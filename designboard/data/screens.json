@@ -1,0 +1,354 @@
+[
+  {
+    "id": "workspace",
+    "name": "Workspace Settings",
+    "subtitle": "Organization & access",
+    "x": 395,
+    "y": 60,
+    "story": "team"
+  },
+  {
+    "id": "teams",
+    "name": "Teams",
+    "subtitle": "Responsibility inventory",
+    "x": 1595,
+    "y": 60,
+    "story": "team"
+  },
+  {
+    "id": "team-create",
+    "name": "Create Team",
+    "subtitle": "Identity & owner",
+    "x": 2795,
+    "y": 60,
+    "story": "team"
+  },
+  {
+    "id": "team-members",
+    "name": "Team Members",
+    "subtitle": "Invite & assign roles",
+    "x": 3995,
+    "y": 60,
+    "story": "team"
+  },
+  {
+    "id": "team-detail",
+    "name": "Team Details",
+    "subtitle": "Ownership & permissions",
+    "x": 5195,
+    "y": 60,
+    "story": "team"
+  },
+  {
+    "id": "products",
+    "name": "Product Inventory",
+    "subtitle": "Existing products",
+    "x": 395,
+    "y": 955,
+    "story": "product"
+  },
+  {
+    "id": "product-create",
+    "name": "Create Product",
+    "subtitle": "Name, type & owner",
+    "x": 1595,
+    "y": 955,
+    "story": "product"
+  },
+  {
+    "id": "product-repository",
+    "name": "Connect Sources",
+    "subtitle": "Git & cloud links",
+    "x": 2795,
+    "y": 955,
+    "story": "product"
+  },
+  {
+    "id": "product-discovery",
+    "name": "Discovery Review",
+    "subtitle": "Detected components & gaps",
+    "x": 3995,
+    "y": 955,
+    "story": "product"
+  },
+  {
+    "id": "product-detail",
+    "name": "Product Details",
+    "subtitle": "Digital twin & controls",
+    "x": 5195,
+    "y": 955,
+    "story": "product"
+  },
+  {
+    "id": "packs",
+    "name": "Governance Packs",
+    "subtitle": "Connected repositories",
+    "x": 395,
+    "y": 1850,
+    "story": "governance"
+  },
+  {
+    "id": "pack-connect",
+    "name": "Connect Pack",
+    "subtitle": "Select repository & release",
+    "x": 1595,
+    "y": 1850,
+    "story": "governance"
+  },
+  {
+    "id": "pack-detail",
+    "name": "Pack Details",
+    "subtitle": "Control provenance",
+    "x": 2795,
+    "y": 1850,
+    "story": "governance"
+  },
+  {
+    "id": "impact",
+    "name": "Impact Analysis",
+    "subtitle": "Version simulation",
+    "x": 3995,
+    "y": 1850,
+    "story": "governance"
+  },
+  {
+    "id": "pack-activation",
+    "name": "Activate Pack",
+    "subtitle": "Scope & enforcement",
+    "x": 5195,
+    "y": 1850,
+    "story": "governance"
+  },
+  {
+    "id": "overview",
+    "name": "Overview",
+    "subtitle": "Portfolio posture",
+    "x": 395,
+    "y": 2745,
+    "story": "remediation"
+  },
+  {
+    "id": "finding",
+    "name": "Finding Details",
+    "subtitle": "Assessment trace",
+    "x": 1595,
+    "y": 2745,
+    "story": "remediation"
+  },
+  {
+    "id": "evidence-detail",
+    "name": "Evidence Details",
+    "subtitle": "Source & observation",
+    "x": 2795,
+    "y": 2745,
+    "story": "remediation"
+  },
+  {
+    "id": "remediation",
+    "name": "Remediation Plan",
+    "subtitle": "PR and remediation",
+    "x": 3995,
+    "y": 2745,
+    "story": "remediation"
+  },
+  {
+    "id": "resolution",
+    "name": "Resolution Loop",
+    "subtitle": "Git PR → verified",
+    "x": 5195,
+    "y": 2745,
+    "story": "remediation"
+  },
+  {
+    "id": "providers",
+    "name": "Evidence Providers",
+    "subtitle": "Available capabilities",
+    "x": 395,
+    "y": 3640,
+    "story": "operations"
+  },
+  {
+    "id": "provider-detail",
+    "name": "Provider Details",
+    "subtitle": "Configuration & health",
+    "x": 1595,
+    "y": 3640,
+    "story": "operations"
+  },
+  {
+    "id": "evidence-register",
+    "name": "Evidence Registry",
+    "subtitle": "Provenance & freshness",
+    "x": 2795,
+    "y": 3640,
+    "story": "operations"
+  },
+  {
+    "id": "docs-screen",
+    "name": "Documentation",
+    "subtitle": "Guides & architecture",
+    "x": 3995,
+    "y": 3640,
+    "story": "operations"
+  },
+  {
+    "id": "ep-catalog",
+    "name": "Evidence Packs",
+    "subtitle": "Git-based providers",
+    "x": 395,
+    "y": 4535,
+    "story": "evidence-pack"
+  },
+  {
+    "id": "ep-connect",
+    "name": "Connect Provider Pack",
+    "subtitle": "Git repository & release",
+    "x": 1595,
+    "y": 4535,
+    "story": "evidence-pack"
+  },
+  {
+    "id": "ep-manifest",
+    "name": "Provider Manifest",
+    "subtitle": "provider.yaml · capability map",
+    "x": 2795,
+    "y": 4535,
+    "story": "evidence-pack"
+  },
+  {
+    "id": "ep-contract",
+    "name": "Capability Contract",
+    "subtitle": "Schema & fixtures",
+    "x": 3995,
+    "y": 4535,
+    "story": "evidence-pack"
+  },
+  {
+    "id": "ep-observation",
+    "name": "Collected Observation",
+    "subtitle": "Actual evidence with provenance",
+    "x": 5195,
+    "y": 4535,
+    "story": "evidence-pack"
+  },
+  {
+    "id": "pr-inbox",
+    "name": "PR Created",
+    "subtitle": "Human or agent opens PR",
+    "x": 395,
+    "y": 5430,
+    "story": "pr-journey"
+  },
+  {
+    "id": "pr-check",
+    "name": "PR Summary Comment",
+    "subtitle": "Only counts & report link",
+    "x": 1595,
+    "y": 5430,
+    "story": "pr-journey"
+  },
+  {
+    "id": "pr-findings",
+    "name": "Full Portal Report",
+    "subtitle": "Findings & evidence",
+    "x": 2795,
+    "y": 5430,
+    "story": "pr-journey"
+  },
+  {
+    "id": "pr-dispatch",
+    "name": "Push & Recheck Loop",
+    "subtitle": "Any author, unlimited iterations",
+    "x": 3995,
+    "y": 5430,
+    "story": "pr-journey"
+  },
+  {
+    "id": "pr-green",
+    "name": "PR Checks Passed",
+    "subtitle": "Status check & review",
+    "x": 5195,
+    "y": 5430,
+    "story": "pr-journey"
+  },
+  {
+    "id": "change-releases",
+    "name": "Governance Releases",
+    "subtitle": "New policy version",
+    "x": 395,
+    "y": 6325,
+    "story": "policy-drift"
+  },
+  {
+    "id": "change-impact",
+    "name": "Baseline Impact",
+    "subtitle": "Assessment of deployments",
+    "x": 1595,
+    "y": 6325,
+    "story": "policy-drift"
+  },
+  {
+    "id": "change-inbox",
+    "name": "Findings Inbox",
+    "subtitle": "PR vs baseline filter",
+    "x": 2795,
+    "y": 6325,
+    "story": "policy-drift"
+  },
+  {
+    "id": "change-triage",
+    "name": "Assign Existing Finding",
+    "subtitle": "Team, owner & deadlines",
+    "x": 3995,
+    "y": 6325,
+    "story": "policy-drift"
+  },
+  {
+    "id": "change-closed",
+    "name": "Reassessment & Closure",
+    "subtitle": "Evidence from deployed state",
+    "x": 5195,
+    "y": 6325,
+    "story": "policy-drift"
+  },
+  {
+    "id": "agent-list",
+    "name": "Agent Accounts",
+    "subtitle": "Nonhuman identities",
+    "x": 395,
+    "y": 7220,
+    "story": "agents"
+  },
+  {
+    "id": "agent-create",
+    "name": "Create Agent",
+    "subtitle": "Workload identity",
+    "x": 1595,
+    "y": 7220,
+    "story": "agents"
+  },
+  {
+    "id": "agent-team",
+    "name": "Team Membership",
+    "subtitle": "Membership, not task routing",
+    "x": 2795,
+    "y": 7220,
+    "story": "agents"
+  },
+  {
+    "id": "agent-scope",
+    "name": "Agent Permissions",
+    "subtitle": "Scopes & guardrails",
+    "x": 3995,
+    "y": 7220,
+    "story": "agents"
+  },
+  {
+    "id": "agent-history",
+    "name": "Agent Activity",
+    "subtitle": "Git activity & independent checks",
+    "x": 5195,
+    "y": 7220,
+    "story": "agents"
+  }
+]

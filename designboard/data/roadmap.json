@@ -1,0 +1,736 @@
+[
+  {
+    "id": "E01",
+    "title": "Lauffähiger Kern",
+    "phase": "MVP",
+    "goal": "Lokaler, portabler Start ohne Cloud-spezifische Dienste.",
+    "features": [
+      {
+        "id": "F01",
+        "title": "Repository und Startumgebung",
+        "goal": "Eine reproduzierbare Entwicklungsumgebung.",
+        "tasks": [
+          {
+            "id": "T001",
+            "title": "Projektstruktur anlegen",
+            "output": "Backend FastAPI, React SPA, Python-Worker und gemeinsame Verträge in einem Repo.",
+            "accept": "`docker compose up --build` startet Web, API und Worker; `/healthz` antwortet mit 200.",
+            "deps": [],
+            "tags": [
+              "foundation"
+            ]
+          },
+          {
+            "id": "T002",
+            "title": "PostgreSQL-Migrationen einführen",
+            "output": "Alembic-Schema und CI-Migrationsjob.",
+            "accept": "Test auf leerer PostgreSQL-DB migriert zu HEAD und startet API erfolgreich.",
+            "deps": [
+              "T001"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T003",
+            "title": "CI-Grundchecks",
+            "output": "GitHub Actions für Python-Tests, TS-Typecheck und Lint.",
+            "accept": "Ein absichtlich fehlerhafter Test lässt PR-Check rot werden; ein grüner Lauf liefert Build-Artefakte.",
+            "deps": [
+              "T001"
+            ],
+            "tags": []
+          }
+        ]
+      },
+      {
+        "id": "F02",
+        "title": "Stabile Kernverträge",
+        "goal": "Technologieunabhängige Daten- und API-Modelle.",
+        "tasks": [
+          {
+            "id": "T004",
+            "title": "Schema für Subject/Fact/Evidence",
+            "output": "Versionierte JSON Schemas mit IDs, Herkunft, Scope, Timestamp.",
+            "accept": "Gültige und ungültige Fixture-Dateien werden in automatisierten Tests erkannt.",
+            "deps": [
+              "T001"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T005",
+            "title": "Assessment-Zustände definieren",
+            "output": "Enum PASS/FAIL/UNKNOWN/NOT_APPLICABLE mit Gründen.",
+            "accept": "Tests beweisen: fehlende Nachweise ergeben UNKNOWN; N/A nur mit dokumentiertem Geltungsbereich.",
+            "deps": [
+              "T004"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E02",
+    "title": "Organisation, Teams und Identitäten",
+    "phase": "MVP",
+    "goal": "Eigentümerschaft, Rollen und Agentenidentitäten ohne Agentenorchestrierung.",
+    "features": [
+      {
+        "id": "F03",
+        "title": "Organisation und Teams",
+        "goal": "CRUD mit stabilen Identifikatoren.",
+        "tasks": [
+          {
+            "id": "T006",
+            "title": "Organisationen und Teams persistieren",
+            "output": "Tabellen organizations, teams, team_members + CRUD-API.",
+            "accept": "Integrationstest erstellt Team, weist es einer Organisation zu und listet Mitglieder.",
+            "deps": [
+              "T002",
+              "T004"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T007",
+            "title": "Team-Rollen prüfen",
+            "output": "Zentrale Authorizer-Funktion für admin, maintainer, viewer.",
+            "accept": "API-Tests zeigen 403 für Viewer bei Änderung und 200 für Admin.",
+            "deps": [
+              "T006"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T008",
+            "title": "Teamoberflächen integrieren",
+            "output": "Teamliste, Team-Anlage und Mitgliederansicht mit API.",
+            "accept": "Browser-E2E erstellt Team, fügt Mitglied hinzu und sieht es nach Reload.",
+            "deps": [
+              "T007"
+            ],
+            "tags": []
+          }
+        ]
+      },
+      {
+        "id": "F04",
+        "title": "Menschliche und nichtmenschliche Accounts",
+        "goal": "Accounts als Principals, keine automatische Aufgabenverteilung.",
+        "tasks": [
+          {
+            "id": "T009",
+            "title": "OIDC-Login und Principal-Modell",
+            "output": "Verifizierter OIDC-Login, Tabelle principals mit kind=user|agent.",
+            "accept": "Invalides JWT liefert 401; gültiger Benutzer sieht nur erlaubte Organisation.",
+            "deps": [
+              "T007"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T010",
+            "title": "Agent-Identitäten und Mitgliedschaft",
+            "output": "CRUD für agent principals und m:n Teamzuordnung.",
+            "accept": "Ein Agent kann zwei Teams angehören; alle Änderungen erscheinen im Auditlog.",
+            "deps": [
+              "T009"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T011",
+            "title": "Rechtebegrenzung für Agenten",
+            "output": "Agent-Principals ohne Rechte zum Selbstfreigeben; separate Repo-Rechte in Git.",
+            "accept": "API-Test verweigert Agent die Pack-Freigabe; UI zeigt explizite Rechte.",
+            "deps": [
+              "T010"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E03",
+    "title": "Git-Anbindung und Pack Releases",
+    "phase": "MVP",
+    "goal": "Packs aus Git-Tags laden und unveränderlich referenzieren.",
+    "features": [
+      {
+        "id": "F05",
+        "title": "Git-Quellen",
+        "goal": "Ein Provider-Interface, zuerst GitHub.",
+        "tasks": [
+          {
+            "id": "T012",
+            "title": "Git-Source-Port definieren",
+            "output": "Interface `fetch(ref)`, `resolve_tag(tag)`, `verify_webhook` ohne Hosting-Abhängigkeit.",
+            "accept": "Fake-Adapter besteht Contract-Tests für Tag-Auflösung und Fehlerfälle.",
+            "deps": [
+              "T004"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T013",
+            "title": "GitHub App read-only anschließen",
+            "output": "Installation, Webhook-Signaturprüfung, Repository-Metadaten lesen.",
+            "accept": "Ungültige Webhook-Signatur => 401; gültige Testlieferung landet als Event.",
+            "deps": [
+              "T012",
+              "T009"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T014",
+            "title": "Git-Tag auf Commit pinnen",
+            "output": "Tag nach SHA auflösen; SHA + Tag + Repo speichern.",
+            "accept": "Nach simuliertem Tag-Move bleibt vorher aktivierte Pack-Revision unverändert und wird als Konflikt gemeldet.",
+            "deps": [
+              "T013",
+              "T002"
+            ],
+            "tags": []
+          }
+        ]
+      },
+      {
+        "id": "F06",
+        "title": "Pack importieren",
+        "goal": "Kein automatischer PDF-Konverter, sondern versionierte Git-Definitionen.",
+        "tasks": [
+          {
+            "id": "T015",
+            "title": "Governance Pack Manifest validieren",
+            "output": "`pack.yaml` JSON-Schema + Parser für Kontrollen und Capability-Refs.",
+            "accept": "Fixtures für unbekannte Version, fehlende Control-ID und ungültige Capability werden abgelehnt.",
+            "deps": [
+              "T004",
+              "T014"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T016",
+            "title": "Evidence Pack Manifest validieren",
+            "output": "`provider.yaml` Schema mit image digest, input/output contracts, capabilities.",
+            "accept": "Tests lehnen unversionierte Images und nicht deklarierte Ausgabe-Schemas ab.",
+            "deps": [
+              "T004",
+              "T014"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T017",
+            "title": "Pack-Katalog-API und UI",
+            "output": "Packliste, Detail, geladene Version, Tag und pinned SHA.",
+            "accept": "E2E verbindet Fixture-Pack und sieht gültige Kontrollen/Provenienz ohne branch-Feld.",
+            "deps": [
+              "T015",
+              "T016",
+              "T008"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E04",
+    "title": "Produkte und Discovery",
+    "phase": "MVP",
+    "goal": "Produkte gehören Teams; technische Fakten haben Herkunft und Grenzen.",
+    "features": [
+      {
+        "id": "F07",
+        "title": "Produktinventar",
+        "goal": "Teams können Produkte ohne CLI registrieren.",
+        "tasks": [
+          {
+            "id": "T018",
+            "title": "Produkt-Datenmodell und CRUD",
+            "output": "products, repo_bindings und ownership Relation.",
+            "accept": "API-Test verhindert Produkt ohne Owner-Team; Produkt lässt sich nach Org filtern.",
+            "deps": [
+              "T006"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T019",
+            "title": "Produkt-Anlage UI",
+            "output": "Schritte Produktname, Team, Git-Quelle, Verifikation.",
+            "accept": "Browser-E2E legt Produkt an und öffnet Detailseite nach Reload.",
+            "deps": [
+              "T018",
+              "T013"
+            ],
+            "tags": []
+          }
+        ]
+      },
+      {
+        "id": "F08",
+        "title": "Erste technische Fakten",
+        "goal": "Discoverer für ausgewählte Quellen, keine Vollständigkeitsbehauptung.",
+        "tasks": [
+          {
+            "id": "T020",
+            "title": "OpenAPI Scanner",
+            "output": "Parser erkennt API-Pfade und Schema-Definitionen aus einem Repo.",
+            "accept": "Fixture-Repos liefern deterministische Subjects und Source-Refs.",
+            "deps": [
+              "T018",
+              "T004",
+              "T012"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T021",
+            "title": "Discovery-Vollständigkeit erfassen",
+            "output": "Für jeden Scanner `covered|partial|failed` und gemessenen Scope persistieren.",
+            "accept": "Wenn Quelle fehlt, wechselt betroffene Bewertung auf UNKNOWN, nicht PASS.",
+            "deps": [
+              "T020",
+              "T005"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E05",
+    "title": "Evidence-Laufzeit und Vertrauen",
+    "phase": "MVP",
+    "goal": "Nachweise aus zugelassenen Packs sicher und wiederholbar sammeln.",
+    "features": [
+      {
+        "id": "F09",
+        "title": "Ausführungsprotokoll",
+        "goal": "Core kennt Collector-Protokoll, nicht Terraform oder AWS.",
+        "tasks": [
+          {
+            "id": "T022",
+            "title": "Collector Request/Response definieren",
+            "output": "JSON request: subject, scope, credentialsRef, capabilities; output: observations.",
+            "accept": "Fixture mit fehlender Capability oder falschem Schema wird abgelehnt.",
+            "deps": [
+              "T004",
+              "T016"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T023",
+            "title": "Einen kontrollierten Collector ausführen",
+            "output": "Container-Runner via Worker, fest freigegebenes Image per Digest, Limits und Timeout.",
+            "accept": "Ein Test-Collector liefert Observation; Timeout => UNKNOWN und terminierter Prozess.",
+            "deps": [
+              "T022",
+              "T001"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T024",
+            "title": "Credentials und Zugriffsgrenzen",
+            "output": "Kurzlebige Secret-Refs, pro Pack erlaubte Capabilities, Egress-Konfiguration.",
+            "accept": "Tests beweisen: fremdes SecretRef und nicht freigegebener Image-Digest werden zurückgewiesen.",
+            "deps": [
+              "T023",
+              "T009"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T025",
+            "title": "Evidence Records speichern",
+            "output": "Provenienz, Zeit, target SHA, collector revision und TTL in Postgres.",
+            "accept": "Abgelaufener Nachweis wird nicht mehr als aktuell in Assessment übernommen.",
+            "deps": [
+              "T023",
+              "T002"
+            ],
+            "tags": []
+          }
+        ]
+      },
+      {
+        "id": "F10",
+        "title": "Beispielprovider als eigenes Repo",
+        "goal": "Provider-Code außerhalb der Plattform.",
+        "tasks": [
+          {
+            "id": "T026",
+            "title": "Minimalen Beispielprovider veröffentlichen",
+            "output": "Separates Fixture-Pack mit `provider.yaml`, JSON-Ausgabe, Schemas und Fixtures.",
+            "accept": "Integrationstest holt Pack aus Git und sammelt eine valide Beispiel-Observation.",
+            "deps": [
+              "T016",
+              "T023"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T027",
+            "title": "Infrastrukturabfrage als Provider-Beispiel dokumentieren",
+            "output": "Getrenntes Beispiel `collector/main.tf` mit nur `data`/`output` plus Einschränkungen.",
+            "accept": "Pack-Verzeichnis enthält HCL und Tests; keine Terraform-Implementierung im Plattform-Core.",
+            "deps": [
+              "T026"
+            ],
+            "tags": [
+              "later"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E06",
+    "title": "Deterministische Kontrolle und Evidence",
+    "phase": "MVP",
+    "goal": "Jede Entscheidung bezieht sich auf exakt definierte Fakten und Pack-Versionen.",
+    "features": [
+      {
+        "id": "F11",
+        "title": "Matching & Evaluation",
+        "goal": "Kontrollen auf Subjects anwenden.",
+        "tasks": [
+          {
+            "id": "T028",
+            "title": "Geltungsbereich ermitteln",
+            "output": "Matching nach Subject Type/Labels mit explizitem UNKNOWN bei unvollständiger Klassifikation.",
+            "accept": "Fixture: Datenbank trifft zu, API nicht, unbekannte Klasse => UNKNOWN.",
+            "deps": [
+              "T015",
+              "T018",
+              "T021"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T029",
+            "title": "Kontrollen regelbasiert bewerten",
+            "output": "Erste Operatoren equals, exists, all, any; Ergebnis und Gründe persistieren.",
+            "accept": "Testmatrix umfasst PASS, FAIL, UNKNOWN, N/A und stale evidence.",
+            "deps": [
+              "T028",
+              "T025",
+              "T005"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T030",
+            "title": "Nachweise deduplizieren",
+            "output": "Mehrere Controls referenzieren dieselbe Capability-Observation.",
+            "accept": "Eine Collector-Ausführung erzeugt einen Nachweis und zwei getrennte Kontrollbewertungen.",
+            "deps": [
+              "T029"
+            ],
+            "tags": []
+          }
+        ]
+      },
+      {
+        "id": "F12",
+        "title": "Findings und Revisionen",
+        "goal": "PR-Finding != Baseline-Finding.",
+        "tasks": [
+          {
+            "id": "T031",
+            "title": "Assessment-Snapshot modellieren",
+            "output": "Assessment Kontext `pull_request|baseline`, Git SHA, Pack SHA, Evidence IDs.",
+            "accept": "Gleiches Produkt kann PR- und Produktionsassessment getrennt besitzen.",
+            "deps": [
+              "T029"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T032",
+            "title": "Finding-Upsert und Lifecycle",
+            "output": "Stabiler Fingerprint, Status open|resolved; History pro Assessment.",
+            "accept": "Zweimal gleicher Befund erzeugt genau ein offenes Finding; erneutes PASS schließt ihn.",
+            "deps": [
+              "T031"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E07",
+    "title": "PR-Feedback ohne Agentensteuerung",
+    "phase": "MVP",
+    "goal": "Ein PR-Kommentar, ein Check, beliebig viele Updates und keine Auftragsvergabe.",
+    "features": [
+      {
+        "id": "F13",
+        "title": "Webhook-Lifecycle",
+        "goal": "Asynchron und idempotent.",
+        "tasks": [
+          {
+            "id": "T033",
+            "title": "PR-Events aufnehmen",
+            "output": "Webhook Opened/Synchronize enqueue; PR-ID und Head-SHA persistieren.",
+            "accept": "Duplikat-Event erzeugt keinen zweiten Assessment-Job.",
+            "deps": [
+              "T013",
+              "T031"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T034",
+            "title": "Worker-Queue auf PostgreSQL",
+            "output": "Job-Polling mit `FOR UPDATE SKIP LOCKED`, Retry und Dead-letter-Status.",
+            "accept": "Abgebrochener Worker verliert keinen Job; wiederholter Job liefert höchstens ein Ergebnis pro SHA.",
+            "deps": [
+              "T033",
+              "T002"
+            ],
+            "tags": []
+          }
+        ]
+      },
+      {
+        "id": "F14",
+        "title": "GitHub Kommentar und Statuscheck",
+        "goal": "Einheitliches Feedback für Menschen und Agenten.",
+        "tasks": [
+          {
+            "id": "T035",
+            "title": "Einzelnen PR-Kommentar upserten",
+            "output": "Kommentar enthält ausschließlich Passed/Failed/Unknown/N/A und Link.",
+            "accept": "Drei Pushes => ein Bot-Kommentar, mit stets aktualisierten Zahlen und Portal-Link.",
+            "deps": [
+              "T034",
+              "T031"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T036",
+            "title": "Commit-genauen Check setzen",
+            "output": "GitHub Checks API für neuesten SHA, FAIL/UNKNOWN blockieren verpflichtende Checks; PASS nur mit ausreichender Evidence.",
+            "accept": "Staler Job kann keine neuere PR-Revision grün schreiben; Unit- und Mock-API-Test.",
+            "deps": [
+              "T035"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T037",
+            "title": "PR-Bericht im Portal anzeigen",
+            "output": "Bericht: Findings, Fakten, Evidence, Control, Quellverweise.",
+            "accept": "Berichtslink aus Kommentar öffnet genau Revision/Assessment; HTTP 403 bei fremder Org.",
+            "deps": [
+              "T032",
+              "T035",
+              "T009"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E08",
+    "title": "Bestandsfindings & Regeländerungen",
+    "phase": "V1",
+    "goal": "Änderungen an Governance oder Infrastruktur lassen sich separat bewerten.",
+    "features": [
+      {
+        "id": "F15",
+        "title": "Baseline-Kontrollen",
+        "goal": "Bestand ohne PR prüfen.",
+        "tasks": [
+          {
+            "id": "T038",
+            "title": "Deployment-Identität speichern",
+            "output": "environment + artifact digest + observed resources pro Produkt.",
+            "accept": "Baseline-Assessment verweist auf Deployment und nie auf ungeprüften PR.",
+            "deps": [
+              "T018",
+              "T031"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T039",
+            "title": "Baseline per API und Zeitplan anstoßen",
+            "output": "Idempotenter Trigger mit dem vorhandenen Job-Runner.",
+            "accept": "Geplante Prüfung erzeugt Assessment; Retries erzeugen keine Duplikate.",
+            "deps": [
+              "T034",
+              "T038"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T040",
+            "title": "Geänderte Packs simulieren",
+            "output": "Neue Tag-Revision gegen unverändertes Baseline-Inventar bewerten.",
+            "accept": "Vor Aktivierung werden neue FAIL/UNKNOWN nach Produkt angezeigt; Status unverändert.",
+            "deps": [
+              "T029",
+              "T014",
+              "T038"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T041",
+            "title": "Aktivierung & Reassessment",
+            "output": "Freigegebenes Pack aktivieren, neue Baseline-Assessments einplanen.",
+            "accept": "Kontrolländerung erzeugt Bestands-Findings ohne PR-Kontext.",
+            "deps": [
+              "T039",
+              "T040",
+              "T032"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E09",
+    "title": "Portal & Dokumentation",
+    "phase": "MVP",
+    "goal": "Navigation und Transparenz der technischen Entscheidungen.",
+    "features": [
+      {
+        "id": "F16",
+        "title": "UX über reale APIs",
+        "goal": "Keine rein dekorativen Buttons in der eigentlichen App.",
+        "tasks": [
+          {
+            "id": "T042",
+            "title": "Übersicht und Suche",
+            "output": "Dashboards für Produkte, Packs, Findings; Filter nach Team/Scope.",
+            "accept": "UI-Tests navigieren zwischen Daten und Bericht; Links führen auf echte IDs.",
+            "deps": [
+              "T017",
+              "T019",
+              "T037"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T043",
+            "title": "Docs-Informationsarchitektur",
+            "output": "Dokumentseiten Getting Started, Packs, Evidence, Security, PR Integration.",
+            "accept": "Jede Docs-Kategorie enthält ein ausführbares Beispiel und definierte Einschränkungen.",
+            "deps": [
+              "T015",
+              "T022"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T044",
+            "title": "Unbekannte Zustände sichtbar machen",
+            "output": "UI unterscheidet Failure, Unknown, N/A mit Grund und Coverage.",
+            "accept": "Browser-Test zeigt UNKNOWN statt grün bei fehlendem Provider.",
+            "deps": [
+              "T021",
+              "T029",
+              "T042"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E10",
+    "title": "Portable Delivery & Betrieb",
+    "phase": "MVP",
+    "goal": "Gleiche stateless Services lokal, auf K8s oder auf AWS-Containern.",
+    "features": [
+      {
+        "id": "F17",
+        "title": "Cloudneutrale Auslieferung",
+        "goal": "Ports & Adapter statt AWS-SDK im Core.",
+        "tasks": [
+          {
+            "id": "T045",
+            "title": "OCI-Images bauen",
+            "output": "Web, API, Worker als versionierte OCI-Images mit Healthchecks.",
+            "accept": "Alle Images starten lokal ohne AWS-Credentials.",
+            "deps": [
+              "T001",
+              "T034"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T046",
+            "title": "Helm-Chart für Kubernetes",
+            "output": "Deployments, Services, SecretsRefs, Probe, Migration Job und ConfigMap.",
+            "accept": "`helm lint` und Kind-Integrationstest zeigen funktionierende UI/API/Worker.",
+            "deps": [
+              "T045",
+              "T002"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T047",
+            "title": "AWS ECS-Deployment als Adapter",
+            "output": "IaC für ECS/Fargate, ALB, RDS und S3-kompatibles Blob-Interface.",
+            "accept": "Smoke-Test in Testaccount: UI erreichbar, Pack lesbar, Job abgeschlossen.",
+            "deps": [
+              "T045",
+              "T025"
+            ],
+            "tags": [
+              "later"
+            ]
+          },
+          {
+            "id": "T048",
+            "title": "Storage-Port und lokales Objektbackend",
+            "output": "Interface BlobStore + S3-kompatibler MinIO-Adapter (optional AWS S3).",
+            "accept": "Contract-Test für Put/Get/Delete ist mit MinIO erfolgreich.",
+            "deps": [
+              "T001"
+            ],
+            "tags": []
+          },
+          {
+            "id": "T049",
+            "title": "Operatives Monitoring und Recovery",
+            "output": "Metriken, strukturierte Logs, Job-Lag, Backup-Restore-Probe.",
+            "accept": "Recover-Test aus DB+Objektbackup erhält Assessments und Audit-IDs.",
+            "deps": [
+              "T034",
+              "T048",
+              "T025"
+            ],
+            "tags": []
+          }
+        ]
+      }
+    ]
+  }
+]

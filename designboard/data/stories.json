@@ -1,0 +1,136 @@
+[
+  {
+    "id": "team",
+    "number": "01",
+    "title": "Team & Verantwortung",
+    "description": "Ein Workspace-Admin richtet ein Team ein, ordnet Mitglieder und Rollen zu und schafft damit einen Verantwortungsbereich für Produkte.",
+    "outcome": "Ergebnis: Customer Platform besitzt ein Team mit Team-Admins, Maintainern und Viewern.",
+    "screenIds": [
+      "workspace",
+      "teams",
+      "team-create",
+      "team-members",
+      "team-detail"
+    ],
+    "y": 60
+  },
+  {
+    "id": "product",
+    "number": "02",
+    "title": "Produkt registrieren",
+    "description": "Ein Team legt sein Produkt an, verknüpft ein Git-Repository und lässt Infrastruktur, Schnittstellen und Datenhaltung automatisch erkennen.",
+    "outcome": "Ergebnis: customer-service ist dem Team zugeordnet und kann ohne CLI geprüft werden.",
+    "screenIds": [
+      "products",
+      "product-create",
+      "product-repository",
+      "product-discovery",
+      "product-detail"
+    ],
+    "y": 955
+  },
+  {
+    "id": "governance",
+    "number": "03",
+    "title": "Governance aus Git",
+    "description": "Ein Governance-Verantwortlicher verbindet ein Pack-Repository, prüft die Release-Version und simuliert die Auswirkungen vor Aktivierung.",
+    "outcome": "Ergebnis: Ein freigegebenes Git-Tag ist auf einen unveränderlichen Commit aufgelöst.",
+    "screenIds": [
+      "packs",
+      "pack-connect",
+      "pack-detail",
+      "impact",
+      "pack-activation"
+    ],
+    "y": 1850
+  },
+  {
+    "id": "remediation",
+    "number": "04",
+    "title": "Finding bis Lösung",
+    "description": "Ein bereits betriebenes Produkt verletzt eine Kontrolle. Das Portal zeigt Quelle, Beleg und Status. Das verantwortliche Team entscheidet unabhängig, ob Mensch oder Agent einen Fix erstellt.",
+    "outcome": "Ergebnis: Eine neue Revision wurde erneut geprüft; Finding und Nachweise bleiben nachvollziehbar.",
+    "screenIds": [
+      "overview",
+      "finding",
+      "evidence-detail",
+      "remediation",
+      "resolution"
+    ],
+    "y": 2745
+  },
+  {
+    "id": "operations",
+    "number": "05",
+    "title": "Betrieb & Dokumentation",
+    "description": "Ein Plattform-Admin prüft Evidence Provider, fehlende Fähigkeiten und die Dokumentation der offen erweiterbaren Plattform.",
+    "outcome": "Ergebnis: Klare Integrations-, Betriebs- und Erweiterungspunkte – unabhängig von einer Governance.",
+    "screenIds": [
+      "providers",
+      "provider-detail",
+      "evidence-register",
+      "docs-screen"
+    ],
+    "y": 3640
+  },
+  {
+    "id": "evidence-pack",
+    "number": "06",
+    "title": "Evidence Provider Pack aus Git",
+    "description": "Ein Plattform-Admin verbindet einen Evidence-Provider aus Git, prüft Manifest und Capability-Vertrag und sieht die tatsächliche Beobachtung.",
+    "outcome": "Ergebnis: Ein vertrauenswürdiger Provider liefert wiederverwendbare, versionierte Nachweise.",
+    "screenIds": [
+      "ep-catalog",
+      "ep-connect",
+      "ep-manifest",
+      "ep-contract",
+      "ep-observation"
+    ],
+    "y": 4535
+  },
+  {
+    "id": "pr-journey",
+    "number": "07",
+    "title": "Pull Request → prüfen → korrigieren → wiederholen",
+    "description": "Mensch oder KI-Agent erstellt und bearbeitet einen PR in Git. Die Plattform prüft jede neue Revision und aktualisiert einen einzigen PR-Kommentar: nur Zahlen und Berichtslink. Keine Aufgabenverteilung.",
+    "outcome": "Ergebnis: Beliebig viele Code-Pushes mit unabhängigen Rechecks; derselbe PR-Kommentar wird aktualisiert. Merge-Gate ist separat.",
+    "screenIds": [
+      "pr-inbox",
+      "pr-check",
+      "pr-findings",
+      "pr-dispatch",
+      "pr-green"
+    ],
+    "y": 5430
+  },
+  {
+    "id": "policy-drift",
+    "number": "08",
+    "title": "Neue Regeln → Bestands-Findings",
+    "description": "Ein neues Governance-Pack-Release wird aktiviert. Bereits deployte Produkte werden erneut bewertet und es entstehen neue, produktbezogene Findings ohne PR.",
+    "outcome": "Ergebnis: Bestands-Findings werden dem zuständigen Team zugeordnet und nach neuem Nachweis geschlossen.",
+    "screenIds": [
+      "change-releases",
+      "change-impact",
+      "change-inbox",
+      "change-triage",
+      "change-closed"
+    ],
+    "y": 6325
+  },
+  {
+    "id": "agents",
+    "number": "09",
+    "title": "KI-Agenten als Teammitglieder",
+    "description": "Ein Unternehmen registriert optional separate KI-Agenten-Identitäten für seine Teams. Agenten arbeiten in Git wie Menschen; die Governance-Plattform verteilt keine Fix-Aufträge.",
+    "outcome": "Ergebnis: Mehrere Teams pro Agent, nachweisbare Identität, Rechtebegrenzung – aber keine Agentenorchestrierung.",
+    "screenIds": [
+      "agent-list",
+      "agent-create",
+      "agent-team",
+      "agent-scope",
+      "agent-history"
+    ],
+    "y": 7220
+  }
+]
