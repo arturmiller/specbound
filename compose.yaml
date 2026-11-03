@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    ports:
+      - "127.0.0.1:8000:8000"
+  worker:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    init: true
+  web:
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    ports:
+      - "127.0.0.1:5173:5173"
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api

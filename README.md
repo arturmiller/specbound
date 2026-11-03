@@ -6,6 +6,21 @@ interaktiven Systemarchitektur und einer Planung aus 10 Epics, 17 Features und
 
 ## Lokal starten
 
+### Produktdienste mit Docker Compose
+
+Docker mit laufender Engine und Compose vorausgesetzt:
+
+```sh
+docker compose up --build
+```
+
+Das Portal ist unter <http://localhost:5173> erreichbar; die API antwortet auf
+<http://localhost:8000/healthz>. Der Worker läuft als eigener Prozess und wartet
+bis zur späteren Einführung einer Job-Queue. Mit `docker compose down` werden
+die Dienste beendet. Die Produktdienste sind ein erster technischer Grundaufbau.
+
+### Designboard
+
 Voraussetzung: Node.js 22 oder neuer. Es gibt keine externen Laufzeitpakete.
 
 ```sh

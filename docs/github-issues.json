@@ -1,0 +1,751 @@
+{
+  "repository": "arturmiller/specbound",
+  "sourceCommit": "1727aabf895e8a91ada7a5e00258b479c6fdaddb",
+  "issues": {
+    "E01": {
+      "number": 1,
+      "id": 6190046871,
+      "url": "https://github.com/arturmiller/specbound/issues/1",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F01": {
+      "number": 11,
+      "id": 6190051933,
+      "url": "https://github.com/arturmiller/specbound/issues/11",
+      "kind": "feature",
+      "parent": "E01",
+      "dependencies": []
+    },
+    "T001": {
+      "number": 28,
+      "id": 6190062045,
+      "url": "https://github.com/arturmiller/specbound/issues/28",
+      "kind": "task",
+      "parent": "F01",
+      "dependencies": []
+    },
+    "T002": {
+      "number": 29,
+      "id": 6190062525,
+      "url": "https://github.com/arturmiller/specbound/issues/29",
+      "kind": "task",
+      "parent": "F01",
+      "dependencies": [
+        "T001"
+      ]
+    },
+    "T003": {
+      "number": 30,
+      "id": 6190063065,
+      "url": "https://github.com/arturmiller/specbound/issues/30",
+      "kind": "task",
+      "parent": "F01",
+      "dependencies": [
+        "T001"
+      ]
+    },
+    "F02": {
+      "number": 12,
+      "id": 6190052434,
+      "url": "https://github.com/arturmiller/specbound/issues/12",
+      "kind": "feature",
+      "parent": "E01",
+      "dependencies": []
+    },
+    "T004": {
+      "number": 31,
+      "id": 6190063494,
+      "url": "https://github.com/arturmiller/specbound/issues/31",
+      "kind": "task",
+      "parent": "F02",
+      "dependencies": [
+        "T001"
+      ]
+    },
+    "T005": {
+      "number": 32,
+      "id": 6190063958,
+      "url": "https://github.com/arturmiller/specbound/issues/32",
+      "kind": "task",
+      "parent": "F02",
+      "dependencies": [
+        "T004"
+      ]
+    },
+    "E02": {
+      "number": 2,
+      "id": 6190047336,
+      "url": "https://github.com/arturmiller/specbound/issues/2",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F03": {
+      "number": 13,
+      "id": 6190053065,
+      "url": "https://github.com/arturmiller/specbound/issues/13",
+      "kind": "feature",
+      "parent": "E02",
+      "dependencies": []
+    },
+    "T006": {
+      "number": 33,
+      "id": 6190064471,
+      "url": "https://github.com/arturmiller/specbound/issues/33",
+      "kind": "task",
+      "parent": "F03",
+      "dependencies": [
+        "T002",
+        "T004"
+      ]
+    },
+    "T007": {
+      "number": 34,
+      "id": 6190065039,
+      "url": "https://github.com/arturmiller/specbound/issues/34",
+      "kind": "task",
+      "parent": "F03",
+      "dependencies": [
+        "T006"
+      ]
+    },
+    "T008": {
+      "number": 35,
+      "id": 6190065632,
+      "url": "https://github.com/arturmiller/specbound/issues/35",
+      "kind": "task",
+      "parent": "F03",
+      "dependencies": [
+        "T007"
+      ]
+    },
+    "F04": {
+      "number": 14,
+      "id": 6190053688,
+      "url": "https://github.com/arturmiller/specbound/issues/14",
+      "kind": "feature",
+      "parent": "E02",
+      "dependencies": []
+    },
+    "T009": {
+      "number": 36,
+      "id": 6190066086,
+      "url": "https://github.com/arturmiller/specbound/issues/36",
+      "kind": "task",
+      "parent": "F04",
+      "dependencies": [
+        "T007"
+      ]
+    },
+    "T010": {
+      "number": 37,
+      "id": 6190066585,
+      "url": "https://github.com/arturmiller/specbound/issues/37",
+      "kind": "task",
+      "parent": "F04",
+      "dependencies": [
+        "T009"
+      ]
+    },
+    "T011": {
+      "number": 38,
+      "id": 6190067064,
+      "url": "https://github.com/arturmiller/specbound/issues/38",
+      "kind": "task",
+      "parent": "F04",
+      "dependencies": [
+        "T010"
+      ]
+    },
+    "E03": {
+      "number": 3,
+      "id": 6190047851,
+      "url": "https://github.com/arturmiller/specbound/issues/3",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F05": {
+      "number": 15,
+      "id": 6190054567,
+      "url": "https://github.com/arturmiller/specbound/issues/15",
+      "kind": "feature",
+      "parent": "E03",
+      "dependencies": []
+    },
+    "T012": {
+      "number": 39,
+      "id": 6190067487,
+      "url": "https://github.com/arturmiller/specbound/issues/39",
+      "kind": "task",
+      "parent": "F05",
+      "dependencies": [
+        "T004"
+      ]
+    },
+    "T013": {
+      "number": 40,
+      "id": 6190067911,
+      "url": "https://github.com/arturmiller/specbound/issues/40",
+      "kind": "task",
+      "parent": "F05",
+      "dependencies": [
+        "T012",
+        "T009"
+      ]
+    },
+    "T014": {
+      "number": 41,
+      "id": 6190068413,
+      "url": "https://github.com/arturmiller/specbound/issues/41",
+      "kind": "task",
+      "parent": "F05",
+      "dependencies": [
+        "T013",
+        "T002"
+      ]
+    },
+    "F06": {
+      "number": 16,
+      "id": 6190055094,
+      "url": "https://github.com/arturmiller/specbound/issues/16",
+      "kind": "feature",
+      "parent": "E03",
+      "dependencies": []
+    },
+    "T015": {
+      "number": 42,
+      "id": 6190069033,
+      "url": "https://github.com/arturmiller/specbound/issues/42",
+      "kind": "task",
+      "parent": "F06",
+      "dependencies": [
+        "T004",
+        "T014"
+      ]
+    },
+    "T016": {
+      "number": 43,
+      "id": 6190069886,
+      "url": "https://github.com/arturmiller/specbound/issues/43",
+      "kind": "task",
+      "parent": "F06",
+      "dependencies": [
+        "T004",
+        "T014"
+      ]
+    },
+    "T017": {
+      "number": 44,
+      "id": 6190070484,
+      "url": "https://github.com/arturmiller/specbound/issues/44",
+      "kind": "task",
+      "parent": "F06",
+      "dependencies": [
+        "T015",
+        "T016",
+        "T008"
+      ]
+    },
+    "E04": {
+      "number": 4,
+      "id": 6190048337,
+      "url": "https://github.com/arturmiller/specbound/issues/4",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F07": {
+      "number": 17,
+      "id": 6190055746,
+      "url": "https://github.com/arturmiller/specbound/issues/17",
+      "kind": "feature",
+      "parent": "E04",
+      "dependencies": []
+    },
+    "T018": {
+      "number": 45,
+      "id": 6190071079,
+      "url": "https://github.com/arturmiller/specbound/issues/45",
+      "kind": "task",
+      "parent": "F07",
+      "dependencies": [
+        "T006"
+      ]
+    },
+    "T019": {
+      "number": 46,
+      "id": 6190071547,
+      "url": "https://github.com/arturmiller/specbound/issues/46",
+      "kind": "task",
+      "parent": "F07",
+      "dependencies": [
+        "T018",
+        "T013"
+      ]
+    },
+    "F08": {
+      "number": 18,
+      "id": 6190056305,
+      "url": "https://github.com/arturmiller/specbound/issues/18",
+      "kind": "feature",
+      "parent": "E04",
+      "dependencies": []
+    },
+    "T020": {
+      "number": 47,
+      "id": 6190071989,
+      "url": "https://github.com/arturmiller/specbound/issues/47",
+      "kind": "task",
+      "parent": "F08",
+      "dependencies": [
+        "T018",
+        "T004",
+        "T012"
+      ]
+    },
+    "T021": {
+      "number": 48,
+      "id": 6190072459,
+      "url": "https://github.com/arturmiller/specbound/issues/48",
+      "kind": "task",
+      "parent": "F08",
+      "dependencies": [
+        "T020",
+        "T005"
+      ]
+    },
+    "E05": {
+      "number": 5,
+      "id": 6190048915,
+      "url": "https://github.com/arturmiller/specbound/issues/5",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F09": {
+      "number": 19,
+      "id": 6190056840,
+      "url": "https://github.com/arturmiller/specbound/issues/19",
+      "kind": "feature",
+      "parent": "E05",
+      "dependencies": []
+    },
+    "T022": {
+      "number": 49,
+      "id": 6190072934,
+      "url": "https://github.com/arturmiller/specbound/issues/49",
+      "kind": "task",
+      "parent": "F09",
+      "dependencies": [
+        "T004",
+        "T016"
+      ]
+    },
+    "T023": {
+      "number": 50,
+      "id": 6190073529,
+      "url": "https://github.com/arturmiller/specbound/issues/50",
+      "kind": "task",
+      "parent": "F09",
+      "dependencies": [
+        "T022",
+        "T001"
+      ]
+    },
+    "T024": {
+      "number": 51,
+      "id": 6190074100,
+      "url": "https://github.com/arturmiller/specbound/issues/51",
+      "kind": "task",
+      "parent": "F09",
+      "dependencies": [
+        "T023",
+        "T009"
+      ]
+    },
+    "T025": {
+      "number": 52,
+      "id": 6190074581,
+      "url": "https://github.com/arturmiller/specbound/issues/52",
+      "kind": "task",
+      "parent": "F09",
+      "dependencies": [
+        "T023",
+        "T002"
+      ]
+    },
+    "F10": {
+      "number": 20,
+      "id": 6190057410,
+      "url": "https://github.com/arturmiller/specbound/issues/20",
+      "kind": "feature",
+      "parent": "E05",
+      "dependencies": []
+    },
+    "T026": {
+      "number": 53,
+      "id": 6190075075,
+      "url": "https://github.com/arturmiller/specbound/issues/53",
+      "kind": "task",
+      "parent": "F10",
+      "dependencies": [
+        "T016",
+        "T023"
+      ]
+    },
+    "T027": {
+      "number": 54,
+      "id": 6190075549,
+      "url": "https://github.com/arturmiller/specbound/issues/54",
+      "kind": "task",
+      "parent": "F10",
+      "dependencies": [
+        "T026"
+      ]
+    },
+    "E06": {
+      "number": 6,
+      "id": 6190049340,
+      "url": "https://github.com/arturmiller/specbound/issues/6",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F11": {
+      "number": 21,
+      "id": 6190057913,
+      "url": "https://github.com/arturmiller/specbound/issues/21",
+      "kind": "feature",
+      "parent": "E06",
+      "dependencies": []
+    },
+    "T028": {
+      "number": 55,
+      "id": 6190075981,
+      "url": "https://github.com/arturmiller/specbound/issues/55",
+      "kind": "task",
+      "parent": "F11",
+      "dependencies": [
+        "T015",
+        "T018",
+        "T021"
+      ]
+    },
+    "T029": {
+      "number": 56,
+      "id": 6190076457,
+      "url": "https://github.com/arturmiller/specbound/issues/56",
+      "kind": "task",
+      "parent": "F11",
+      "dependencies": [
+        "T028",
+        "T025",
+        "T005"
+      ]
+    },
+    "T030": {
+      "number": 57,
+      "id": 6190076906,
+      "url": "https://github.com/arturmiller/specbound/issues/57",
+      "kind": "task",
+      "parent": "F11",
+      "dependencies": [
+        "T029"
+      ]
+    },
+    "F12": {
+      "number": 22,
+      "id": 6190058397,
+      "url": "https://github.com/arturmiller/specbound/issues/22",
+      "kind": "feature",
+      "parent": "E06",
+      "dependencies": []
+    },
+    "T031": {
+      "number": 58,
+      "id": 6190077327,
+      "url": "https://github.com/arturmiller/specbound/issues/58",
+      "kind": "task",
+      "parent": "F12",
+      "dependencies": [
+        "T029"
+      ]
+    },
+    "T032": {
+      "number": 59,
+      "id": 6190077864,
+      "url": "https://github.com/arturmiller/specbound/issues/59",
+      "kind": "task",
+      "parent": "F12",
+      "dependencies": [
+        "T031"
+      ]
+    },
+    "E07": {
+      "number": 7,
+      "id": 6190049830,
+      "url": "https://github.com/arturmiller/specbound/issues/7",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F13": {
+      "number": 23,
+      "id": 6190058896,
+      "url": "https://github.com/arturmiller/specbound/issues/23",
+      "kind": "feature",
+      "parent": "E07",
+      "dependencies": []
+    },
+    "T033": {
+      "number": 60,
+      "id": 6190078388,
+      "url": "https://github.com/arturmiller/specbound/issues/60",
+      "kind": "task",
+      "parent": "F13",
+      "dependencies": [
+        "T013",
+        "T031"
+      ]
+    },
+    "T034": {
+      "number": 61,
+      "id": 6190079021,
+      "url": "https://github.com/arturmiller/specbound/issues/61",
+      "kind": "task",
+      "parent": "F13",
+      "dependencies": [
+        "T033",
+        "T002"
+      ]
+    },
+    "F14": {
+      "number": 24,
+      "id": 6190059349,
+      "url": "https://github.com/arturmiller/specbound/issues/24",
+      "kind": "feature",
+      "parent": "E07",
+      "dependencies": []
+    },
+    "T035": {
+      "number": 62,
+      "id": 6190079479,
+      "url": "https://github.com/arturmiller/specbound/issues/62",
+      "kind": "task",
+      "parent": "F14",
+      "dependencies": [
+        "T034",
+        "T031"
+      ]
+    },
+    "T036": {
+      "number": 63,
+      "id": 6190079943,
+      "url": "https://github.com/arturmiller/specbound/issues/63",
+      "kind": "task",
+      "parent": "F14",
+      "dependencies": [
+        "T035"
+      ]
+    },
+    "T037": {
+      "number": 64,
+      "id": 6190080483,
+      "url": "https://github.com/arturmiller/specbound/issues/64",
+      "kind": "task",
+      "parent": "F14",
+      "dependencies": [
+        "T032",
+        "T035",
+        "T009"
+      ]
+    },
+    "E08": {
+      "number": 8,
+      "id": 6190050334,
+      "url": "https://github.com/arturmiller/specbound/issues/8",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F15": {
+      "number": 25,
+      "id": 6190060037,
+      "url": "https://github.com/arturmiller/specbound/issues/25",
+      "kind": "feature",
+      "parent": "E08",
+      "dependencies": []
+    },
+    "T038": {
+      "number": 65,
+      "id": 6190080979,
+      "url": "https://github.com/arturmiller/specbound/issues/65",
+      "kind": "task",
+      "parent": "F15",
+      "dependencies": [
+        "T018",
+        "T031"
+      ]
+    },
+    "T039": {
+      "number": 66,
+      "id": 6190081502,
+      "url": "https://github.com/arturmiller/specbound/issues/66",
+      "kind": "task",
+      "parent": "F15",
+      "dependencies": [
+        "T034",
+        "T038"
+      ]
+    },
+    "T040": {
+      "number": 67,
+      "id": 6190082068,
+      "url": "https://github.com/arturmiller/specbound/issues/67",
+      "kind": "task",
+      "parent": "F15",
+      "dependencies": [
+        "T029",
+        "T014",
+        "T038"
+      ]
+    },
+    "T041": {
+      "number": 68,
+      "id": 6190082669,
+      "url": "https://github.com/arturmiller/specbound/issues/68",
+      "kind": "task",
+      "parent": "F15",
+      "dependencies": [
+        "T039",
+        "T040",
+        "T032"
+      ]
+    },
+    "E09": {
+      "number": 9,
+      "id": 6190050866,
+      "url": "https://github.com/arturmiller/specbound/issues/9",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F16": {
+      "number": 26,
+      "id": 6190060672,
+      "url": "https://github.com/arturmiller/specbound/issues/26",
+      "kind": "feature",
+      "parent": "E09",
+      "dependencies": []
+    },
+    "T042": {
+      "number": 69,
+      "id": 6190083270,
+      "url": "https://github.com/arturmiller/specbound/issues/69",
+      "kind": "task",
+      "parent": "F16",
+      "dependencies": [
+        "T017",
+        "T019",
+        "T037"
+      ]
+    },
+    "T043": {
+      "number": 70,
+      "id": 6190083685,
+      "url": "https://github.com/arturmiller/specbound/issues/70",
+      "kind": "task",
+      "parent": "F16",
+      "dependencies": [
+        "T015",
+        "T022"
+      ]
+    },
+    "T044": {
+      "number": 71,
+      "id": 6190084173,
+      "url": "https://github.com/arturmiller/specbound/issues/71",
+      "kind": "task",
+      "parent": "F16",
+      "dependencies": [
+        "T021",
+        "T029",
+        "T042"
+      ]
+    },
+    "E10": {
+      "number": 10,
+      "id": 6190051399,
+      "url": "https://github.com/arturmiller/specbound/issues/10",
+      "kind": "epic",
+      "parent": null,
+      "dependencies": []
+    },
+    "F17": {
+      "number": 27,
+      "id": 6190061181,
+      "url": "https://github.com/arturmiller/specbound/issues/27",
+      "kind": "feature",
+      "parent": "E10",
+      "dependencies": []
+    },
+    "T045": {
+      "number": 72,
+      "id": 6190084751,
+      "url": "https://github.com/arturmiller/specbound/issues/72",
+      "kind": "task",
+      "parent": "F17",
+      "dependencies": [
+        "T001",
+        "T034"
+      ]
+    },
+    "T046": {
+      "number": 73,
+      "id": 6190085320,
+      "url": "https://github.com/arturmiller/specbound/issues/73",
+      "kind": "task",
+      "parent": "F17",
+      "dependencies": [
+        "T045",
+        "T002"
+      ]
+    },
+    "T047": {
+      "number": 74,
+      "id": 6190085906,
+      "url": "https://github.com/arturmiller/specbound/issues/74",
+      "kind": "task",
+      "parent": "F17",
+      "dependencies": [
+        "T045",
+        "T025"
+      ]
+    },
+    "T048": {
+      "number": 75,
+      "id": 6190086490,
+      "url": "https://github.com/arturmiller/specbound/issues/75",
+      "kind": "task",
+      "parent": "F17",
+      "dependencies": [
+        "T001"
+      ]
+    },
+    "T049": {
+      "number": 76,
+      "id": 6190087017,
+      "url": "https://github.com/arturmiller/specbound/issues/76",
+      "kind": "task",
+      "parent": "F17",
+      "dependencies": [
+        "T034",
+        "T048",
+        "T025"
+      ]
+    }
+  }
+}

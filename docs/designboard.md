@@ -23,9 +23,12 @@ Quellen anwenden.
 5. Quellen zusammen mit der Produktänderung reviewen und versionieren.
    `dist/` wird gebaut und nicht von Hand geändert.
 
-Task-Markierungen sind lokale Planungshilfen. GitHub Issues, deren Verknüpfung
-über Task-IDs und der tatsächliche Issue-Status sind ein separater nächster Schritt;
-es gibt bislang keine GitHub-Synchronisierung.
+Task-Markierungen sind lokale Planungshilfen. Die vorhandenen 10 Epics,
+17 Features und 49 Tasks wurden als GitHub Issues übernommen, einschließlich
+Elternbeziehungen und Task-Abhängigkeiten. Die Zuordnung der stabilen Board-IDs
+steht in [GitHub-Issues](github-issues.md) und maschinenlesbar in
+`github-issues.json`. Es gibt weiterhin keine laufende GitHub-Synchronisierung;
+lokale Task-Markierungen spiegeln den tatsächlichen Issue-Status nicht wider.
 
 ## Speicherung
 
