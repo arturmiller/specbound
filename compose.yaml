@@ -1,10 +1,38 @@
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: specbound
+      POSTGRES_USER: specbound
+      POSTGRES_PASSWORD: local-dev-only
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U specbound -d specbound"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  migrate:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://specbound:local-dev-only@db:5432/specbound
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
   api:
     build:
       context: .
       dockerfile: services/api/Dockerfile
     ports:
       - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://specbound:local-dev-only@db:5432/specbound
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
   worker:
     build:
       context: .
@@ -20,3 +48,6 @@ services:
       API_PROXY_TARGET: http://api:8000
     depends_on:
       - api
+
+volumes:
+  postgres_data:

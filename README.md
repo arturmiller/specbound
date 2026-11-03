@@ -14,6 +14,10 @@ Docker mit laufender Engine und Compose vorausgesetzt:
 docker compose up --build
 ```
 
+PostgreSQL wird lokal gestartet; der Migrationsdienst führt `alembic upgrade head`
+aus, bevor die API startet. Daten bleiben im Compose-Volume `postgres_data` erhalten.
+Die Zugangsdaten in der Compose-Datei sind ausschließlich für lokale Entwicklung.
+
 Das Portal ist unter <http://localhost:5173> erreichbar; die API antwortet auf
 <http://localhost:8000/healthz>. Der Worker läuft als eigener Prozess und wartet
 bis zur späteren Einführung einer Job-Queue. Mit `docker compose down` werden

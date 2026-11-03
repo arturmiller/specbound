@@ -1,0 +1,33 @@
+name: PostgreSQL migrations
+on:
+  push:
+  pull_request:
+
+jobs:
+  migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: specbound
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: specbound_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U specbound -d specbound_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/api/requirements.txt
+      - name: Migrate a fresh database and start the API
+        working-directory: services/api
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -v
