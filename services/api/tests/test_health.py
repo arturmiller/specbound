@@ -11,9 +11,5 @@ class HealthEndpointTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'status': 'ok'})
 
-    def test_ci_failure_probe(self) -> None:
-        self.fail('Intentional temporary failure to verify pull request checks')
-
-
 if __name__ == '__main__':
     unittest.main()
