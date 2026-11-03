@@ -13,7 +13,9 @@ function App() {
       })
       .then((data) => setStatus(data.status === 'ok' ? 'API erreichbar' : 'API nicht bereit'))
       .catch((error) => {
-        if (error.name !== 'AbortError') setStatus('API nicht erreichbar');
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          setStatus('API nicht erreichbar');
+        }
       });
     return () => controller.abort();
   }, []);
@@ -27,4 +29,6 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+const root = document.getElementById('root');
+if (!root) throw new Error('Missing root element');
+createRoot(root).render(<App />);
