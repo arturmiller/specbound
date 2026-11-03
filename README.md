@@ -70,4 +70,10 @@ Die erste Migration trennt Daten, Styles und Verhaltensbereiche. Der Build setzt
 die JS-Bereiche in definierter Reihenfolge im bisherigen Laufzeit-Scope zusammen.
 Weitere Modulgrenzen können schrittweise eingeführt werden.
 
+## CI-Grundchecks
+
+GitHub Actions prüft Python mit Ruff und API-Tests, das Web mit TypeScript und
+ESLint sowie die PostgreSQL-Migration auf einer leeren Datenbank. Ein erfolgreicher
+Lauf stellt Web- und Designboard-Build als Workflow-Artefakte bereit.
+
 Weiterentwicklung und Prüfprotokoll: [Designboard pflegen](docs/designboard.md).

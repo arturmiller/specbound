@@ -4,6 +4,8 @@ import logging
 import signal
 import threading
 
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -14,9 +16,9 @@ def main() -> None:
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
-    logging.info("Worker started; no job queue configured")
+    logger.info("Worker started; no job queue configured")
     stop.wait()
-    logging.info("Worker stopped")
+    logger.info("Worker stopped")
 
 
 if __name__ == "__main__":

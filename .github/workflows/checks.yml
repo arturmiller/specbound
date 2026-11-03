@@ -1,0 +1,56 @@
+name: Grundchecks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python Tests und Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/api/requirements-dev.txt
+      - name: Python lint
+        run: ruff check services/api services/worker
+      - name: API tests
+        working-directory: services/api
+        run: python -m unittest discover -s tests/unit -v
+
+  web:
+    name: Web Typecheck, Lint und Build
+    needs: python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/web/package-lock.json
+      - run: npm ci
+        working-directory: services/web
+      - run: npm run typecheck
+        working-directory: services/web
+      - run: npm run lint
+        working-directory: services/web
+      - run: npm run build
+        working-directory: services/web
+      - name: Designboard prüfen und bauen
+        run: npm run check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: specbound-web
+          path: services/web/dist/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: designboard
+          path: dist/
+          if-no-files-found: error
