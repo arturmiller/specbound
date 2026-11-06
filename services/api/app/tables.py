@@ -50,3 +50,18 @@ audit_events = Table(
     Column("details", JSON),
     Column("occurred_at", DateTime(timezone=True)),
 )
+products = Table(
+    "products",
+    metadata,
+    Column("id", String),
+    Column("owner_team_id", String),
+    Column("name", String),
+)
+repo_bindings = Table(
+    "repo_bindings",
+    metadata,
+    Column("id", String),
+    Column("product_id", String),
+    Column("provider", String),
+    Column("repository", String),
+)

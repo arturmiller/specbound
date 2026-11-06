@@ -19,7 +19,7 @@ from app.authorization import (
 )
 from app.database import get_connection
 from app.identity import get_current_principal
-from app.tables import agents, members, organizations, teams
+from app.tables import agents, members, organizations, products, teams
 
 NonBlank = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -139,6 +139,13 @@ def update_organization(
 def delete_organization(organization_id: str, principal: Principal, db: Db):
     organization_access(db, organization_id, principal, write=True)
     _lock_existing(db, organizations, organization_id)
+    if db.execute(
+        select(products.c.id)
+        .select_from(products.join(teams, products.c.owner_team_id == teams.c.id))
+        .where(teams.c.organization_id == organization_id)
+        .limit(1)
+    ).first():
+        raise HTTPException(status_code=409, detail="Remove products first")
     registered = db.execute(
         select(agents.c.principal_id)
         .where(agents.c.organization_id == organization_id)
@@ -207,6 +214,10 @@ def update_team(team_id: str, data: NameInput, principal: Principal, db: Db):
 def delete_team(team_id: str, principal: Principal, db: Db):
     team_access(db, team_id, principal, "manage")
     _lock_existing(db, teams, team_id)
+    if db.execute(
+        select(products.c.id).where(products.c.owner_team_id == team_id).limit(1)
+    ).first():
+        raise HTTPException(status_code=409, detail="Remove or transfer products first")
     if db.execute(
         select(members.c.id)
         .where(members.c.team_id == team_id, members.c.principal_id.like("agent:%"))
