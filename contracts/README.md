@@ -4,6 +4,10 @@
 Dies sind erste Datenverträge; sie implementieren weder Discovery, eine
 Evidence-Laufzeit noch Bewertungen oder Persistenz.
 
+Zusätzlich beschreiben `governance-pack.schema.json` und
+`governance-control.schema.json` das in [ADR 0011](../docs/adr/0011-governance-manifests.md)
+festgelegte erste Governance-Manifestformat. Es ersetzt keine Regelbewertung.
+
 - **Subject** beschreibt ein typisiertes Prüfobjekt in einem Produktkontext.
 - **Fact** hält einen benannten JSON-Wert über ein Subject fest. Ein vorhandener
   `null`-Wert ist ein tatsächlicher JSON-Wert, kein fehlendes Feld.

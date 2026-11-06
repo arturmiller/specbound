@@ -1,0 +1,9 @@
+id: SEC-NET-001
+target:
+  kind: database
+requiredEvidence:
+  capability: net.internet-reachability/v1
+assertions:
+  - path: publicly_reachable
+    operator: equals
+    expected: false

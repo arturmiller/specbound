@@ -1,0 +1,4 @@
+id: SEC-NET-001
+target: {kind: database}
+requiredEvidence: {capability: not-a-versioned-capability}
+assertions: [{path: publicly_reachable, operator: equals, expected: false}]
