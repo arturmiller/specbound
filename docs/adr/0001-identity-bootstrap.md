@@ -1,0 +1,17 @@
+# 0001: Identitätsgrenze bis zur OIDC-Anbindung
+
+Die Team-API benötigt eine verifizierte Identität und ist standardmäßig gesperrt.
+Bis Issue #36 die OIDC-Identität bereitstellt, liefert die Identitätsgrenze 401;
+Header, Query-Parameter oder Umgebungsvariablen schalten keine Testidentität frei.
+Der Health-Endpunkt bleibt unabhängig davon erreichbar.
+
+Integrationstests ersetzen diese Grenze ausschließlich im Testprozess und nutzen
+eine isolierte PostgreSQL-Datenbank. Ein ersetzter Test-Principal ist keine
+produktiv verifizierte Identität. Die Rollenprüfung wird in #34 implementiert;
+die persistierte Principal-ID ist bis #36 eine externe Referenz, keine bereits
+implementierte Principal-Tabelle. Die Team-API ist bis zur Integration beider
+Bausteine für reale Nutzer nicht freigeschaltet.
+
+Beim Erstellen einer Organisation wird die vertrauenswürdig bereitgestellte
+Principal-ID als Eigentümer gespeichert. So kann die spätere Rollenprüfung die
+Einrichtung des ersten Teams autorisieren, bevor Teammitgliedschaften existieren.
