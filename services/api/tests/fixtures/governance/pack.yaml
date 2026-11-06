@@ -1,0 +1,9 @@
+apiVersion: specbound.example/v1alpha1
+kind: GovernancePack
+metadata:
+  id: com.acme.security
+  version: 1.2.0
+controls:
+  - controls/SEC-NET-001.yaml
+requiresCapabilities:
+  - net.internet-reachability/v1
