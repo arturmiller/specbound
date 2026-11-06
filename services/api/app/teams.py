@@ -9,6 +9,8 @@ from sqlalchemy import Table, delete, insert, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
+from app.agents import lock_agent
+from app.audit import record_agent_event
 from app.authorization import (
     organization_access,
     team_access,
@@ -17,7 +19,7 @@ from app.authorization import (
 )
 from app.database import get_connection
 from app.identity import get_current_principal
-from app.tables import members, organizations, teams
+from app.tables import agents, members, organizations, teams
 
 NonBlank = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -50,6 +52,16 @@ def _required(db: Connection, table: Table, item_id: str):
     if item is None:
         raise HTTPException(status_code=404, detail="Not found")
     return item
+
+
+def _lock_existing(db: Connection, table: Table, item_id: str):
+    if (
+        db.execute(
+            select(table.c.id).where(table.c.id == item_id).with_for_update()
+        ).first()
+        is None
+    ):
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 def _organization(item):
@@ -126,6 +138,25 @@ def update_organization(
 )
 def delete_organization(organization_id: str, principal: Principal, db: Db):
     organization_access(db, organization_id, principal, write=True)
+    _lock_existing(db, organizations, organization_id)
+    registered = db.execute(
+        select(agents.c.principal_id)
+        .where(agents.c.organization_id == organization_id)
+        .limit(1)
+    ).first()
+    assigned = db.execute(
+        select(members.c.id)
+        .select_from(members.join(teams, members.c.team_id == teams.c.id))
+        .where(
+            teams.c.organization_id == organization_id,
+            members.c.principal_id.like("agent:%"),
+        )
+        .limit(1)
+    ).first()
+    if registered or assigned:
+        raise HTTPException(
+            status_code=409, detail="Remove agent records and memberships first"
+        )
     db.execute(delete(organizations).where(organizations.c.id == organization_id))
 
 
@@ -175,12 +206,24 @@ def update_team(team_id: str, data: NameInput, principal: Principal, db: Db):
 @router.delete("/teams/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_team(team_id: str, principal: Principal, db: Db):
     team_access(db, team_id, principal, "manage")
+    _lock_existing(db, teams, team_id)
+    if db.execute(
+        select(members.c.id)
+        .where(members.c.team_id == team_id, members.c.principal_id.like("agent:%"))
+        .limit(1)
+    ).first():
+        raise HTTPException(status_code=409, detail="Remove agent memberships first")
     db.execute(delete(teams).where(teams.c.id == team_id))
 
 
 @router.post("/teams/{team_id}/members", status_code=status.HTTP_201_CREATED)
 def create_member(team_id: str, data: MemberInput, principal: Principal, db: Db):
-    team_access(db, team_id, principal, "manage")
+    team = team_access(db, team_id, principal, "manage")
+    _lock_existing(db, teams, team_id)
+    if data.principalId.startswith("agent:"):
+        lock_agent(db, team["organization_id"], data.principalId)
+        if data.role != "viewer":
+            raise HTTPException(status_code=403, detail="Agent membership is read-only")
     try:
         row = (
             db.execute(
@@ -200,6 +243,16 @@ def create_member(team_id: str, data: MemberInput, principal: Principal, db: Db)
         raise HTTPException(
             status_code=409, detail="Membership already exists"
         ) from exc
+    if data.principalId.startswith("agent:"):
+        record_agent_event(
+            db,
+            organization_id=team["organization_id"],
+            actor_id=principal,
+            action="agent.membership.created",
+            target_id=data.principalId,
+            team_id=team_id,
+            details={"role": data.role},
+        )
     return _member(row)
 
 
@@ -229,8 +282,12 @@ def _team_member(team_id: str, member_id: str, db: Connection):
 def update_member(
     team_id: str, member_id: str, data: MemberRoleInput, principal: Principal, db: Db
 ):
-    team_access(db, team_id, principal, "manage")
-    _team_member(team_id, member_id, db)
+    team = team_access(db, team_id, principal, "manage")
+    member = _team_member(team_id, member_id, db)
+    if member["principalId"].startswith("agent:"):
+        lock_agent(db, team["organization_id"], member["principalId"])
+        if data.role != "viewer":
+            raise HTTPException(status_code=403, detail="Agent membership is read-only")
     row = (
         db.execute(
             update(members)
@@ -239,8 +296,20 @@ def update_member(
             .returning(members)
         )
         .mappings()
-        .one()
+        .one_or_none()
     )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if member["principalId"].startswith("agent:"):
+        record_agent_event(
+            db,
+            organization_id=team["organization_id"],
+            actor_id=principal,
+            action="agent.membership.updated",
+            target_id=member["principalId"],
+            team_id=team_id,
+            details={"oldRole": member["role"], "newRole": data.role},
+        )
     return _member(row)
 
 
@@ -248,6 +317,26 @@ def update_member(
     "/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT
 )
 def delete_member(team_id: str, member_id: str, principal: Principal, db: Db):
-    team_access(db, team_id, principal, "manage")
-    _team_member(team_id, member_id, db)
-    db.execute(delete(members).where(members.c.id == member_id))
+    team = team_access(db, team_id, principal, "manage")
+    member = _team_member(team_id, member_id, db)
+    if member["principalId"].startswith("agent:"):
+        db.execute(
+            select(agents.c.principal_id)
+            .where(agents.c.principal_id == member["principalId"])
+            .with_for_update()
+        ).first()
+    deleted = db.execute(
+        delete(members).where(members.c.id == member_id).returning(members.c.id)
+    ).scalar_one_or_none()
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if member["principalId"].startswith("agent:"):
+        record_agent_event(
+            db,
+            organization_id=team["organization_id"],
+            actor_id=principal,
+            action="agent.membership.deleted",
+            target_id=member["principalId"],
+            team_id=team_id,
+            details={"role": member["role"]},
+        )

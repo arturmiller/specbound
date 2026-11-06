@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from app.agents import router as agents_router
 from app.identity import router as auth_router
 from app.teams import router as teams_router
 
@@ -13,6 +14,7 @@ class HealthResponse(BaseModel):
 
 app = FastAPI(title="Specbound API")
 app.include_router(auth_router)
+app.include_router(agents_router)
 app.include_router(teams_router)
 
 
