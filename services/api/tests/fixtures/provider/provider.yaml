@@ -1,0 +1,19 @@
+apiVersion: specbound.example/v1alpha1
+kind: EvidenceProviderPack
+metadata:
+  id: org.acme.aws-network
+  version: 1.4.2
+  title: Network Provider
+runtime:
+  kind: approved-container
+  image: registry.example/evidence/aws-reader@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  entrypoint: ["/collector"]
+  input: contracts/collect-request.json
+  output: contracts/observation.json
+capabilities:
+  - id: net.internet-reachability
+    version: v1
+    outputSchema: schemas/reachability.json
+permissions:
+  aws: ["rds:DescribeDBInstances"]
+tests: [tests/reachability.yaml]
