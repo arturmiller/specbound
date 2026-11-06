@@ -5,36 +5,19 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, StringConstraints
-from sqlalchemy import Column, MetaData, String, Table, delete, insert, select, update
+from sqlalchemy import Table, delete, insert, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
+from app.authorization import (
+    organization_access,
+    team_access,
+    visible_organizations,
+    visible_teams,
+)
 from app.database import get_connection
 from app.identity import get_current_principal
-
-metadata = MetaData()
-organizations = Table(
-    "organizations",
-    metadata,
-    Column("id", String),
-    Column("name", String),
-    Column("owner_principal_id", String),
-)
-teams = Table(
-    "teams",
-    metadata,
-    Column("id", String),
-    Column("organization_id", String),
-    Column("name", String),
-)
-members = Table(
-    "team_members",
-    metadata,
-    Column("id", String),
-    Column("team_id", String),
-    Column("principal_id", String),
-    Column("role", String),
-)
+from app.tables import members, organizations, teams
 
 NonBlank = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -109,23 +92,22 @@ def create_organization(data: NameInput, principal: Principal, db: Db):
 
 
 @router.get("/organizations")
-def list_organizations(db: Db):
-    return [
-        _organization(row)
-        for row in db.execute(
-            select(organizations).order_by(organizations.c.id)
-        ).mappings()
-    ]
+def list_organizations(principal: Principal, db: Db):
+    return [_organization(row) for row in visible_organizations(db, principal)]
 
 
 @router.get("/organizations/{organization_id}")
-def get_organization(organization_id: str, db: Db):
-    return _organization(_required(db, organizations, organization_id))
+def get_organization(organization_id: str, principal: Principal, db: Db):
+    return _organization(
+        organization_access(db, organization_id, principal, write=False)
+    )
 
 
 @router.patch("/organizations/{organization_id}")
-def update_organization(organization_id: str, data: NameInput, db: Db):
-    _required(db, organizations, organization_id)
+def update_organization(
+    organization_id: str, data: NameInput, principal: Principal, db: Db
+):
+    organization_access(db, organization_id, principal, write=True)
     row = (
         db.execute(
             update(organizations)
@@ -142,16 +124,16 @@ def update_organization(organization_id: str, data: NameInput, db: Db):
 @router.delete(
     "/organizations/{organization_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-def delete_organization(organization_id: str, db: Db):
-    _required(db, organizations, organization_id)
+def delete_organization(organization_id: str, principal: Principal, db: Db):
+    organization_access(db, organization_id, principal, write=True)
     db.execute(delete(organizations).where(organizations.c.id == organization_id))
 
 
 @router.post(
     "/organizations/{organization_id}/teams", status_code=status.HTTP_201_CREATED
 )
-def create_team(organization_id: str, data: NameInput, db: Db):
-    _required(db, organizations, organization_id)
+def create_team(organization_id: str, data: NameInput, principal: Principal, db: Db):
+    organization_access(db, organization_id, principal, write=True)
     row = (
         db.execute(
             insert(teams)
@@ -165,24 +147,18 @@ def create_team(organization_id: str, data: NameInput, db: Db):
 
 
 @router.get("/organizations/{organization_id}/teams")
-def list_teams(organization_id: str, db: Db):
-    _required(db, organizations, organization_id)
-    rows = db.execute(
-        select(teams)
-        .where(teams.c.organization_id == organization_id)
-        .order_by(teams.c.id)
-    ).mappings()
-    return [_team(row) for row in rows]
+def list_teams(organization_id: str, principal: Principal, db: Db):
+    return [_team(row) for row in visible_teams(db, organization_id, principal)]
 
 
 @router.get("/teams/{team_id}")
-def get_team(team_id: str, db: Db):
-    return _team(_required(db, teams, team_id))
+def get_team(team_id: str, principal: Principal, db: Db):
+    return _team(team_access(db, team_id, principal, "read"))
 
 
 @router.patch("/teams/{team_id}")
-def update_team(team_id: str, data: NameInput, db: Db):
-    _required(db, teams, team_id)
+def update_team(team_id: str, data: NameInput, principal: Principal, db: Db):
+    team_access(db, team_id, principal, "edit")
     row = (
         db.execute(
             update(teams)
@@ -197,14 +173,14 @@ def update_team(team_id: str, data: NameInput, db: Db):
 
 
 @router.delete("/teams/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_team(team_id: str, db: Db):
-    _required(db, teams, team_id)
+def delete_team(team_id: str, principal: Principal, db: Db):
+    team_access(db, team_id, principal, "manage")
     db.execute(delete(teams).where(teams.c.id == team_id))
 
 
 @router.post("/teams/{team_id}/members", status_code=status.HTTP_201_CREATED)
-def create_member(team_id: str, data: MemberInput, db: Db):
-    _required(db, teams, team_id)
+def create_member(team_id: str, data: MemberInput, principal: Principal, db: Db):
+    team_access(db, team_id, principal, "manage")
     try:
         row = (
             db.execute(
@@ -228,8 +204,8 @@ def create_member(team_id: str, data: MemberInput, db: Db):
 
 
 @router.get("/teams/{team_id}/members")
-def list_members(team_id: str, db: Db):
-    _required(db, teams, team_id)
+def list_members(team_id: str, principal: Principal, db: Db):
+    team_access(db, team_id, principal, "read")
     rows = db.execute(
         select(members).where(members.c.team_id == team_id).order_by(members.c.id)
     ).mappings()
@@ -237,7 +213,12 @@ def list_members(team_id: str, db: Db):
 
 
 @router.get("/teams/{team_id}/members/{member_id}")
-def get_member(team_id: str, member_id: str, db: Db):
+def get_member(team_id: str, member_id: str, principal: Principal, db: Db):
+    team_access(db, team_id, principal, "read")
+    return _team_member(team_id, member_id, db)
+
+
+def _team_member(team_id: str, member_id: str, db: Connection):
     member = _required(db, members, member_id)
     if member["team_id"] != team_id:
         raise HTTPException(status_code=404, detail="Not found")
@@ -245,8 +226,11 @@ def get_member(team_id: str, member_id: str, db: Db):
 
 
 @router.patch("/teams/{team_id}/members/{member_id}")
-def update_member(team_id: str, member_id: str, data: MemberRoleInput, db: Db):
-    get_member(team_id, member_id, db)
+def update_member(
+    team_id: str, member_id: str, data: MemberRoleInput, principal: Principal, db: Db
+):
+    team_access(db, team_id, principal, "manage")
+    _team_member(team_id, member_id, db)
     row = (
         db.execute(
             update(members)
@@ -263,6 +247,7 @@ def update_member(team_id: str, member_id: str, data: MemberRoleInput, db: Db):
 @router.delete(
     "/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-def delete_member(team_id: str, member_id: str, db: Db):
-    get_member(team_id, member_id, db)
+def delete_member(team_id: str, member_id: str, principal: Principal, db: Db):
+    team_access(db, team_id, principal, "manage")
+    _team_member(team_id, member_id, db)
     db.execute(delete(members).where(members.c.id == member_id))
