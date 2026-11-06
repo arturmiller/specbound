@@ -1,0 +1,71 @@
+import React, { useEffect, useState } from 'react';
+
+/** @typedef {{id: string, repository: string, tag: string, commit: string, kind: string, manifest: {metadata: {id: string, version: string}}, controls: {id: string}[], capabilities: (string | {id: string, version: string})[]}} Pack */
+
+/** @param {{organizationId: string, accessToken?: string}} props */
+export function PackWorkspace({ organizationId, accessToken = '' }) {
+  const [packs, setPacks] = useState(/** @type {Pack[]} */ ([]));
+  const [selected, setSelected] = useState('');
+  const [repository, setRepository] = useState('');
+  const [tag, setTag] = useState('');
+  const [kind, setKind] = useState('governance');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const root = `/api/organizations/${encodeURIComponent(organizationId)}/packs`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(root, { signal: controller.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} })
+      .then((response) => { if (!response.ok) throw new Error('load failed'); return response.json(); })
+      .then((/** @type {Pack[]} */ data) => { setPacks(data); setSelected(data[0]?.id || ''); })
+      .catch(() => { if (!controller.signal.aborted) setError('Packs konnten nicht geladen werden.'); });
+    return () => controller.abort();
+  }, [root, accessToken]);
+
+  /** @param {React.FormEvent<HTMLFormElement>} event */
+  async function connect(event) {
+    event.preventDefault();
+    setBusy(true); setError('');
+    try {
+      const response = await fetch(root, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+        body: JSON.stringify({ repository: repository.trim(), tag: tag.trim(), kind }),
+      });
+      if (!response.ok) throw new Error(response.status === 409 ? 'Der Tag wurde verschoben; der gespeicherte Commit bleibt unverändert.' : 'Pack konnte nicht verbunden werden.');
+      /** @type {Pack} */ const pack = await response.json();
+      setPacks((current) => [...current.filter((item) => item.id !== pack.id), pack]);
+      setSelected(pack.id);
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Pack konnte nicht verbunden werden.'); }
+    finally { setBusy(false); }
+  }
+
+  const detail = packs.find((pack) => pack.id === selected);
+  return <section aria-labelledby="packs-heading" className="workspace">
+    <div className="workspace-heading"><div><p className="eyebrow">GOVERNANCE</p><h2 id="packs-heading">Pack-Katalog</h2></div>
+      <p>Versionierte Manifeste und ihre Herkunft.</p></div>
+    {error && <p role="alert" className="alert">{error}</p>}
+    <div className="workspace-grid">
+      <div className="panel">
+        <h3>Packs</h3>
+        {packs.length === 0 && <p>Noch keine Packs verbunden.</p>}
+        <ul className="team-list">{packs.map((pack) => <li key={pack.id}><button className="team-choice" type="button" aria-pressed={pack.id === selected} onClick={() => setSelected(pack.id)}>{pack.manifest.metadata.id} · {pack.tag}</button></li>)}</ul>
+        <form onSubmit={connect}>
+          <label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label>
+          <label className="field">Release-Tag<input required maxLength={200} value={tag} onChange={(event) => setTag(event.target.value)} placeholder="v1.0.0" /></label>
+          <label className="field">Pack-Typ<select value={kind} onChange={(event) => setKind(event.target.value)}><option value="governance">Governance</option><option value="provider">Evidence Provider</option></select></label>
+          <button type="submit" disabled={busy}>Pack verbinden</button>
+        </form>
+      </div>
+      <div className="panel"><h3>Pack-Details</h3>{detail ? <>
+        <p><strong>{detail.manifest.metadata.id}</strong> · Version {detail.manifest.metadata.version}</p>
+        <p>Repository: {detail.repository}</p><p>Tag: {detail.tag}</p><p>Commit: <code>{detail.commit}</code></p>
+        <p>Strukturell validiert; noch nicht freigegeben.</p>
+        <h4>Kontrollen</h4>{detail.controls.length ? <ul>{detail.controls.map((control) => <li key={control.id}>{control.id}</li>)}</ul> : <p>Keine Governance-Kontrollen.</p>}
+        <h4>Capabilities</h4><ul>{detail.capabilities.map((capability) => {
+          const value = typeof capability === 'string' ? capability : `${capability.id}/${capability.version}`;
+          return <li key={value}>{value}</li>;
+        })}</ul>
+      </> : <p>Wähle ein Pack aus.</p>}</div>
+    </div>
+  </section>;
+}

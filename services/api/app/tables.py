@@ -97,3 +97,8 @@ pack_activations = Table(
     "pack_activations", metadata,
     Column("organization_id", String), Column("repository", String), Column("revision_id", String),
 )
+pack_catalog = Table(
+    "pack_catalog", metadata,
+    Column("revision_id", String), Column("kind", String), Column("manifest", JSON),
+    Column("controls", JSON), Column("capabilities", JSON),
+)
