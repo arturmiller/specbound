@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "subject:db-primary",
+  "type": "database",
+  "scope": {"productId": "customer-service"},
+  "observedAt": "2026-11-06T10:30:00Z"
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "evidence:storage",
+  "subjectId": "subject:db-primary",
+  "capability": "storage.encryption",
+  "scope": {"productId": "customer-service", "environment": "production"},
+  "provenance": {"sourceRef": "collector:storage"},
+  "observedAt": "2026-11-06T10:30:00Z"
+}

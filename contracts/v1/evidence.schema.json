@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specbound:contracts:v1:evidence",
+  "title": "Evidence v1",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "id": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "subjectId": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "capability": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "factIds": {"type": "array", "items": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"}, "uniqueItems": true},
+    "scope": {
+      "$ref": "urn:specbound:contracts:v1:common#/$defs/scope",
+      "required": ["environment", "targetRevision"]
+    },
+    "provenance": {"$ref": "urn:specbound:contracts:v1:common#/$defs/provenance"},
+    "observedAt": {"$ref": "urn:specbound:contracts:v1:common#/$defs/timestamp"}
+  },
+  "required": ["schemaVersion", "id", "subjectId", "capability", "scope", "provenance", "observedAt"],
+  "additionalProperties": false
+}

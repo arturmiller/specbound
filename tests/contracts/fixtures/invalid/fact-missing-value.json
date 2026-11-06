@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "fact:encryption",
+  "subjectId": "subject:db-primary",
+  "predicate": "storage.encrypted",
+  "scope": {"productId": "customer-service"},
+  "provenance": {"sourceRef": "collector:storage"},
+  "observedAt": "2026-11-06T10:30:00Z"
+}

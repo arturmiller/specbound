@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specbound:contracts:v1:fact",
+  "title": "Fact v1",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "id": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "subjectId": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "predicate": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "value": true,
+    "scope": {"$ref": "urn:specbound:contracts:v1:common#/$defs/scope"},
+    "provenance": {"$ref": "urn:specbound:contracts:v1:common#/$defs/provenance"},
+    "observedAt": {"$ref": "urn:specbound:contracts:v1:common#/$defs/timestamp"}
+  },
+  "required": ["schemaVersion", "id", "subjectId", "predicate", "value", "scope", "provenance", "observedAt"],
+  "additionalProperties": false
+}

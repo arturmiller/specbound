@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specbound:contracts:v1:subject",
+  "title": "Subject v1",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "id": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "type": {"$ref": "urn:specbound:contracts:v1:common#/$defs/identifier"},
+    "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "scope": {"$ref": "urn:specbound:contracts:v1:common#/$defs/scope"},
+    "provenance": {"$ref": "urn:specbound:contracts:v1:common#/$defs/provenance"},
+    "observedAt": {"$ref": "urn:specbound:contracts:v1:common#/$defs/timestamp"}
+  },
+  "required": ["schemaVersion", "id", "type", "scope", "provenance", "observedAt"],
+  "additionalProperties": false
+}
