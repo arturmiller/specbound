@@ -1,10 +1,12 @@
 """OIDC access-token tests use an isolated local issuer and a disposable database."""
 
+import hashlib
 import json
 import os
 import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 from uuid import uuid4
@@ -172,6 +174,46 @@ class OidcIntegrationTest(unittest.TestCase):
                         "issuer": self.issuer,
                         "subject": subject,
                     },
+                )
+        finally:
+            engine.dispose()
+        with TestClient(app) as client:
+            response = client.get(
+                "/auth/me", headers={"Authorization": f"Bearer {self.token(subject)}"}
+            )
+            self.assertEqual(response.status_code, 401)
+
+    def test_parallel_first_requests_resolve_the_same_user(self):
+        for _ in range(3):
+            token = self.token(f"parallel-{uuid4()}")
+            barrier = threading.Barrier(6)
+
+            def request_user():
+                with TestClient(app) as client:
+                    barrier.wait(timeout=15)
+                    response = client.get(
+                        "/auth/me", headers={"Authorization": f"Bearer {token}"}
+                    )
+                    return response.status_code, response.json()
+
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                results = list(pool.map(lambda _: request_user(), range(6)))
+            self.assertEqual([status for status, _ in results], [200] * 6, results)
+            self.assertEqual(len({body["id"] for _, body in results}), 1)
+
+    def test_principal_id_collision_is_rejected(self):
+        subject = f"collision-{uuid4()}"
+        principal_id = "user:" + hashlib.sha256(
+            f"{self.issuer}\0{subject}".encode("utf-8")
+        ).hexdigest()
+        engine = create_engine(os.environ["DATABASE_URL"])
+        try:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO principals (id, kind, issuer, subject) VALUES (:id, 'agent', :issuer, :subject)"
+                    ),
+                    {"id": principal_id, "issuer": self.issuer, "subject": str(uuid4())},
                 )
         finally:
             engine.dispose()
