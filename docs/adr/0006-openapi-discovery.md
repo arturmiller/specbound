@@ -11,8 +11,9 @@ mit Endung `.openapi.yaml`, `.openapi.yml` oder `.openapi.json` und eigenständi
 Dateien `*.schema.json`. OpenAPI 3.0/3.1 liefert Subjects für Pfade und
 `components.schemas`; JSON Schema liefert ein Subject für das Dokument und
 weitere für `$defs`. Quellenreferenzen enthalten Dateipfad und JSON-Pointer.
-Andere Dateinamen werden nicht durchsucht. Externe Referenzen werden nicht
-aufgelöst; der Scanner ist keine vollständige Spezifikationsvalidierung.
+Andere Dateinamen werden nicht durchsucht. Referenzen werden nicht aufgelöst;
+Dateien mit `$ref` melden daher unvollständige Abdeckung. Der Scanner ist keine
+vollständige Spezifikationsvalidierung.
 
 Fehlende Quellen und nicht lesbare, zu große, mehrdeutige oder nicht unterstützte
 Dateien erscheinen als Fehler, während Ergebnisse anderer Dateien erhalten

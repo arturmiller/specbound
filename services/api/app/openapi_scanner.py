@@ -74,6 +74,19 @@ def _pointer(*parts):
     )
 
 
+def _contains_references(document):
+    pending = [document]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            if "$ref" in value:
+                return True
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return False
+
+
 def _entries(path: str, document):
     if not isinstance(document, dict):
         raise ValueError("document must be an object")
@@ -163,7 +176,8 @@ def scan_repository(
     errors = []
     for path in candidates:
         try:
-            entries = _entries(path, _parse(path, snapshot.files[path]))
+            document = _parse(path, snapshot.files[path])
+            entries = _entries(path, document)
             for kind, pointer, name in entries:
                 if not isinstance(name, str) or not name.strip():
                     raise ValueError("subject name must be a nonempty string")
@@ -195,6 +209,8 @@ def scan_repository(
                     }
                 )
             subjects.extend(file_subjects)
+            if _contains_references(document):
+                errors.append(ScanError(path, "References are not resolved"))
         except (ValueError, UnicodeError, yaml.YAMLError, RecursionError):
             errors.append(ScanError(path, "Unsupported or malformed source file"))
     return ScanResult(tuple(subjects), candidates, tuple(errors), snapshot.commit)

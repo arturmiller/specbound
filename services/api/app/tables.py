@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Column, DateTime, MetaData, String, Table
+from sqlalchemy import JSON, Column, DateTime, Integer, MetaData, String, Table
 
 metadata = MetaData()
 organizations = Table(
@@ -64,4 +64,17 @@ repo_bindings = Table(
     Column("product_id", String),
     Column("provider", String),
     Column("repository", String),
+)
+scanner_coverage = Table(
+    "scanner_coverage",
+    metadata,
+    Column("id", Integer),
+    Column("binding_id", String),
+    Column("scanner", String),
+    Column("ref", String),
+    Column("status", String),
+    Column("source_revision", String),
+    Column("observed_at", DateTime(timezone=True)),
+    Column("files", JSON),
+    Column("errors", JSON),
 )
