@@ -1,0 +1,34 @@
+name: Lokaler Objektspeicher
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  minio:
+    name: MinIO Compose-Vertrag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/api/requirements-dev.txt
+      - name: Start MinIO and initialize the local bucket
+        run: |
+          docker compose up -d minio
+          docker compose run --rm minio-init
+      - name: Check BlobStore against Compose MinIO
+        working-directory: services/api
+        env:
+          BLOBSTORE_ENDPOINT: http://127.0.0.1:9000
+          BLOBSTORE_BUCKET: specbound
+          BLOBSTORE_ACCESS_KEY: specbound
+          BLOBSTORE_SECRET_KEY: local-dev-only
+        run: python -m unittest discover -s tests -p 'test_blobstore_minio.py' -v
+      - name: Stop Compose services
+        if: always()
+        run: docker compose down

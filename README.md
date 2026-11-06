@@ -14,8 +14,9 @@ Docker mit laufender Engine und Compose vorausgesetzt:
 docker compose up --build
 ```
 
-PostgreSQL wird lokal gestartet; der Migrationsdienst führt `alembic upgrade head`
-aus, bevor die API startet. Daten bleiben im Compose-Volume `postgres_data` erhalten.
+PostgreSQL und MinIO werden lokal gestartet; der Migrationsdienst führt
+`alembic upgrade head` aus, bevor die API startet. Daten bleiben in den
+Compose-Volumes `postgres_data` und `minio_data` erhalten.
 Die Zugangsdaten in der Compose-Datei sind ausschließlich für lokale Entwicklung.
 
 Das Portal ist unter <http://localhost:5173> erreichbar; die API antwortet auf
@@ -30,6 +31,14 @@ als Umgebungsvariablen gesetzt. Der Provider muss RFC-9068-Access-Tokens und
 den Resource-Parameter unterstützen. Ohne gültige Konfiguration bleiben
 geschützte APIs gesperrt. Die genauen Anforderungen und Grenzen stehen in
 [ADR 0002](docs/adr/0002-oidc-access-tokens.md).
+
+MinIO stellt die S3-kompatible API lokal unter <http://127.0.0.1:9000> und die
+Konsole unter <http://127.0.0.1:9001> bereit. Compose legt den Bucket
+`specbound` beim Start an. Die voreingestellten lokalen Zugangsdaten sind
+`specbound` / `local-dev-only`; sie können über `MINIO_ROOT_USER`,
+`MINIO_ROOT_PASSWORD` und `BLOBSTORE_BUCKET` ersetzt werden. Einzelheiten zum
+BlobStore und zum lokalen Vertragstest stehen in
+[ADR 0008](docs/adr/0008-local-blobstore.md).
 
 ### Designboard
 
