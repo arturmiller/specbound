@@ -7,6 +7,8 @@ Evidence-Laufzeit noch Bewertungen oder Persistenz.
 Zusätzlich beschreiben `governance-pack.schema.json` und
 `governance-control.schema.json` das in [ADR 0011](../docs/adr/0011-governance-manifests.md)
 festgelegte erste Governance-Manifestformat. Es ersetzt keine Regelbewertung.
+`evidence-provider-pack.schema.json` beschreibt das Provider-Format aus
+[ADR 0012](../docs/adr/0012-provider-manifests.md).
 
 - **Subject** beschreibt ein typisiertes Prüfobjekt in einem Produktkontext.
 - **Fact** hält einen benannten JSON-Wert über ein Subject fest. Ein vorhandener
