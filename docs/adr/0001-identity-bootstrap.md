@@ -1,5 +1,10 @@
 # 0001: Identitätsgrenze bis zur OIDC-Anbindung
 
+Status: Die Übergangssperre ist durch [ADR 0002](0002-oidc-access-tokens.md)
+für konfigurierte OIDC-Provider abgelöst. Ohne gültige OIDC-Konfiguration
+bleibt die API weiterhin gesperrt. Die unten dokumentierten Teamrollen gelten
+weiterhin.
+
 Die Team-API benötigt eine verifizierte Identität und ist standardmäßig gesperrt.
 Bis Issue #36 die OIDC-Identität bereitstellt, liefert die Identitätsgrenze 401;
 Header, Query-Parameter oder Umgebungsvariablen schalten keine Testidentität frei.

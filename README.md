@@ -23,6 +23,14 @@ Das Portal ist unter <http://localhost:5173> erreichbar; die API antwortet auf
 bis zur späteren Einführung einer Job-Queue. Mit `docker compose down` werden
 die Dienste beendet. Die Produktdienste sind ein erster technischer Grundaufbau.
 
+Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
+ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`
+werden `OIDC_ISSUER`, `OIDC_JWKS_URL`, `OIDC_CLIENT_ID` und `OIDC_AUDIENCE`
+als Umgebungsvariablen gesetzt. Der Provider muss RFC-9068-Access-Tokens und
+den Resource-Parameter unterstützen. Ohne gültige Konfiguration bleiben
+geschützte APIs gesperrt. Die genauen Anforderungen und Grenzen stehen in
+[ADR 0002](docs/adr/0002-oidc-access-tokens.md).
+
 ### Designboard
 
 Voraussetzung: Node.js 22 oder neuer. Es gibt keine externen Laufzeitpakete.

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { TeamWorkspace } from './teams.jsx';
+import { AuthWorkspace } from './auth.jsx';
 import './styles.css';
 
 function App() {
@@ -27,7 +27,7 @@ function App() {
       <h1>Specbound</h1>
       <p>Lokale Entwicklungsumgebung</p>
       <p role="status">{status}</p>
-      <TeamWorkspace />
+      <AuthWorkspace />
     </main>
   );
 }

@@ -12,11 +12,11 @@ class ApiError extends Error {
   }
 }
 
-/** @param {string} path @param {RequestInit} [options] */
-async function request(path, options = {}) {
+/** @param {string} path @param {RequestInit} [options] @param {string} [accessToken] */
+async function request(path, options = {}, accessToken = '') {
   const response = await fetch(`/api${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...options.headers },
   });
   if (!response.ok) throw new ApiError(response.status);
   return response.json();
@@ -30,7 +30,8 @@ function errorMessage(error) {
   return 'Die Anfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.';
 }
 
-export function TeamWorkspace() {
+/** @param {{accessToken?: string}} props */
+export function TeamWorkspace({ accessToken = '' }) {
   const [organizations, setOrganizations] = useState(/** @type {Organization[]} */ ([]));
   const [teams, setTeams] = useState(/** @type {Team[]} */ ([]));
   const [members, setMembers] = useState(/** @type {Member[]} */ ([]));
@@ -47,7 +48,7 @@ export function TeamWorkspace() {
 
   useEffect(() => {
     const controller = new AbortController();
-    request('/organizations', { signal: controller.signal })
+    request('/organizations', { signal: controller.signal }, accessToken)
       .then((/** @type {Organization[]} */ data) => {
         setOrganizations(data);
         setOrganizationId((current) => data.some((org) => org.id === current) ? current : (data[0]?.id || ''));
@@ -55,13 +56,13 @@ export function TeamWorkspace() {
       .catch((failure) => { if (!controller.signal.aborted) setError(errorMessage(failure)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     if (!organizationId) { setTeams([]); setTeamId(''); setTeamsLoading(false); return; }
     const controller = new AbortController();
     setTeamsLoading(true);
-    request(`/organizations/${encodeURIComponent(organizationId)}/teams`, { signal: controller.signal })
+    request(`/organizations/${encodeURIComponent(organizationId)}/teams`, { signal: controller.signal }, accessToken)
       .then((/** @type {Team[]} */ data) => {
         setTeams(data);
         setTeamId((current) => data.some((team) => team.id === current) ? current : (data[0]?.id || ''));
@@ -69,19 +70,19 @@ export function TeamWorkspace() {
       .catch((failure) => { if (!controller.signal.aborted) setError(errorMessage(failure)); })
       .finally(() => { if (!controller.signal.aborted) setTeamsLoading(false); });
     return () => controller.abort();
-  }, [organizationId]);
+  }, [organizationId, accessToken]);
 
   useEffect(() => {
     if (!teamId) { setMembers([]); setMembersLoading(false); return; }
     const controller = new AbortController();
     setMembers([]);
     setMembersLoading(true);
-    request(`/teams/${encodeURIComponent(teamId)}/members`, { signal: controller.signal })
+    request(`/teams/${encodeURIComponent(teamId)}/members`, { signal: controller.signal }, accessToken)
       .then((/** @type {Member[]} */ data) => setMembers(data))
       .catch((failure) => { if (!controller.signal.aborted) setError(errorMessage(failure)); })
       .finally(() => { if (!controller.signal.aborted) setMembersLoading(false); });
     return () => controller.abort();
-  }, [teamId]);
+  }, [teamId, accessToken]);
 
   useEffect(() => {
     const url = new URL(location.href);
@@ -98,7 +99,7 @@ export function TeamWorkspace() {
     try {
       const team = await request(`/organizations/${encodeURIComponent(organizationId)}/teams`, {
         method: 'POST', body: JSON.stringify({ name: teamName.trim() }),
-      });
+      }, accessToken);
       setTeams((current) => [...current, team]);
       setTeamId(team.id);
       setTeamName('');
@@ -114,7 +115,7 @@ export function TeamWorkspace() {
     try {
       const member = await request(`/teams/${encodeURIComponent(teamId)}/members`, {
         method: 'POST', body: JSON.stringify({ principalId: principalId.trim(), role }),
-      });
+      }, accessToken);
       setMembers((current) => [...current, member]);
       setPrincipalId('');
     } catch (failure) { setError(errorMessage(failure)); }
