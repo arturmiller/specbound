@@ -12,6 +12,7 @@ export default defineConfig({
       command: 'python -m tests.e2e_server',
       cwd: '../api',
       url: 'http://127.0.0.1:18762/healthz',
+      env: { OIDC_ISSUER: '', OIDC_JWKS_URL: '', OIDC_CLIENT_ID: '', OIDC_AUDIENCE: '' },
       reuseExistingServer: false,
       timeout: 60000,
     },
