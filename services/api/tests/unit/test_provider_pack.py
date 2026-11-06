@@ -45,8 +45,9 @@ class ProviderPackTest(unittest.TestCase):
         with self.assertRaises(ManifestError):
             self.load(missing)
         undeclared = self.manifest.replace(
-            b"    outputSchema: schemas/reachability.json\n", b""
+            b"    outputSchema: schemas/reachability.json", b""
         )
+        self.assertNotEqual(undeclared, self.manifest)
         with self.assertRaises(ManifestError):
             self.load({**self.files, "provider.yaml": undeclared})
 
