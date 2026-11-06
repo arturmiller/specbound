@@ -61,6 +61,16 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_coverage.py' -v
+      - name: Verify GitHub webhook event intake
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_github_webhook.py' -v
+      - name: Verify GitHub repository authorization
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_github_metadata.py' -v
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
