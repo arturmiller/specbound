@@ -41,3 +41,17 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_authorization.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/web/package-lock.json
+      - run: npm ci
+        working-directory: services/web
+      - run: npx playwright install --with-deps --only-shell chromium
+        working-directory: services/web
+      - name: Browser team workflow
+        working-directory: services/web
+        env:
+          SPECBOUND_E2E_DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: npm run test:e2e
