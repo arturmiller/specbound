@@ -12,6 +12,10 @@ die persistierte Principal-ID ist bis #36 eine externe Referenz, keine bereits
 implementierte Principal-Tabelle. Die Team-API ist bis zur Integration beider
 Bausteine für reale Nutzer nicht freigeschaltet.
 
+Der Browser-Test startet einen eigenen Testserver mit dieser Einspeisung und
+verlangt dafür ausdrücklich `SPECBOUND_E2E_DATABASE_URL` für eine Wegwerf-
+Datenbank. Der reguläre API-Start aktiviert keine Testidentität.
+
 Beim Erstellen einer Organisation wird die vertrauenswürdig bereitgestellte
 Principal-ID als Eigentümer gespeichert. So kann die spätere Rollenprüfung die
 Einrichtung des ersten Teams autorisieren, bevor Teammitgliedschaften existieren.
