@@ -149,7 +149,7 @@ def get_current_principal(
     )
     db.execute(
         text(
-            "INSERT INTO principals (id, kind, issuer, subject) VALUES (:id, 'user', :issuer, :subject) ON CONFLICT (issuer, subject) DO NOTHING"
+            "INSERT INTO principals (id, kind, issuer, subject) VALUES (:id, 'user', :issuer, :subject) ON CONFLICT DO NOTHING"
         ),
         {"id": principal_id, "issuer": issuer, "subject": subject},
     )
@@ -161,9 +161,9 @@ def get_current_principal(
             {"issuer": issuer, "subject": subject},
         )
         .mappings()
-        .one()
+        .one_or_none()
     )
-    if row["kind"] != "user":
+    if row is None or row["kind"] != "user":
         raise _unauthorized()
     return row["id"]
 
