@@ -30,6 +30,17 @@ explizit aktivieren. Ein Beispiel dafür und für die lokale Registry enthalten 
 Vertragstests in `tests/contracts/`. Bei inkompatiblen Änderungen eine neue
 Version hinzufügen; bestehende Versionen nicht nachträglich umdeuten.
 
+## Assessment-Zustände
+
+`services/api/app/assessment.py` definiert PASS, FAIL, UNKNOWN und
+NOT_APPLICABLE mit Begründung. Bei ungeklärtem Scope, fehlender Scope-Begründung,
+fehlenden Nachweisen oder fehlendem Regelergebnis ergibt die Hilfsfunktion
+UNKNOWN. Ein ausdrücklich als nicht anwendbar dokumentierter Scope ergibt
+NOT_APPLICABLE auch ohne Nachweise; PASS und FAIL benötigen Nachweis-IDs und
+ein begründetes, vom Aufrufer geliefertes Regelergebnis. Die Funktion sucht
+keine Nachweise und prüft weder deren Existenz noch deren Aktualität oder Scope.
+Diese Verantwortung bleibt bei den späteren Evidence- und Evaluations-Tasks.
+
 Tests (mit den Entwicklungsabhängigkeiten der API installiert):
 
 ```sh
