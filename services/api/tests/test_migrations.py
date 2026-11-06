@@ -9,7 +9,7 @@ import unittest
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect
 
 
 class MigrationIntegrationTest(unittest.TestCase):
@@ -23,9 +23,7 @@ class MigrationIntegrationTest(unittest.TestCase):
             environment = {**os.environ, "DATABASE_URL": url}
             for _ in range(2):
                 subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], check=True, env=environment)
-            with engine.connect() as connection:
-                versions = connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
-            self.assertEqual(versions, ["0001_baseline"])
+            subprocess.run([sys.executable, "-m", "alembic", "current", "--check-heads"], check=True, env=environment)
 
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
