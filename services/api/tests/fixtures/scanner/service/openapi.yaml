@@ -1,0 +1,17 @@
+openapi: 3.1.0
+info:
+  title: Catalog
+  version: 1.0.0
+paths:
+  /pets/{petId}:
+    get:
+      responses: {}
+  /pets:
+    post:
+      responses: {}
+components:
+  schemas:
+    Pet:
+      type: object
+    Error:
+      type: object
