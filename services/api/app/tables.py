@@ -78,3 +78,13 @@ scanner_coverage = Table(
     Column("files", JSON),
     Column("errors", JSON),
 )
+github_events = Table(
+    "github_events",
+    metadata,
+    Column("delivery_id", String),
+    Column("installation_id", String),
+    Column("organization_id", String),
+    Column("event_type", String),
+    Column("payload", JSON),
+    Column("received_at", DateTime(timezone=True)),
+)

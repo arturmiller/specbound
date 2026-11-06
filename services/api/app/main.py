@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.agents import router as agents_router
+from app.github_repositories import router as github_repositories_router
+from app.github_webhook import router as github_webhook_router
 from app.identity import router as auth_router
 from app.products import router as products_router
 from app.teams import router as teams_router
@@ -15,6 +17,8 @@ class HealthResponse(BaseModel):
 
 app = FastAPI(title="Specbound API")
 app.include_router(auth_router)
+app.include_router(github_webhook_router)
+app.include_router(github_repositories_router)
 app.include_router(agents_router)
 app.include_router(products_router)
 app.include_router(teams_router)
