@@ -15,3 +15,9 @@ Bausteine für reale Nutzer nicht freigeschaltet.
 Beim Erstellen einer Organisation wird die vertrauenswürdig bereitgestellte
 Principal-ID als Eigentümer gespeichert. So kann die spätere Rollenprüfung die
 Einrichtung des ersten Teams autorisieren, bevor Teammitgliedschaften existieren.
+
+Der Organisationseigentümer verwaltet Organisation und Teams. Team-Admins
+verwalten ihr Team und dessen Mitgliedschaften; Maintainer dürfen das eigene
+Team ändern, Viewer nur lesen. Mitglieder sehen nur ihre eigenen Teams; andere
+Principals erhalten keinen Zugriff. Neue Organisationen können von einer
+verifizierten Identität angelegt werden, die dann deren Eigentümer wird.
