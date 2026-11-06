@@ -88,3 +88,12 @@ github_events = Table(
     Column("payload", JSON),
     Column("received_at", DateTime(timezone=True)),
 )
+pack_revisions = Table(
+    "pack_revisions", metadata,
+    Column("id", String), Column("organization_id", String),
+    Column("repository", String), Column("tag", String), Column("commit_sha", String),
+)
+pack_activations = Table(
+    "pack_activations", metadata,
+    Column("organization_id", String), Column("repository", String), Column("revision_id", String),
+)
