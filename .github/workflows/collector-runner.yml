@@ -1,0 +1,28 @@
+name: Collector Runner
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-runner:
+    name: Collector Docker Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/worker/requirements.txt
+      - name: Build and check the worker image
+        run: |
+          docker build -f services/worker/Dockerfile -t specbound-worker-test .
+          docker run --rm --entrypoint python specbound-worker-test -c 'import collector_runner'
+      - run: docker pull python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+      - name: Run collector integration tests
+        env:
+          SPECBOUND_DOCKER_TESTS: '1'
+        run: python -m unittest discover -s services/worker/tests -v
