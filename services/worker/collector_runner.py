@@ -11,7 +11,8 @@ from app.collector_contracts import (
 )
 from docker.errors import DockerException, NotFound
 from docker.types import LogConfig
-from requests.exceptions import ReadTimeout
+from requests.exceptions import ConnectionError, ReadTimeout
+from urllib3.exceptions import ReadTimeoutError
 
 MAX_REQUEST = 64 * 1024
 MAX_OUTPUT = 1024 * 1024
@@ -52,6 +53,23 @@ def _unique_pairs(pairs):
             raise ValueError("Duplicate JSON key")
         result[key] = value
     return result
+
+
+def _read_timed_out(error):
+    """Requests may wrap urllib3's read timeout in a ConnectionError."""
+    pending = [error]
+    seen = set()
+    while pending:
+        item = pending.pop()
+        if id(item) in seen:
+            continue
+        seen.add(id(item))
+        if isinstance(item, (ReadTimeout, ReadTimeoutError)):
+            return True
+        if isinstance(item, BaseException):
+            pending.extend(item.args)
+            pending.extend((item.__cause__, item.__context__))
+    return False
 
 
 def run_collector(client, provider, request, approved, *, timeout_seconds=10):
@@ -101,8 +119,9 @@ def run_collector(client, provider, request, approved, *, timeout_seconds=10):
         container.start()
         try:
             result = container.wait(timeout=timeout_seconds)
-        except ReadTimeout:
-            return CollectorResult("UNKNOWN", "timeout")
+        except (ReadTimeout, ConnectionError) as exc:
+            reason = "timeout" if _read_timed_out(exc) else "runtime-unavailable"
+            return CollectorResult("UNKNOWN", reason)
         if result.get("StatusCode") != 0:
             return CollectorResult("UNKNOWN", "collector-failed")
         output = container.logs(stdout=True, stderr=False)

@@ -6,9 +6,12 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
 import docker
 import yaml
+from requests.exceptions import ConnectionError
+from urllib3.exceptions import ReadTimeoutError
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "services" / "api"))
@@ -86,6 +89,17 @@ class ApprovalTest(unittest.TestCase):
     def test_mutable_image_is_not_an_approval(self):
         with self.assertRaises(ValueError):
             ApprovedCollector("python:latest", ("python", "-c", SCRIPT))
+
+    def test_wrapped_read_timeout_is_unknown_and_container_is_removed(self):
+        command = ("python", "-c", SCRIPT)
+        provider, request = fixture(command)
+        client = Mock()
+        client.images.get.return_value.attrs = {"Config": {}}
+        container = client.containers.create.return_value
+        container.wait.side_effect = ConnectionError(ReadTimeoutError(None, "/wait", "timed out"))
+        result = run_collector(client, provider, request, ApprovedCollector(IMAGE, command))
+        self.assertEqual((result.status, result.reason), ("UNKNOWN", "timeout"))
+        container.remove.assert_called_once_with(force=True)
 
 
 @unittest.skipUnless(os.environ.get("SPECBOUND_DOCKER_TESTS") == "1", "Docker integration disabled")
