@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.engine import Connection
 
+from app.findings import apply_snapshot
 from app.tables import assessment_jobs, assessment_snapshots
 
 MAX_ATTEMPTS = 3
@@ -165,6 +166,7 @@ def finish_job(db: Connection, job_id, lease_token, *, clock, build_snapshot):
         ).first()
         if snapshot is None:
             raise ValueError("Snapshot does not match the queued PR head")
+        apply_snapshot(db, row["organization_id"], snapshot_id)
         if not db.execute(
             select(assessment_jobs.c.id).where(
                 assessment_jobs.c.id == job_id,
