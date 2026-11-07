@@ -1,4 +1,13 @@
-from sqlalchemy import JSON, Column, DateTime, Integer, MetaData, String, Table
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+)
 
 metadata = MetaData()
 organizations = Table(
@@ -140,4 +149,11 @@ finding_history = Table(
     Column("id", String), Column("finding_id", String), Column("snapshot_id", String),
     Column("evaluation_id", String), Column("outcome", String), Column("state_after", String),
     Column("reason", String), Column("observed_at", DateTime(timezone=True)),
+)
+assessment_jobs = Table(
+    "assessment_jobs", metadata,
+    Column("id", String), Column("organization_id", String), Column("product_id", String),
+    Column("binding_id", String), Column("delivery_id", String), Column("pull_request_id", BigInteger),
+    Column("pull_request_number", Integer), Column("head_sha", String), Column("status", String),
+    Column("created_at", DateTime(timezone=True)),
 )
