@@ -1,0 +1,87 @@
+name: Lokaler Compose-Betrieb
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    name: Compose Build und Healthchecks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: specbound-health-ci
+      SPECBOUND_IMAGE_TAG: ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the local stack
+        run: docker compose up --build -d --wait --wait-timeout 240
+      - name: Check services and worker readiness
+        run: |
+          docker compose ps -a
+          curl --fail http://127.0.0.1:8000/readyz
+          curl --fail http://127.0.0.1:5173/api/readyz
+          docker compose exec -T worker python -c 'import http.client; c=http.client.HTTPConnection("127.0.0.1",8081,timeout=3); c.request("GET","/readyz"); assert c.getresponse().status == 503'
+      - name: Detect dependency failures and recovery
+        shell: bash
+        run: |
+          await_health() {
+            local service="$1" expected="$2" id state
+            id="$(docker compose ps -q "$service")"
+            for attempt in $(seq 1 45); do
+              state="$(docker inspect --format '{{.State.Health.Status}}' "$id")"
+              if [ "$state" = "$expected" ]; then return 0; fi
+              sleep 2
+            done
+            echo "$service: expected $expected, got $state"
+            docker compose ps -a
+            return 1
+          }
+          signal_worker() {
+            docker compose exec -T -e "WORKER_TEST_SIGNAL=$1" worker python - <<'PY'
+          import os, signal
+          for name in os.listdir('/proc'):
+              if not name.isdigit():
+                  continue
+              try:
+                  args = open('/proc/' + name + '/cmdline', 'rb').read().split(bytes([0]))
+              except OSError:
+                  continue
+              if args[0].rsplit(b'/', 1)[-1].startswith(b'python') and b'worker.py' in args:
+                  os.kill(int(name), getattr(signal, 'SIG' + os.environ['WORKER_TEST_SIGNAL']))
+                  break
+          else:
+              raise SystemExit('worker process not found')
+          PY
+          }
+          docker compose stop db
+          await_health api unhealthy
+          await_health web unhealthy
+          docker compose start db
+          await_health api healthy
+          await_health web healthy
+          schema_version="$(docker compose exec -T db psql -U specbound -d specbound -Atc 'SELECT version_num FROM alembic_version')"
+          [[ "$schema_version" =~ ^[a-zA-Z0-9_]+$ ]]
+          docker compose exec -T db psql -U specbound -d specbound -c "UPDATE alembic_version SET version_num = 'outdated_test_schema'"
+          await_health api unhealthy
+          docker compose exec -T db psql -U specbound -d specbound -c "UPDATE alembic_version SET version_num = '$schema_version'"
+          await_health api healthy
+          await_health web healthy
+          docker compose stop minio
+          await_health api unhealthy
+          docker compose start minio
+          await_health api healthy
+          await_health web healthy
+          signal_worker STOP
+          await_health worker unhealthy
+          signal_worker CONT
+          await_health worker healthy
+          worker_id="$(docker compose ps -q worker)"
+          docker compose stop worker
+          test "$(docker inspect --format '{{.State.Status}}' "$worker_id")" = exited
+      - name: Remove the isolated test stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans

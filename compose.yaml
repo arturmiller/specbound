@@ -13,6 +13,7 @@ services:
       timeout: 3s
       retries: 30
   migrate:
+    image: specbound-api:${SPECBOUND_IMAGE_TAG:-0.1.0-local}
     build:
       context: .
       dockerfile: services/api/Dockerfile
@@ -52,13 +53,14 @@ services:
     depends_on:
       - minio
   api:
+    image: specbound-api:${SPECBOUND_IMAGE_TAG:-0.1.0-local}
     build:
       context: .
       dockerfile: services/api/Dockerfile
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      DATABASE_URL: postgresql+psycopg://specbound:local-dev-only@db:5432/specbound
+      DATABASE_URL: postgresql+psycopg://specbound:local-dev-only@db:5432/specbound?connect_timeout=2
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
@@ -76,12 +78,26 @@ services:
         condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=5).read()"]
+      interval: 5s
+      timeout: 7s
+      retries: 3
+      start_period: 20s
   worker:
+    image: specbound-worker:${SPECBOUND_IMAGE_TAG:-0.1.0-local}
     build:
       context: .
       dockerfile: services/worker/Dockerfile
     init: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2).read()"]
+      interval: 5s
+      timeout: 4s
+      retries: 3
+      start_period: 5s
   web:
+    image: specbound-web:${SPECBOUND_IMAGE_TAG:-0.1.0-local}
     build:
       context: .
       dockerfile: services/web/Dockerfile
@@ -90,7 +106,14 @@ services:
     environment:
       API_PROXY_TARGET: http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "Promise.all(['/', '/src/main.jsx', '/api/readyz'].map(p => fetch('http://127.0.0.1:5173' + p, {signal: AbortSignal.timeout(5000)}))).then(r => process.exit(r.every(x => x.ok) ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 7s
+      retries: 3
+      start_period: 20s
 
 volumes:
   postgres_data:

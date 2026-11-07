@@ -14,6 +14,10 @@ Docker mit laufender Engine und Compose vorausgesetzt:
 docker compose up --build
 ```
 
+Die lokal gebauten Images heißen `specbound-api`, `specbound-web` und
+`specbound-worker` und tragen standardmäßig den Tag `0.1.0-local`. Mit
+`SPECBOUND_IMAGE_TAG` kann ein eigener Tag gesetzt werden.
+
 PostgreSQL und MinIO werden lokal gestartet; der Migrationsdienst führt
 `alembic upgrade head` aus, bevor die API startet. Daten bleiben in den
 Compose-Volumes `postgres_data` und `minio_data` erhalten.
@@ -25,6 +29,12 @@ mit ausführbaren lokalen Beispielen und ihren Einschränkungen; die Quelldateie
 liegen unter [Guides](services/web/src/guides/). Der Worker wartet, bis ein
 freigegebener Job-Handler konfiguriert ist. Mit `docker compose down` werden
 die Dienste beendet. Die Produktdienste sind ein erster technischer Grundaufbau.
+
+`docker compose ps` zeigt den Zustand der Dienste. Die API meldet unter `/readyz`
+nur dann Bereitschaft, wenn Datenbank, Migrationsstand und MinIO-Bucket verfügbar
+sind. Der Web-Healthcheck prüft auch den API-Proxy. Der Worker-Healthcheck prüft,
+ob sein Prozess lebt; seine interne `/readyz`-Antwort bleibt ohne Handler `503` und
+behauptet damit keine Bereitschaft zur Job-Verarbeitung.
 
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
 ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`
