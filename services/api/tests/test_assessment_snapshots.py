@@ -5,6 +5,7 @@ import unittest
 from datetime import timedelta
 
 import test_rule_evaluation as fixtures
+from app.coverage import run_openapi_scan
 from app.database import get_engine
 from app.snapshots import create_snapshot, get_snapshot, list_snapshots
 
@@ -90,6 +91,25 @@ class AssessmentSnapshotsTest(unittest.TestCase):
             )
         with self.assertRaises(LookupError):
             self.create("baseline", evaluation, environment="pr", org=f.other)
+
+    def test_newer_scan_invalidates_old_evaluation_for_new_snapshots(self):
+        f = self.fixture
+        evaluation = self.evaluation("pr")
+        with get_engine().begin() as db:
+            run_openapi_scan(
+                db,
+                f.binding,
+                fixtures.Source(),
+                "main",
+                fixtures.NOW + timedelta(seconds=1),
+            )
+        with self.assertRaises(ValueError):
+            self.create(
+                "baseline",
+                evaluation,
+                environment="pr",
+                now=fixtures.NOW + timedelta(seconds=1),
+            )
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from uuid import uuid4
 from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection
 
+from app.coverage import scan_covers
 from app.tables import (
     assessment_snapshots,
     evidence_records,
@@ -157,17 +158,33 @@ def create_snapshot(
         if identity in pairs:
             raise ValueError("Duplicate subject and control evaluation")
         pairs.add(identity)
-        if (
-            row["scan_id"] is not None
-            and db.execute(
-                select(scanner_coverage.c.id).where(
-                    scanner_coverage.c.id == row["scan_id"],
-                    scanner_coverage.c.binding_id == binding_id,
+        scan = None
+        if row["scan_id"] is not None:
+            scan = (
+                db.execute(
+                    select(scanner_coverage).where(
+                        scanner_coverage.c.id == row["scan_id"],
+                        scanner_coverage.c.binding_id == binding_id,
+                    )
                 )
-            ).first()
-            is None
+                .mappings()
+                .one_or_none()
+            )
+            if scan is None:
+                raise ValueError("Evaluation belongs to a different repository binding")
+        if row["status"] != "UNKNOWN" and (
+            scan is None
+            or not scan_covers(
+                db,
+                scan_id=row["scan_id"],
+                product_id=product_id,
+                binding_id=binding_id,
+                ref=scan["ref"],
+                expected_commit=git_sha,
+                not_after=now,
+            )
         ):
-            raise ValueError("Evaluation belongs to a different repository binding")
+            raise ValueError("Evaluation no longer has current scanner coverage")
         ids = row["evidence_ids"]
         if not isinstance(ids, list) or (row["status"] in ("PASS", "FAIL") and not ids):
             raise ValueError("Evaluation evidence is invalid")

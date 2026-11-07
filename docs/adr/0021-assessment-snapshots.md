@@ -13,7 +13,8 @@ Beim Erstellen müssen alle Bewertungen zu Organisation, Produkt, Environment,
 Ziel- und Pack-Commit sowie, falls ein Scan referenziert ist, zur Repository-Bindung
 passen. Doppelte Bewertungen für dasselbe Subject und Control werden zurückgewiesen.
 Referenzierte Evidence muss im Snapshot-Zeitpunkt vorhanden, passend und aktuell
-sein; andernfalls ist eine neue Bewertung erforderlich. Ein Snapshot ist ein
+sein; auch die Scanner-Abdeckung muss für eindeutige Ergebnisse noch aktuell sein.
+Andernfalls ist eine neue Bewertung erforderlich. Ein Snapshot ist ein
 historischer Stand, keine Aussage, dass seine Evidence auch später noch aktuell ist.
 Der Aufrufer ist für die Herkunft der gepinnten Pack-Revision verantwortlich;
 der Snapshot allein stellt keine Pack-Freigabe dar.
