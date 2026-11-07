@@ -20,8 +20,10 @@ Compose-Volumes `postgres_data` und `minio_data` erhalten.
 Die Zugangsdaten in der Compose-Datei sind ausschließlich für lokale Entwicklung.
 
 Das Portal ist unter <http://localhost:5173> erreichbar; die API antwortet auf
-<http://localhost:8000/healthz>. Der Worker läuft als eigener Prozess und wartet
-bis zur späteren Einführung einer Job-Queue. Mit `docker compose down` werden
+<http://localhost:8000/healthz>. Die Dokumentation im Portal enthält fünf Kategorien
+mit ausführbaren lokalen Beispielen und ihren Einschränkungen; die Quelldateien
+liegen unter [Guides](services/web/src/guides/). Der Worker wartet, bis ein
+freigegebener Job-Handler konfiguriert ist. Mit `docker compose down` werden
 die Dienste beendet. Die Produktdienste sind ein erster technischer Grundaufbau.
 
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
