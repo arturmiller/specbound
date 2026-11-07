@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AuthWorkspace } from './auth.jsx';
+import { Documentation } from './docs.jsx';
 import './styles.css';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
       <p>Lokale Entwicklungsumgebung</p>
       <p role="status">{status}</p>
       <AuthWorkspace />
+      <Documentation />
     </main>
   );
 }
