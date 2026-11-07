@@ -35,6 +35,24 @@ class GovernancePackTest(unittest.TestCase):
             "net.internet-reachability/v1",
         )
 
+    def test_target_labels_are_parsed_and_must_be_strings(self):
+        control = fixture("control.yaml").replace(
+            b"  kind: database", b"  kind: database\n  labels: {environment: prod}"
+        )
+        files = {
+            "pack.yaml": fixture("pack.yaml"),
+            "controls/SEC-NET-001.yaml": control,
+        }
+        result = load_governance_pack(GitSnapshot("a" * 40, files))
+        self.assertEqual(
+            result["controls"][0]["target"]["labels"], {"environment": "prod"}
+        )
+        files["controls/SEC-NET-001.yaml"] = control.replace(
+            b"environment: prod", b"environment: 12"
+        )
+        with self.assertRaises(ManifestError):
+            load_governance_pack(GitSnapshot("a" * 40, files))
+
     def test_invalid_fixtures_are_rejected(self):
         for pack, control in (
             ("pack-unknown-version.yaml", "control.yaml"),
