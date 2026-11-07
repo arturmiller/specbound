@@ -119,3 +119,11 @@ rule_evaluations = Table(
     Column("status", String), Column("reason", String), Column("evidence_ids", JSON),
     Column("control", JSON), Column("subject", JSON), Column("evaluated_at", DateTime(timezone=True)),
 )
+assessment_snapshots = Table(
+    "assessment_snapshots", metadata,
+    Column("id", String), Column("organization_id", String), Column("product_id", String),
+    Column("binding_id", String), Column("context", String), Column("pull_request_number", Integer),
+    Column("environment", String), Column("git_sha", String), Column("pack_sha", String),
+    Column("evaluation_ids", JSON), Column("evidence_ids", JSON), Column("counts", JSON),
+    Column("evaluations", JSON), Column("created_at", DateTime(timezone=True)),
+)
