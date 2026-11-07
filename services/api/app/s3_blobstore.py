@@ -9,6 +9,7 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from app.blobstore import BlobNotFound, BlobStoreError, validate_key
+from app.object_archive import ensure_empty, export_objects, restore_objects
 
 
 class S3BlobStore:
@@ -59,6 +60,15 @@ class S3BlobStore:
             self._client.head_bucket(Bucket=self._bucket)
         except (BotoCoreError, ClientError, OSError) as exc:
             raise BlobStoreError("object store unavailable") from exc
+
+    def export_archive(self, output):
+        return export_objects(self._client, self._bucket, output)
+
+    def restore_archive(self, input_stream):
+        return restore_objects(self._client, self._bucket, input_stream)
+
+    def ensure_empty(self):
+        ensure_empty(self._client, self._bucket)
 
     def put(self, key: str, data: bytes) -> None:
         validate_key(key)
