@@ -20,7 +20,7 @@ jobs:
       - name: Build and check the worker image
         run: |
           docker build -f services/worker/Dockerfile -t specbound-worker-test .
-          docker run --rm --entrypoint python specbound-worker-test -c 'import collector_runner'
+          docker run --rm --entrypoint python specbound-worker-test -c 'import collector_runner, queue_worker'
       - run: docker pull python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
       - name: Run collector integration tests
         env:

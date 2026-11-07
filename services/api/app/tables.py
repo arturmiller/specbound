@@ -155,5 +155,7 @@ assessment_jobs = Table(
     Column("id", String), Column("organization_id", String), Column("product_id", String),
     Column("binding_id", String), Column("delivery_id", String), Column("pull_request_id", BigInteger),
     Column("pull_request_number", Integer), Column("head_sha", String), Column("status", String),
-    Column("created_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True)), Column("attempts", Integer),
+    Column("lease_token", String), Column("lease_until", DateTime(timezone=True)),
+    Column("last_error", String), Column("result_snapshot_id", String),
 )

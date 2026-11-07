@@ -71,6 +71,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_pull_request_events.py' -v
+      - name: Verify worker leases, retries and results
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_worker_queue.py' -v
       - name: Verify GitHub repository authorization
         working-directory: services/api
         env:
