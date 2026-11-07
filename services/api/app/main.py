@@ -15,6 +15,7 @@ from app.github_repositories import router as github_repositories_router
 from app.github_webhook import router as github_webhook_router
 from app.identity import router as auth_router
 from app.metrics import render_metrics
+from app.overview import router as overview_router
 from app.pack_catalog import router as pack_catalog_router
 from app.products import router as products_router
 from app.readiness import check_readiness
@@ -32,6 +33,7 @@ app.include_router(github_repositories_router)
 app.include_router(pack_catalog_router)
 app.include_router(agents_router)
 app.include_router(assessment_reports_router)
+app.include_router(overview_router)
 app.include_router(products_router)
 app.include_router(teams_router)
 

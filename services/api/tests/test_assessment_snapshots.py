@@ -119,6 +119,50 @@ class AssessmentSnapshotsTest(unittest.TestCase):
         finally:
             app.dependency_overrides.clear()
 
+    def test_overview_limits_findings_and_products_to_visible_teams(self):
+        f = self.fixture
+        f.save_evidence()
+        control = {
+            **f.control,
+            "assertions": [
+                {"path": "publicly_reachable", "operator": "equals", "expected": True}
+            ],
+        }
+        evaluation = f.evaluate(control=control)
+        snapshot = self.create("pull_request", evaluation, environment="test", pr=17)
+        with get_engine().begin() as db:
+            apply_snapshot(db, f.org, snapshot["id"])
+        app.dependency_overrides[get_current_principal] = lambda: "owner"
+        try:
+            with TestClient(app) as client:
+                second_team = client.post(
+                    f"/organizations/{f.org}/teams", json={"name": "Private"}
+                ).json()["id"]
+                second_product = client.post(
+                    f"/organizations/{f.org}/products",
+                    json={"name": "Private product", "ownerTeamId": second_team},
+                ).json()["id"]
+                self.assertEqual(
+                    client.post(
+                        f"/teams/{f.team}/members",
+                        json={"principalId": "user:viewer", "role": "viewer"},
+                    ).status_code,
+                    201,
+                )
+                app.dependency_overrides[get_current_principal] = lambda: "user:viewer"
+                result = client.get(f"/organizations/{f.org}/overview")
+                self.assertEqual(result.status_code, 200, result.text)
+                body = result.json()
+                self.assertEqual([p["id"] for p in body["products"]], [f.product])
+                self.assertNotIn(second_product, [p["id"] for p in body["products"]])
+                self.assertEqual(body["findings"][0]["snapshotId"], snapshot["id"])
+                app.dependency_overrides[get_current_principal] = lambda: "outsider"
+                self.assertEqual(
+                    client.get(f"/organizations/{f.org}/overview").status_code, 403
+                )
+        finally:
+            app.dependency_overrides.clear()
+
     def test_invalid_context_scope_and_stale_evidence_are_rejected(self):
         f = self.fixture
         evaluation = self.evaluation("pr")

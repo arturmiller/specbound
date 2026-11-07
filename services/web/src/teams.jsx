@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PackWorkspace } from './packs.jsx';
 import { ProductWorkspace } from './products.jsx';
+import { Overview } from './overview.jsx';
 
 /** @typedef {{id: string, name: string}} Organization */
 /** @typedef {{id: string, name: string}} Team */
@@ -169,6 +170,7 @@ export function TeamWorkspace({ accessToken = '' }) {
       </>}
       {organizationId && <ProductWorkspace key={`products-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
       {organizationId && <PackWorkspace key={`packs-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
+      {organizationId && <Overview key={`overview-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
     </section>
   );
 }
