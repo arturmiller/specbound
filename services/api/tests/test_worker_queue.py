@@ -7,11 +7,13 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 import test_rule_evaluation as fixtures
 from app.database import get_engine
 from app.job_queue import LeaseLost, claim_next, fail_job, finish_job
+from app.pr_comment_delivery import publish_once
 from app.snapshots import create_snapshot
 from app.tables import (
     assessment_jobs,
@@ -20,7 +22,7 @@ from app.tables import (
     products,
     repo_bindings,
 )
-from sqlalchemy import delete, func, insert, select
+from sqlalchemy import delete, func, insert, select, update
 
 NOW = fixtures.NOW
 
@@ -275,3 +277,97 @@ class WorkerQueueTest(unittest.TestCase):
                     select(assessment_jobs.c.id).where(assessment_jobs.c.id == self.job)
                 ).first()
             )
+
+    def test_comment_delivery_retries_without_reexecuting_assessment(self):
+        with get_engine().begin() as db:
+            db.execute(
+                update(repo_bindings)
+                .where(repo_bindings.c.id == self.f.binding)
+                .values(provider="github", repository=f"org/repo-{self.f.org}")
+            )
+            db.execute(
+                update(github_events)
+                .where(github_events.c.delivery_id == self.delivery)
+                .values(
+                    payload={
+                        "action": "opened",
+                        "number": 17,
+                        "repository": {"id": 99, "full_name": f"org/repo-{self.f.org}"},
+                        "pull_request": {
+                            "id": 123456,
+                            "number": 17,
+                            "head": {"sha": fixtures.COMMIT},
+                            "base": {"repo": {"id": 99}},
+                        },
+                    }
+                )
+            )
+        lease = self.claim()
+        snapshot_id = self.finish(lease, NOW)
+
+        class Source:
+            def close(self):
+                pass
+
+        with patch(
+            "app.pr_comment_delivery.upsert_comment",
+            side_effect=[RuntimeError("private"), True],
+        ) as send:
+            args = (
+                get_engine(),
+                self.f.org,
+                lambda _repository: Source(),
+                "https://portal.example",
+            )
+            self.assertTrue(publish_once(*args, clock=lambda: NOW))
+            self.assertIsNone(self.state()["comment_processed_at"])
+            self.assertFalse(
+                publish_once(*args, clock=lambda: NOW + timedelta(seconds=29))
+            )
+            self.assertTrue(
+                publish_once(*args, clock=lambda: NOW + timedelta(seconds=31))
+            )
+            self.assertEqual(
+                self.state()["comment_processed_at"], NOW + timedelta(seconds=31)
+            )
+            self.assertEqual(self.state()["result_snapshot_id"], snapshot_id)
+            self.assertEqual(send.call_count, 2)
+
+    def test_changed_repository_does_not_receive_old_assessment(self):
+        lease = self.claim()
+        self.finish(lease, NOW)
+        with get_engine().begin() as db:
+            db.execute(
+                update(repo_bindings)
+                .where(repo_bindings.c.id == self.f.binding)
+                .values(provider="github", repository="other/repo")
+            )
+            db.execute(
+                update(github_events)
+                .where(github_events.c.delivery_id == self.delivery)
+                .values(
+                    payload={
+                        "action": "opened",
+                        "number": 17,
+                        "repository": {"id": 99, "full_name": "org/repo"},
+                        "pull_request": {
+                            "id": 123456,
+                            "number": 17,
+                            "head": {"sha": fixtures.COMMIT},
+                            "base": {"repo": {"id": 99}},
+                        },
+                    }
+                )
+            )
+        with patch("app.pr_comment_delivery.upsert_comment") as send:
+            self.assertTrue(
+                publish_once(
+                    get_engine(),
+                    self.f.org,
+                    lambda _: None,
+                    "https://portal.example",
+                    clock=lambda: NOW,
+                )
+            )
+            send.assert_not_called()
+        self.assertIsNotNone(self.state()["comment_processed_at"])
