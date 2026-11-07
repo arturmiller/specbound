@@ -91,6 +91,14 @@ services:
       context: .
       dockerfile: services/worker/Dockerfile
     init: true
+    environment:
+      DATABASE_URL: postgresql+psycopg://specbound:local-dev-only@db:5432/specbound?connect_timeout=2
+      GITHUB_COMMENT_PUBLISHING: ${GITHUB_COMMENT_PUBLISHING:-false}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_INSTALLATION_ID: ${GITHUB_INSTALLATION_ID:-}
+      GITHUB_ORGANIZATION_ID: ${GITHUB_ORGANIZATION_ID:-}
+      GITHUB_APP_PRIVATE_KEY_FILE: ${GITHUB_APP_PRIVATE_KEY_FILE:-}
+      PORTAL_PUBLIC_URL: ${PORTAL_PUBLIC_URL:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2).read()"]
       interval: 5s

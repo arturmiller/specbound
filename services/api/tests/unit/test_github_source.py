@@ -6,6 +6,7 @@ import unittest
 import httpx
 from app.git_source import SourceNotFound, SourceUnavailable
 from app.github_source import GitHubSource
+from app.pr_comment import MARKER, upsert_comment
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -156,6 +157,74 @@ class GitHubSourceTest(unittest.TestCase):
             GitHubSource(
                 "../repo", app_id="1234", installation_id=123, private_key=self.pem
             )
+
+    def test_comment_upsert_uses_scoped_token_and_bot_identity(self):
+        import json
+
+        comments = []
+        head = ["a" * 40]
+        requests = []
+
+        def handle(request):
+            requests.append(request)
+            path = request.url.path
+            if path.endswith("/installation"):
+                return httpx.Response(200, json={"id": 123, "app_slug": "sample-app"})
+            if path.endswith("/access_tokens"):
+                self.assertEqual(
+                    json.loads(request.content)["permissions"],
+                    {"pull_requests": "write"},
+                )
+                return httpx.Response(201, json={"token": "fixture-token"})
+            self.assertEqual(request.headers["authorization"], "Bearer fixture-token")
+            if path.endswith("/pulls/3"):
+                return httpx.Response(200, json={"head": {"sha": head[0]}})
+            if path.endswith("/issues/3/comments") and request.method == "GET":
+                return httpx.Response(200, json=comments)
+            if path.endswith("/issues/3/comments") and request.method == "POST":
+                comments.append(
+                    {
+                        "id": 100,
+                        "body": json.loads(request.content)["body"],
+                        "user": {"login": "sample-app[bot]", "type": "Bot"},
+                        "performed_via_github_app": None,
+                    }
+                )
+                return httpx.Response(201, json=comments[0])
+            if path.endswith("/issues/comments/100") and request.method == "PATCH":
+                comments[0]["body"] = json.loads(request.content)["body"]
+                return httpx.Response(200, json=comments[0])
+            return httpx.Response(404)
+
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+            )
+            for index, letter in enumerate("abc"):
+                head[0] = letter * 40
+                self.assertTrue(
+                    upsert_comment(
+                        source,
+                        3,
+                        head[0],
+                        {"PASS": index, "FAIL": 0, "UNKNOWN": 0, "NOT_APPLICABLE": 0},
+                        "https://portal.example",
+                        "snap-" + letter,
+                    )
+                )
+        self.assertEqual(len(comments), 1)
+        self.assertTrue(comments[0]["body"].startswith(MARKER + "\nPassed: 2"))
+        self.assertEqual(
+            sum(
+                r.method == "POST" and r.url.path.endswith("/issues/3/comments")
+                for r in requests
+            ),
+            1,
+        )
 
 
 if __name__ == "__main__":

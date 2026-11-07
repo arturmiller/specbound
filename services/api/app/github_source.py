@@ -74,7 +74,7 @@ class GitHubSource:
         if self._owns_client:
             self.client.close()
 
-    def _request(self, method, path, token, **kwargs):
+    def _request(self, method, path, token, *, response_type=dict, **kwargs):
         try:
             response = self.client.request(
                 method,
@@ -92,7 +92,7 @@ class GitHubSource:
             if response.status_code < 200 or response.status_code >= 300:
                 raise SourceUnavailable("GitHub API request failed")
             payload = response.json()
-            if not isinstance(payload, dict):
+            if not isinstance(payload, response_type):
                 raise SourceUnavailable("Unexpected GitHub API response")
             return payload
         except (httpx.HTTPError, ValueError) as exc:
@@ -100,7 +100,7 @@ class GitHubSource:
                 "GitHub API unavailable or returned invalid JSON"
             ) from exc
 
-    def _token(self):
+    def _token(self, *, permissions=None):
         now = int(time.time())
         try:
             app_token = jwt.encode(
@@ -117,13 +117,18 @@ class GitHubSource:
             raise SourceUnavailable(
                 "Repository is not part of the configured installation"
             )
+        if permissions and "pull_requests" in permissions:
+            slug = installation.get("app_slug")
+            if not isinstance(slug, str) or not re.fullmatch(r"[A-Za-z0-9-]+", slug):
+                raise SourceUnavailable("GitHub App identity is missing")
+            self._installation_slug = slug.lower()
         payload = self._request(
             "POST",
             f"/app/installations/{self.installation_id}/access_tokens",
             app_token,
             json={
                 "repositories": [self.repository.split("/", 1)[1]],
-                "permissions": {"contents": "read"},
+                "permissions": permissions or {"contents": "read"},
             },
         )
         token = payload.get("token")
