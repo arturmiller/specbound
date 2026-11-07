@@ -15,6 +15,44 @@ from sqlalchemy import text
 FIXTURE_ORGANIZATION = "123e4567-e89b-12d3-a456-426614174000"
 
 
+@app.post("/__e2e/assessment")
+def create_assessment_fixture():
+    """Seed a complete report only in this test-only server."""
+    import sys
+
+    from app.snapshots import create_snapshot
+    from app.tables import organizations
+    from sqlalchemy import update
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    import test_rule_evaluation as fixtures
+
+    fixture = fixtures.RuleEvaluationTest(methodName="runTest")
+    fixture.setUp()
+    fixture.save_evidence()
+    evaluation = fixture.evaluate()
+    with get_engine().begin() as db:
+        db.execute(
+            update(organizations)
+            .where(organizations.c.id == fixture.org)
+            .values(owner_principal_id="user:e2e")
+        )
+        snapshot = create_snapshot(
+            db,
+            fixture.org,
+            fixture.product,
+            context="pull_request",
+            binding_id=fixture.binding,
+            pull_request_number=17,
+            environment="test",
+            git_sha=fixtures.COMMIT,
+            pack_sha="a" * 40,
+            evaluation_ids=[evaluation["id"]],
+            now=fixtures.NOW,
+        )
+    return {"id": snapshot["id"], "sha": snapshot["gitSha"]}
+
+
 class FixtureSource:
     def __init__(self, repository):
         self.repository = repository

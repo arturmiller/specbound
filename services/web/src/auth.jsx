@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
 import { TeamWorkspace } from './teams.jsx';
+import { AssessmentReport } from './assessment-report.jsx';
 
 /** @typedef {{enabled: boolean, issuer: string, clientId: string, audience: string}} AuthConfig */
 
@@ -41,8 +42,14 @@ export function AuthWorkspace() {
         let current;
         const params = new URLSearchParams(window.location.search);
         if (params.has('code') || (params.has('error') && params.has('state'))) {
-          try { current = await oidc.signinRedirectCallback(); }
-          finally { window.history.replaceState(null, '', window.location.pathname); }
+          let target = '/';
+          try {
+            current = await oidc.signinRedirectCallback();
+            const state = current?.state;
+            if (state && typeof state === 'object' && 'returnTo' in state && typeof state.returnTo === 'string'
+                && /^\/assessments\/[A-Za-z0-9_-]{1,100}$/.test(state.returnTo)) target = state.returnTo;
+          }
+          finally { window.history.replaceState(null, '', target); }
         } else {
           current = await oidc.getUser();
         }
@@ -58,10 +65,11 @@ export function AuthWorkspace() {
 
   if (!ready) return <p>Authentifizierung wird vorbereitet …</p>;
   if (error) return <p role="alert">{error}</p>;
-  if (!configured) return <TeamWorkspace />;
-  if (!user) return <section><p>Bitte anmelden, um Teams zu verwalten.</p><button onClick={() => { void manager?.signinRedirect({ nonce: crypto.randomUUID() }).catch(() => setError('Anmeldung konnte nicht gestartet werden.')); }}>Anmelden</button></section>;
+  const reportId = /^\/assessments\/([A-Za-z0-9_-]{1,100})\/?$/.exec(window.location.pathname)?.[1];
+  if (!configured) return reportId ? <AssessmentReport id={reportId} /> : <TeamWorkspace />;
+  if (!user) return <section><p>Bitte anmelden, um fortzufahren.</p><button onClick={() => { void manager?.signinRedirect({ nonce: crypto.randomUUID(), state: { returnTo: window.location.pathname } }).catch(() => setError('Anmeldung konnte nicht gestartet werden.')); }}>Anmelden</button></section>;
   return <>
     <p>Angemeldet. <button onClick={() => { void manager?.removeUser().then(() => setUser(null)).catch(() => setError('Lokale Abmeldung fehlgeschlagen.')); }}>Lokal abmelden</button></p>
-    <TeamWorkspace key={user.profile.sub} accessToken={user.access_token} />
+    {reportId ? <AssessmentReport id={reportId} accessToken={user.access_token} /> : <TeamWorkspace key={user.profile.sub} accessToken={user.access_token} />}
   </>;
 }

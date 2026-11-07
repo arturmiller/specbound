@@ -7,7 +7,11 @@ from datetime import timedelta
 import test_rule_evaluation as fixtures
 from app.coverage import run_openapi_scan
 from app.database import get_engine
+from app.findings import apply_snapshot
+from app.identity import get_current_principal
+from app.main import app
 from app.snapshots import create_snapshot, get_snapshot, list_snapshots
+from fastapi.testclient import TestClient
 
 
 class AssessmentSnapshotsTest(unittest.TestCase):
@@ -70,6 +74,50 @@ class AssessmentSnapshotsTest(unittest.TestCase):
                 {item["id"] for item in list_snapshots(db, f.org, f.product)},
                 {pr["id"], baseline["id"]},
             )
+
+    def test_exact_report_contains_provenance_and_forbids_foreign_org(self):
+        f = self.fixture
+        f.save_evidence()
+        control = {
+            **f.control,
+            "assertions": [
+                {"path": "publicly_reachable", "operator": "equals", "expected": True}
+            ],
+        }
+        evaluation = f.evaluate(control=control)
+        pr = self.create("pull_request", evaluation, environment="test", pr=17)
+        baseline = self.create("baseline", evaluation, environment="test")
+        with get_engine().begin() as db:
+            apply_snapshot(db, f.org, pr["id"])
+        app.dependency_overrides[get_current_principal] = lambda: "owner"
+        try:
+            with TestClient(app) as client:
+                response = client.get(f"/assessments/{pr['id']}")
+                self.assertEqual(response.status_code, 200, response.text)
+                report = response.json()
+                self.assertEqual(report["assessment"]["id"], pr["id"])
+                self.assertNotEqual(report["assessment"]["id"], baseline["id"])
+                self.assertEqual(report["assessment"]["gitSha"], fixtures.COMMIT)
+                self.assertEqual(
+                    report["evaluations"][0]["control"]["id"], control["id"]
+                )
+                self.assertTrue(
+                    report["evaluations"][0]["subject"]["provenance"][
+                        "sourceRef"
+                    ].startswith("repo:")
+                )
+                self.assertEqual(
+                    report["evidence"][0]["value"], {"publicly_reachable": False}
+                )
+                self.assertEqual(report["findings"][0]["outcome"], "FAIL")
+                app.dependency_overrides[get_current_principal] = lambda: (
+                    "foreign-owner"
+                )
+                self.assertEqual(
+                    client.get(f"/assessments/{pr['id']}").status_code, 403
+                )
+        finally:
+            app.dependency_overrides.clear()
 
     def test_invalid_context_scope_and_stale_evidence_are_rejected(self):
         f = self.fixture

@@ -32,3 +32,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .docs-content h4 { margin: 22px 0 8px; }
 .docs-content pre { overflow-x: auto; padding: 14px; border-radius: 6px; color: #e9f2ff; background: #17304f; }
 .docs-content li { margin: 8px 0; }
+.assessment-report dd, .assessment-report p, .assessment-report pre { overflow-wrap: anywhere; }
+.assessment-report pre { white-space: pre-wrap; }
+.assessment-report .panel { margin: 12px 0; }

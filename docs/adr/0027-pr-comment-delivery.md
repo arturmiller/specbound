@@ -19,9 +19,8 @@ vom Assessment-Job. Fehler werden ohne Exception-Inhalt protokolliert und nach
 und PR; nach einem Abbruch kann ein bereits erstellter Bot-Kommentar anhand der
 App-Identität wiedergefunden werden. Mehrdeutige Repository-Bindungen werden
 vorläufig nicht veröffentlicht, damit Ergebnisse nicht einem falschen Produkt
-zugeordnet werden. Eine öffentliche Berichtsansicht für den gewählten Pfad
-`/assessments/<snapshot-id>` folgt in #64; bis dahin ist der Link noch nicht
-funktionsfähig.
+zugeordnet werden. Der Link unter `/assessments/<snapshot-id>` führt zur
+authentifizierten, auf das Team des Produkts begrenzten Berichtsansicht.
 
 ## Lokale Konfiguration
 

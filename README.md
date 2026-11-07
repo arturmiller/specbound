@@ -45,6 +45,8 @@ Die optionale Zustellung von PR-Kommentaren und ihre Voraussetzungen stehen in
 [ADR 0027](docs/adr/0027-pr-comment-delivery.md).
 Commit-genaue GitHub-Checks sind in [ADR 0028](docs/adr/0028-commit-checks.md)
 beschrieben.
+Die geschützte Ansicht eines Assessment-Links erläutert
+[ADR 0029](docs/adr/0029-assessment-report.md).
 
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
 ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`
