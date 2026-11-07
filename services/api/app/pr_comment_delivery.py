@@ -18,6 +18,53 @@ logger = logging.getLogger(__name__)
 
 
 def publish_once(engine, organization_id, source_factory, portal_url, *, clock):
+    def send(_db, source, job, snapshot, portal, _now):
+        upsert_comment(
+            source,
+            job["pull_request_number"],
+            job["head_sha"],
+            snapshot["counts"],
+            portal,
+            snapshot["id"],
+        )
+        return None
+
+    return deliver_once(
+        engine,
+        organization_id,
+        source_factory,
+        portal_url,
+        clock=clock,
+        mode="comment",
+        send=send,
+    )
+
+
+def deliver_once(
+    engine, organization_id, source_factory, portal_url, *, clock, mode, send
+):
+    if mode not in ("comment", "check"):
+        raise ValueError("Unknown delivery mode")
+    processed = (
+        assessment_jobs.c.comment_processed_at
+        if mode == "comment"
+        else assessment_jobs.c.check_processed_at
+    )
+    retry = (
+        assessment_jobs.c.comment_retry_at
+        if mode == "comment"
+        else assessment_jobs.c.check_retry_at
+    )
+    pending = processed.is_(None)
+    if mode == "check":
+        pending = or_(pending, assessment_jobs.c.check_valid_until <= clock())
+
+    def finished_values(valid_until=None):
+        values = {processed.name: clock(), retry.name: None}
+        if mode == "check":
+            values["check_valid_until"] = valid_until
+        return values
+
     with engine.begin() as db:
         job = (
             db.execute(
@@ -25,10 +72,10 @@ def publish_once(engine, organization_id, source_factory, portal_url, *, clock):
                 .where(
                     assessment_jobs.c.organization_id == organization_id,
                     assessment_jobs.c.status == "completed",
-                    assessment_jobs.c.comment_processed_at.is_(None),
+                    pending,
                     or_(
-                        assessment_jobs.c.comment_retry_at.is_(None),
-                        assessment_jobs.c.comment_retry_at <= clock(),
+                        retry.is_(None),
+                        retry <= clock(),
                     ),
                 )
                 .order_by(assessment_jobs.c.created_at, assessment_jobs.c.id)
@@ -57,7 +104,7 @@ def publish_once(engine, organization_id, source_factory, portal_url, *, clock):
             db.execute(
                 update(assessment_jobs)
                 .where(assessment_jobs.c.id == job["id"])
-                .values(comment_processed_at=clock())
+                .values(**finished_values())
             )
             return True
         event_payload = db.execute(
@@ -80,7 +127,7 @@ def publish_once(engine, organization_id, source_factory, portal_url, *, clock):
             db.execute(
                 update(assessment_jobs)
                 .where(assessment_jobs.c.id == job["id"])
-                .values(comment_processed_at=clock())
+                .values(**finished_values())
             )
             return True
         snapshot = (
@@ -122,28 +169,21 @@ def publish_once(engine, organization_id, source_factory, portal_url, *, clock):
                 raise ValueError("Repository binding is ambiguous")
             source = source_factory(binding["repository"])
             try:
-                upsert_comment(
-                    source,
-                    job["pull_request_number"],
-                    job["head_sha"],
-                    snapshot["counts"],
-                    portal_url,
-                    snapshot["id"],
-                )
+                valid_until = send(db, source, job, snapshot, portal_url, clock())
             finally:
                 source.close()
         except Exception:
-            logger.warning("PR comment delivery failed; retry scheduled")
+            logger.warning("PR %s delivery failed; retry scheduled", mode)
             db.execute(
                 update(assessment_jobs)
                 .where(assessment_jobs.c.id == job["id"])
-                .values(comment_retry_at=clock() + timedelta(seconds=30))
+                .values(**{retry.name: clock() + timedelta(seconds=30)})
             )
             return True
-        # Obsolete heads are deliberately processed without publishing.
+        # Delivery callbacks decide how obsolete heads should be handled.
         db.execute(
             update(assessment_jobs)
             .where(assessment_jobs.c.id == job["id"])
-            .values(comment_processed_at=clock(), comment_retry_at=None)
+            .values(**finished_values(valid_until))
         )
         return True
