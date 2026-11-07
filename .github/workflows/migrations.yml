@@ -91,6 +91,16 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_rule_evaluation.py' -v
+      - name: Install collector runner dependencies
+        run: pip install -r services/worker/requirements.txt
+      - name: Pull pinned test collector
+        run: docker pull python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+      - name: Verify a collector observation is shared
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+          SPECBOUND_DOCKER_TESTS: '1'
+        run: python -m unittest discover -s tests -p 'test_evidence_sharing.py' -v
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
