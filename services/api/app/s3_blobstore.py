@@ -12,7 +12,17 @@ from app.blobstore import BlobNotFound, BlobStoreError, validate_key
 
 
 class S3BlobStore:
-    def __init__(self, *, endpoint: str, bucket: str, access_key: str, secret_key: str):
+    def __init__(
+        self,
+        *,
+        endpoint: str,
+        bucket: str,
+        access_key: str,
+        secret_key: str,
+        connect_timeout: int = 5,
+        read_timeout: int = 30,
+        retries: int = 2,
+    ):
         parsed = urlsplit(endpoint)
         if (
             parsed.scheme not in ("http", "https")
@@ -37,11 +47,18 @@ class S3BlobStore:
             config=Config(
                 signature_version="s3v4",
                 s3={"addressing_style": "path"},
-                connect_timeout=5,
-                read_timeout=30,
-                retries={"max_attempts": 2},
+                connect_timeout=connect_timeout,
+                read_timeout=read_timeout,
+                retries={"max_attempts": retries},
             ),
         )
+
+    def check_ready(self) -> None:
+        """Check bucket availability without creating or modifying objects."""
+        try:
+            self._client.head_bucket(Bucket=self._bucket)
+        except (BotoCoreError, ClientError, OSError) as exc:
+            raise BlobStoreError("object store unavailable") from exc
 
     def put(self, key: str, data: bytes) -> None:
         validate_key(key)
@@ -77,11 +94,16 @@ class S3BlobStore:
             raise BlobStoreError("object deletion failed") from exc
 
 
-def configured_blobstore() -> S3BlobStore:
+def configured_blobstore(
+    *, connect_timeout: int = 5, read_timeout: int = 30, retries: int = 2
+) -> S3BlobStore:
     """Build the adapter only from explicit configuration, never instance credentials."""
     return S3BlobStore(
         endpoint=os.environ.get("BLOBSTORE_ENDPOINT", ""),
         bucket=os.environ.get("BLOBSTORE_BUCKET", ""),
         access_key=os.environ.get("BLOBSTORE_ACCESS_KEY", ""),
         secret_key=os.environ.get("BLOBSTORE_SECRET_KEY", ""),
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        retries=retries,
     )
