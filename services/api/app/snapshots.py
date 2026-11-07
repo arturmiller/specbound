@@ -131,6 +131,7 @@ def create_snapshot(
             products.c.id == product_id,
             teams.c.organization_id == organization_id,
         )
+        .with_for_update(of=products)
     ).first()
     if owned is None:
         raise LookupError("Product or repository binding not found in organization")

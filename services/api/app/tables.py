@@ -127,3 +127,17 @@ assessment_snapshots = Table(
     Column("evaluation_ids", JSON), Column("evidence_ids", JSON), Column("counts", JSON),
     Column("evaluations", JSON), Column("created_at", DateTime(timezone=True)),
 )
+findings = Table(
+    "findings", metadata,
+    Column("id", String), Column("fingerprint", String), Column("organization_id", String),
+    Column("product_id", String), Column("binding_id", String), Column("context", String),
+    Column("pull_request_number", Integer), Column("environment", String), Column("subject_id", String),
+    Column("control_id", String), Column("status", String), Column("created_at", DateTime(timezone=True)),
+    Column("updated_at", DateTime(timezone=True)), Column("last_snapshot_id", String),
+)
+finding_history = Table(
+    "finding_history", metadata,
+    Column("id", String), Column("finding_id", String), Column("snapshot_id", String),
+    Column("evaluation_id", String), Column("outcome", String), Column("state_after", String),
+    Column("reason", String), Column("observed_at", DateTime(timezone=True)),
+)
