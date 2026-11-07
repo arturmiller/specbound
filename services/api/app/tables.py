@@ -159,4 +159,6 @@ assessment_jobs = Table(
     Column("lease_token", String), Column("lease_until", DateTime(timezone=True)),
     Column("last_error", String), Column("result_snapshot_id", String),
     Column("comment_processed_at", DateTime(timezone=True)), Column("comment_retry_at", DateTime(timezone=True)),
+    Column("check_processed_at", DateTime(timezone=True)), Column("check_retry_at", DateTime(timezone=True)),
+    Column("check_valid_until", DateTime(timezone=True)),
 )

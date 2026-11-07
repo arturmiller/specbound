@@ -13,6 +13,7 @@ from uuid import uuid4
 import test_rule_evaluation as fixtures
 from app.database import get_engine
 from app.job_queue import LeaseLost, claim_next, fail_job, finish_job
+from app.pr_check import publish_check_once
 from app.pr_comment_delivery import publish_once
 from app.snapshots import create_snapshot
 from app.tables import (
@@ -371,3 +372,69 @@ class WorkerQueueTest(unittest.TestCase):
             )
             send.assert_not_called()
         self.assertIsNotNone(self.state()["comment_processed_at"])
+
+    def test_check_becomes_failure_when_evidence_expires(self):
+        repo = f"org/check-{self.f.org}"
+        with get_engine().begin() as db:
+            db.execute(
+                update(repo_bindings)
+                .where(repo_bindings.c.id == self.f.binding)
+                .values(provider="github", repository=repo)
+            )
+            db.execute(
+                update(github_events)
+                .where(github_events.c.delivery_id == self.delivery)
+                .values(
+                    payload={
+                        "action": "opened",
+                        "number": 17,
+                        "repository": {"id": 99, "full_name": repo},
+                        "pull_request": {
+                            "id": 123456,
+                            "number": 17,
+                            "head": {"sha": fixtures.COMMIT},
+                            "base": {"repo": {"id": 99}},
+                        },
+                    }
+                )
+            )
+        self.finish(self.claim(), NOW)
+
+        class Source:
+            repository = repo
+            app_id = "42"
+
+            def __init__(self):
+                self.checks = []
+
+            def close(self):
+                pass
+
+            def _token(self, *, permissions):
+                return "test-token"
+
+            def _request(self, method, path, token, **kwargs):
+                if "/pulls/" in path:
+                    return {"head": {"sha": fixtures.COMMIT}}
+                if method == "GET":
+                    return {"check_runs": self.checks}
+                data = kwargs["json"]
+                if method == "POST":
+                    self.checks.append({**data, "id": 9, "app": {"id": 42}})
+                else:
+                    self.checks[0].update(data)
+                return self.checks[0]
+
+        source = Source()
+        args = (get_engine(), self.f.org, lambda _: source, "")
+        self.assertTrue(publish_check_once(*args, clock=lambda: NOW))
+        self.assertEqual(source.checks[0]["conclusion"], "success")
+        self.assertEqual(source.checks[0]["head_sha"], fixtures.COMMIT)
+        self.assertFalse(
+            publish_check_once(*args, clock=lambda: NOW + timedelta(seconds=59))
+        )
+        self.assertTrue(
+            publish_check_once(*args, clock=lambda: NOW + timedelta(seconds=60))
+        )
+        self.assertEqual(len(source.checks), 1)
+        self.assertEqual(source.checks[0]["conclusion"], "failure")

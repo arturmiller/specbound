@@ -6,6 +6,7 @@ import unittest
 import httpx
 from app.git_source import SourceNotFound, SourceUnavailable
 from app.github_source import GitHubSource
+from app.pr_check import publish_check
 from app.pr_comment import MARKER, upsert_comment
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -225,6 +226,57 @@ class GitHubSourceTest(unittest.TestCase):
             ),
             1,
         )
+
+    def test_checks_api_never_writes_a_newer_sha_for_stale_job(self):
+        import json
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import patch
+
+        current = ["b" * 40]
+        check_runs = []
+        sent = []
+
+        def handle(request):
+            path = request.url.path
+            if path.endswith("/installation"):
+                return httpx.Response(200, json={"id": 123, "app_slug": "sample-app"})
+            if path.endswith("/access_tokens"):
+                self.assertEqual(
+                    json.loads(request.content)["permissions"],
+                    {"pull_requests": "read", "checks": "write"},
+                )
+                return httpx.Response(201, json={"token": "fixture-token"})
+            if path.endswith("/pulls/3"):
+                return httpx.Response(200, json={"head": {"sha": current[0]}})
+            if "/commits/" in path:
+                return httpx.Response(200, json={"check_runs": check_runs})
+            if path.endswith("/check-runs") and request.method == "POST":
+                data = json.loads(request.content)
+                sent.append(data)
+                check_runs.append({**data, "id": 1, "app": {"id": 1234}})
+                return httpx.Response(201, json=check_runs[0])
+            return httpx.Response(404)
+
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        job = {"id": "job", "pull_request_number": 3, "head_sha": "a" * 40}
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+            )
+            with patch(
+                "app.pr_check.assess_snapshot",
+                return_value=("success", now + timedelta(seconds=60)),
+            ):
+                self.assertIsNone(publish_check(None, source, job, {}, "", now))
+                self.assertEqual(sent, [])
+                current[0] = "a" * 40
+                publish_check(None, source, job, {}, "", now)
+        self.assertEqual(sent[0]["head_sha"], "a" * 40)
+        self.assertEqual(sent[0]["conclusion"], "success")
 
 
 if __name__ == "__main__":

@@ -43,6 +43,8 @@ Alter des ältesten wartenden Jobs bereit. Der Endpunkt lässt sich mit
 Compose-Projekte sind in [ADR 0026](docs/adr/0026-local-recovery.md) beschrieben.
 Die optionale Zustellung von PR-Kommentaren und ihre Voraussetzungen stehen in
 [ADR 0027](docs/adr/0027-pr-comment-delivery.md).
+Commit-genaue GitHub-Checks sind in [ADR 0028](docs/adr/0028-commit-checks.md)
+beschrieben.
 
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
 ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`

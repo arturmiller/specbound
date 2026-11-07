@@ -13,21 +13,23 @@ from app.structured_logging import JsonFormatter
 logger = logging.getLogger(__name__)
 
 
-def publish_loop(stop):
+def publish_loop(stop, kind):
     from app.database import get_engine
     from app.github_source import configured_github_source
+    from app.pr_check import publish_check_once
     from app.pr_comment_delivery import publish_once
 
     organization = os.environ.get("GITHUB_ORGANIZATION_ID", "")
     portal = os.environ.get("PORTAL_PUBLIC_URL", "")
-    if not organization or not portal:
+    if not organization or (kind == "comment" and not portal):
         logger.warning(
-            "Comment publishing is missing organization or portal configuration"
+            "GitHub publishing is missing organization or portal configuration"
         )
         return
     while not stop.is_set():
         try:
-            worked = publish_once(
+            operation = publish_once if kind == "comment" else publish_check_once
+            worked = operation(
                 get_engine(),
                 organization,
                 configured_github_source,
@@ -44,8 +46,10 @@ def publish_loop(stop):
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/healthz":
-            publisher = getattr(self.server, "publisher", None)
-            mode = "comment_publisher" if publisher and publisher.is_alive() else "idle"
+            publishers = getattr(self.server, "publishers", ())
+            mode = (
+                "github_publisher" if any(p.is_alive() for p in publishers) else "idle"
+            )
             status, body = (
                 200,
                 json.dumps(
@@ -81,17 +85,24 @@ def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 8081), HealthHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    publisher = None
-    if os.environ.get("GITHUB_COMMENT_PUBLISHING", "").lower() == "true":
-        publisher = threading.Thread(target=publish_loop, args=(stop,), daemon=True)
-        server.publisher = publisher
-        publisher.start()
+    publishers = []
+    for kind, setting in (
+        ("comment", "GITHUB_COMMENT_PUBLISHING"),
+        ("check", "GITHUB_CHECK_PUBLISHING"),
+    ):
+        if os.environ.get(setting, "").lower() == "true":
+            publisher = threading.Thread(
+                target=publish_loop, args=(stop, kind), daemon=True
+            )
+            publishers.append(publisher)
+            publisher.start()
+    server.publishers = publishers
     logger.info("Worker started; no job queue configured")
     stop.wait()
     server.shutdown()
     server.server_close()
     thread.join()
-    if publisher:
+    for publisher in publishers:
         publisher.join()
     logger.info("Worker stopped")
 
