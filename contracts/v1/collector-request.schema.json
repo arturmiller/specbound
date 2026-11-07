@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specbound:contracts:v1:collector-request",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "subject": {"$ref": "urn:specbound:contracts:v1:subject"},
+    "scope": {"$ref": "urn:specbound:contracts:v1:common#/$defs/scope", "required": ["environment", "targetRevision"]},
+    "credentialsRef": {"type": ["string", "null"], "pattern": "^credential:[A-Za-z0-9._/-]{1,200}$"},
+    "capabilities": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+/v[1-9][0-9]*$"}
+    }
+  },
+  "required": ["schemaVersion", "subject", "scope", "credentialsRef", "capabilities"],
+  "additionalProperties": false
+}
