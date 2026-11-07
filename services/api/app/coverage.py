@@ -1,6 +1,6 @@
 """Persist observed scanner scope and guard evaluations that depend on it."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection
@@ -85,7 +85,7 @@ def run_openapi_scan(
     return {**_serialize(row), "subjects": result.subjects}
 
 
-def assess_with_scan(
+def scan_covers(
     db: Connection,
     *,
     scan_id: int | None,
@@ -93,10 +93,9 @@ def assess_with_scan(
     binding_id: str,
     ref: str,
     expected_commit: str,
-    **assessment_inputs,
-) -> AssessmentResult:
-    """Evaluate only when the latest scan of the requested scope covered this revision."""
-    assessment = determine_assessment(**assessment_inputs)
+    not_after: datetime | None = None,
+):
+    """Return whether the latest scan covers the exact binding and revision."""
     row = (
         db.execute(
             select(scanner_coverage)
@@ -119,13 +118,44 @@ def assess_with_scan(
         .mappings()
         .one_or_none()
     )
-    if (
+    if not_after is not None:
+        if not_after.tzinfo is None or not_after.utcoffset() is None:
+            raise ValueError("not_after must be timezone-aware")
+        if row is not None:
+            observed = row["observed_at"]
+            if observed.tzinfo is None:  # SQLite returns naive UTC timestamps.
+                observed = observed.replace(tzinfo=timezone.utc)
+            if observed > not_after:
+                return False
+    return not (
         row is None
         or scan_id is None
         or row["id"] != scan_id
         or row["status"] != "covered"
         or row["source_revision"] != expected_commit
         or not expected_commit
+    )
+
+
+def assess_with_scan(
+    db: Connection,
+    *,
+    scan_id: int | None,
+    product_id: str,
+    binding_id: str,
+    ref: str,
+    expected_commit: str,
+    **assessment_inputs,
+) -> AssessmentResult:
+    """Evaluate only when the latest scan of the requested scope covered this revision."""
+    assessment = determine_assessment(**assessment_inputs)
+    if not scan_covers(
+        db,
+        scan_id=scan_id,
+        product_id=product_id,
+        binding_id=binding_id,
+        ref=ref,
+        expected_commit=expected_commit,
     ):
         return AssessmentResult(
             AssessmentStatus.UNKNOWN,

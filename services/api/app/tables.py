@@ -111,3 +111,11 @@ evidence_records = Table(
     Column("observed_at", DateTime(timezone=True)), Column("expires_at", DateTime(timezone=True)),
     Column("ttl_seconds", Integer),
 )
+rule_evaluations = Table(
+    "rule_evaluations", metadata,
+    Column("id", String), Column("organization_id", String), Column("product_id", String),
+    Column("subject_id", String), Column("environment", String), Column("target_revision", String),
+    Column("control_id", String), Column("governance_revision", String), Column("scan_id", Integer),
+    Column("status", String), Column("reason", String), Column("evidence_ids", JSON),
+    Column("control", JSON), Column("subject", JSON), Column("evaluated_at", DateTime(timezone=True)),
+)
