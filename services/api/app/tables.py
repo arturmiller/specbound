@@ -102,3 +102,12 @@ pack_catalog = Table(
     Column("revision_id", String), Column("kind", String), Column("manifest", JSON),
     Column("controls", JSON), Column("capabilities", JSON),
 )
+evidence_records = Table(
+    "evidence_records", metadata,
+    Column("id", String), Column("organization_id", String), Column("product_id", String),
+    Column("subject_id", String), Column("capability", String), Column("environment", String),
+    Column("target_revision", String), Column("collector_revision", String),
+    Column("collector_image", String), Column("provenance", JSON), Column("value", JSON),
+    Column("observed_at", DateTime(timezone=True)), Column("expires_at", DateTime(timezone=True)),
+    Column("ttl_seconds", Integer),
+)
