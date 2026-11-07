@@ -17,6 +17,7 @@ from app.tables import (
     finding_history,
     findings,
     rule_evaluations,
+    scanner_coverage,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
@@ -90,6 +91,18 @@ def assessment_report(
         .mappings()
         .all()
     )
+    scan_ids = [row["scan_id"] for row in evaluations if row["scan_id"] is not None]
+    scans = (
+        db.execute(
+            select(scanner_coverage).where(
+                scanner_coverage.c.id.in_(scan_ids),
+                scanner_coverage.c.binding_id == snapshot["binding_id"],
+            )
+        )
+        .mappings()
+        .all()
+    )
+    scan_by_id = {row["id"]: row for row in scans}
     return {
         "assessment": serialize_snapshot(snapshot),
         "evaluations": [
@@ -100,6 +113,15 @@ def assessment_report(
                 "status": row["status"],
                 "reason": row["reason"],
                 "evidenceIds": row["evidence_ids"],
+                "coverage": (
+                    {
+                        "status": scan_by_id[row["scan_id"]]["status"],
+                        "revision": scan_by_id[row["scan_id"]]["source_revision"],
+                        "errors": scan_by_id[row["scan_id"]]["errors"],
+                    }
+                    if row["scan_id"] in scan_by_id
+                    else None
+                ),
             }
             for row in evaluations
         ],

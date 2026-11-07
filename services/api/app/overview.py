@@ -10,7 +10,7 @@ from app.authorization import visible_teams
 from app.database import get_connection
 from app.identity import get_current_principal
 from app.pack_catalog import _query as pack_query
-from app.tables import findings, pack_revisions, products
+from app.tables import assessment_snapshots, findings, pack_revisions, products
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
 
@@ -50,6 +50,20 @@ def overview(
         .mappings()
         .all()
     )
+    assessments = (
+        db.execute(
+            select(assessment_snapshots)
+            .where(
+                assessment_snapshots.c.organization_id == organization_id,
+                assessment_snapshots.c.product_id.in_(product_ids),
+            )
+            .order_by(
+                assessment_snapshots.c.created_at.desc(), assessment_snapshots.c.id
+            )
+        )
+        .mappings()
+        .all()
+    )
     return {
         "products": [
             {"id": row["id"], "name": row["name"], "teamId": row["owner_team_id"]}
@@ -76,5 +90,19 @@ def overview(
                 "snapshotId": row["last_snapshot_id"],
             }
             for row in finding_rows
+        ],
+        "assessments": [
+            {
+                "id": row["id"],
+                "productId": row["product_id"],
+                "environment": row["environment"],
+                "gitSha": row["git_sha"],
+                "counts": row["counts"],
+                "evaluations": [
+                    {"status": item["status"], "reason": item["reason"]}
+                    for item in row["evaluations"]
+                ],
+            }
+            for row in assessments
         ],
     }

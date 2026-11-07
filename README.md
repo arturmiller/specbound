@@ -49,6 +49,8 @@ Die geschützte Ansicht eines Assessment-Links erläutert
 [ADR 0029](docs/adr/0029-assessment-report.md).
 Die Suche über zugängliche Produkte, Packs und Findings ist in
 [ADR 0030](docs/adr/0030-overview-search.md) beschrieben.
+Ergebniszustände und die angezeigte Quellabdeckung erläutert
+[ADR 0031](docs/adr/0031-unknown-and-coverage.md).
 
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
 ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`

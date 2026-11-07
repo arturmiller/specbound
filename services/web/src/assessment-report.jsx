@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 /** @typedef {{id: string, outcome: string, state: string, reason: string}} Finding */
-/** @typedef {{id: string, status: string, reason: string, evidenceIds: string[], control: {id: string}, subject: {id: string, provenance?: {sourceRef?: string}}}} Evaluation */
+/** @typedef {{id: string, status: string, reason: string, evidenceIds: string[], control: {id: string}, subject: {id: string, provenance?: {sourceRef?: string}}, coverage: {status: string, revision: string, errors: {path: string, reason: string}[]} | null}} Evaluation */
 /** @typedef {{id: string, capability: string, provenance?: {sourceRef?: string}, observedAt: string, expiresAt: string, value: unknown}} Evidence */
 /** @typedef {{assessment: {id: string, gitSha: string, packSha: string, pullRequestNumber: number | null, environment: string, counts: {PASS: number, FAIL: number, UNKNOWN: number, NOT_APPLICABLE: number}}, evaluations: Evaluation[], evidence: Evidence[], findings: Finding[]}} Report */
 
@@ -37,7 +37,11 @@ export function AssessmentReport({ id, accessToken = '' }) {
       <ul>{findings.map((item) => <li key={item.id}>{item.outcome}: {item.state} – {item.reason}</li>)}</ul>}
     <h3>Controls und Bewertungen</h3>
     {evaluations.map((item) => <article key={item.id} className="panel">
-      <h4>{item.control.id}: {item.status}</h4><p>{item.reason}</p>
+      <h4>{item.control.id}: <span className={`assessment-status status-${item.status.toLowerCase()}`}>{item.status === 'NOT_APPLICABLE' ? 'N/A' : item.status}</span></h4><p>Grund: {item.reason}</p>
+      <p>Quellabdeckung: {item.coverage ? item.coverage.status : 'Nicht vorhanden'}
+        {item.coverage && <> · Scan-Revision: {item.coverage.revision || 'Nicht verfügbar'}
+          {item.coverage.revision !== assessment.gitSha && ' (abweichende Revision)'}</>} (historischer Scan)</p>
+      {item.coverage?.errors?.map((error, index) => <p key={index}>Abdeckungsfehler: {error.path} {error.reason}</p>)}
       <p>Subject: {item.subject.id}</p><p>Quellverweis: {item.subject.provenance?.sourceRef || 'Nicht verfügbar'}</p>
       <p>Evidence: {item.evidenceIds.length ? item.evidenceIds.join(', ') : 'Keine'}</p>
       <details><summary>Control</summary><pre>{JSON.stringify(item.control, null, 2)}</pre></details>
