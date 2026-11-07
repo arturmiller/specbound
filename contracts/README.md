@@ -51,6 +51,10 @@ ein begründetes, vom Aufrufer geliefertes Regelergebnis. Die Funktion sucht
 keine Nachweise und prüft weder deren Existenz noch deren Aktualität oder Scope.
 Diese Verantwortung bleibt bei den späteren Evidence- und Evaluations-Tasks.
 
+Die interne Evidence-Auswahl und der Assessment-Schutz für gespeicherte Records
+sind in [ADR 0017](../docs/adr/0017-evidence-freshness.md) beschrieben. Eine
+persistierte Assessment-Pipeline gibt es noch nicht.
+
 Tests (mit den Entwicklungsabhängigkeiten der API installiert):
 
 ```sh
