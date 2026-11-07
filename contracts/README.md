@@ -9,6 +9,10 @@ Zusätzlich beschreiben `governance-pack.schema.json` und
 festgelegte erste Governance-Manifestformat. Es ersetzt keine Regelbewertung.
 `evidence-provider-pack.schema.json` beschreibt das Provider-Format aus
 [ADR 0012](../docs/adr/0012-provider-manifests.md).
+`collector-request.schema.json` und `collector-response.schema.json` definieren
+den Austausch mit einem Collector; die Verknüpfung zu Provider-Capabilities
+und deren Schemas ist in [ADR 0015](../docs/adr/0015-collector-contracts.md)
+beschrieben.
 
 - **Subject** beschreibt ein typisiertes Prüfobjekt in einem Produktkontext.
 - **Fact** hält einen benannten JSON-Wert über ein Subject fest. Ein vorhandener
