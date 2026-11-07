@@ -1,7 +1,7 @@
 """Read metadata for an authorized product's GitHub repository binding."""
 
 import os
-from typing import Annotated
+from typing import Annotated, Callable
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -9,12 +9,16 @@ from sqlalchemy.engine import Connection
 
 from app.database import get_connection
 from app.git_source import SourceNotFound, SourceUnavailable
-from app.github_source import configured_github_source
+from app.github_source import GitHubSource, configured_github_source
 from app.identity import get_current_principal
 from app.products import _product
 from app.tables import repo_bindings
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
+
+
+def github_metadata_source_factory() -> Callable[[str], GitHubSource]:
+    return configured_github_source
 
 
 @router.get("/products/{product_id}/repositories/{binding_id}/github")
@@ -23,6 +27,9 @@ def github_repository_metadata(
     binding_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
     db: Annotated[Connection, Depends(get_connection)],
+    factory: Annotated[
+        Callable[[str], GitHubSource], Depends(github_metadata_source_factory)
+    ],
 ):
     _, team = _product(db, product_id, principal, "read")
     configured_org = os.environ.get("GITHUB_ORGANIZATION_ID", "")
@@ -49,7 +56,7 @@ def github_repository_metadata(
     if binding["provider"].lower() != "github":
         raise HTTPException(status_code=400, detail="Repository provider is not GitHub")
     try:
-        source = configured_github_source(binding["repository"])
+        source = factory(binding["repository"])
         try:
             return source.metadata()
         finally:

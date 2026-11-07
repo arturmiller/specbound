@@ -6,6 +6,7 @@ from pathlib import Path
 import uvicorn
 from app.database import get_engine
 from app.git_source import GitSnapshot
+from app.github_repositories import github_metadata_source_factory
 from app.identity import get_current_principal
 from app.main import app
 from app.pack_catalog import github_source_factory
@@ -38,6 +39,14 @@ class FixtureSource:
     def close(self):
         pass
 
+    def metadata(self):
+        return {
+            "id": 42,
+            "full_name": self.repository,
+            "default_branch": "main",
+            "private": False,
+        }
+
 
 def main():
     test_url = os.environ.get("SPECBOUND_E2E_DATABASE_URL")
@@ -60,6 +69,7 @@ def main():
         )
     app.dependency_overrides[get_current_principal] = lambda: "user:e2e"
     app.dependency_overrides[github_source_factory] = lambda: FixtureSource
+    app.dependency_overrides[github_metadata_source_factory] = lambda: FixtureSource
     uvicorn.run(app, host="127.0.0.1", port=18762, log_level="warning")
 
 
