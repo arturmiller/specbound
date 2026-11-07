@@ -12,6 +12,7 @@ from sqlalchemy.engine import Connection
 
 from app.database import get_connection
 from app.github_source import verify_github_signature
+from app.pull_request_events import enqueue_pr_event, parse_pr_event
 from app.tables import github_events
 
 router = APIRouter()
@@ -66,9 +67,15 @@ async def github_webhook(
         raise HTTPException(status_code=400, detail="Invalid GitHub delivery") from exc
     if str(payload["installation"].get("id", "")) != installation:
         raise HTTPException(status_code=403, detail="Unexpected installation")
-    db.execute(
+    try:
+        pr_event = parse_pr_event(payload) if event_type == "pull_request" else None
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail="Invalid pull request delivery"
+        ) from exc
+    inserted = db.execute(
         text(
-            "INSERT INTO github_events (delivery_id, installation_id, organization_id, event_type, payload) VALUES (:delivery, :installation, :organization, :event, :payload) ON CONFLICT DO NOTHING"
+            "INSERT INTO github_events (delivery_id, installation_id, organization_id, event_type, payload) VALUES (:delivery, :installation, :organization, :event, :payload) ON CONFLICT DO NOTHING RETURNING delivery_id"
         ).bindparams(bindparam("payload", type_=JSON)),
         {
             "delivery": delivery,
@@ -77,4 +84,6 @@ async def github_webhook(
             "event": event_type,
             "payload": payload,
         },
-    )
+    ).first()
+    if inserted and pr_event is not None:
+        enqueue_pr_event(db, organization, delivery, pr_event)
