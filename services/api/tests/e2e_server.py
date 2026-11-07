@@ -16,10 +16,11 @@ FIXTURE_ORGANIZATION = "123e4567-e89b-12d3-a456-426614174000"
 
 
 @app.post("/__e2e/assessment")
-def create_assessment_fixture():
+def create_assessment_fixture(failing: bool = False):
     """Seed a complete report only in this test-only server."""
     import sys
 
+    from app.findings import apply_snapshot
     from app.snapshots import create_snapshot
     from app.tables import organizations
     from sqlalchemy import update
@@ -30,7 +31,15 @@ def create_assessment_fixture():
     fixture = fixtures.RuleEvaluationTest(methodName="runTest")
     fixture.setUp()
     fixture.save_evidence()
-    evaluation = fixture.evaluate()
+    control = fixture.control
+    if failing:
+        control = {
+            **control,
+            "assertions": [
+                {"path": "publicly_reachable", "operator": "equals", "expected": True}
+            ],
+        }
+    evaluation = fixture.evaluate(control=control)
     with get_engine().begin() as db:
         db.execute(
             update(organizations)
@@ -50,7 +59,15 @@ def create_assessment_fixture():
             evaluation_ids=[evaluation["id"]],
             now=fixtures.NOW,
         )
-    return {"id": snapshot["id"], "sha": snapshot["gitSha"]}
+        if failing:
+            apply_snapshot(db, fixture.org, snapshot["id"])
+    return {
+        "id": snapshot["id"],
+        "sha": snapshot["gitSha"],
+        "organizationId": fixture.org,
+        "teamId": fixture.team,
+        "productId": fixture.product,
+    }
 
 
 class FixtureSource:

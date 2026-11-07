@@ -17,7 +17,10 @@ export function PackWorkspace({ organizationId, accessToken = '' }) {
     const controller = new AbortController();
     fetch(root, { signal: controller.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} })
       .then((response) => { if (!response.ok) throw new Error('load failed'); return response.json(); })
-      .then((/** @type {Pack[]} */ data) => { setPacks(data); setSelected(data[0]?.id || ''); })
+      .then((/** @type {Pack[]} */ data) => {
+        const requested = new URLSearchParams(location.search).get('pack');
+        setPacks(data); setSelected(data.some((item) => item.id === requested) ? requested || '' : (data[0]?.id || ''));
+      })
       .catch(() => { if (!controller.signal.aborted) setError('Packs konnten nicht geladen werden.'); });
     return () => controller.abort();
   }, [root, accessToken]);

@@ -47,6 +47,8 @@ Commit-genaue GitHub-Checks sind in [ADR 0028](docs/adr/0028-commit-checks.md)
 beschrieben.
 Die geschützte Ansicht eines Assessment-Links erläutert
 [ADR 0029](docs/adr/0029-assessment-report.md).
+Die Suche über zugängliche Produkte, Packs und Findings ist in
+[ADR 0030](docs/adr/0030-overview-search.md) beschrieben.
 
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
 ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`
