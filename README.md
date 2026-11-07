@@ -36,6 +36,12 @@ sind. Der Web-Healthcheck prüft auch den API-Proxy. Der Worker-Healthcheck prü
 ob sein Prozess lebt; seine interne `/readyz`-Antwort bleibt ohne Handler `503` und
 behauptet damit keine Bereitschaft zur Job-Verarbeitung.
 
+API und Worker schreiben strukturierte JSON-Logs. Unter
+<http://127.0.0.1:8000/metrics> stehen lokale, aggregierte Jobzahlen und das
+Alter des ältesten wartenden Jobs bereit. Der Endpunkt lässt sich mit
+`METRICS_ENABLED=false` abschalten. Sicherung und Wiederherstellung für lokale
+Compose-Projekte sind in [ADR 0026](docs/adr/0026-local-recovery.md) beschrieben.
+
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
 ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`
 werden `OIDC_ISSUER`, `OIDC_JWKS_URL`, `OIDC_CLIENT_ID` und `OIDC_AUDIENCE`

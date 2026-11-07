@@ -5,6 +5,8 @@ import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from app.structured_logging import JsonFormatter
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,7 +29,9 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
     stop = threading.Event()
 
     def shutdown(_signum: int, _frame: object) -> None:

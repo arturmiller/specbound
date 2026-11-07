@@ -1,0 +1,50 @@
+name: Lokale Sicherung und Wiederherstellung
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery:
+    name: Compose Backup und Restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SPECBOUND_IMAGE_TAG: recovery-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and seed isolated source
+        run: |
+          docker compose -p specbound-recovery-source up --build -d --wait --wait-timeout 240
+          docker compose -p specbound-recovery-source exec -T -e SPECBOUND_RECOVERY_FIXTURE=1 api python -m tests.recovery_fixture seed > "$RUNNER_TEMP/recovery-fixture.json"
+          curl --fail http://127.0.0.1:8000/metrics | grep 'specbound_oldest_pending_job_seconds'
+          docker compose -p specbound-recovery-source logs --no-color --no-log-prefix api > "$RUNNER_TEMP/specbound-api.log"
+          python -c 'import json,os,pathlib; lines=pathlib.Path(os.environ["RUNNER_TEMP"],"specbound-api.log").read_text().splitlines(); assert any(json.loads(line).get("message") == "http_request" for line in lines)'
+      - name: Back up and refuse a nonempty target
+        run: |
+          docker compose -p specbound-recovery-source stop api web worker
+          python scripts/compose_backup.py backup --project specbound-recovery-source --path "$RUNNER_TEMP/specbound-backup"
+          if python scripts/compose_backup.py restore --project specbound-recovery-source --path "$RUNNER_TEMP/specbound-backup"; then
+            echo 'Restore unexpectedly accepted a nonempty database' >&2
+            exit 1
+          fi
+          docker compose -p specbound-recovery-source stop db minio
+      - name: Restore into a fresh Compose project
+        run: |
+          docker compose -p specbound-recovery-target up -d --wait --wait-timeout 120 db minio
+          docker compose -p specbound-recovery-target run --rm minio-init
+          python scripts/compose_backup.py restore --project specbound-recovery-target --path "$RUNNER_TEMP/specbound-backup"
+          docker compose -p specbound-recovery-target up -d --no-build --wait --wait-timeout 180
+          docker compose -p specbound-recovery-target exec -T -e SPECBOUND_RECOVERY_FIXTURE=1 api python -m tests.recovery_fixture verify < "$RUNNER_TEMP/recovery-fixture.json"
+          curl --fail http://127.0.0.1:8000/readyz
+      - name: Remove isolated test projects
+        if: always()
+        run: |
+          docker compose -p specbound-recovery-source down --volumes --remove-orphans
+          docker compose -p specbound-recovery-target down --volumes --remove-orphans
