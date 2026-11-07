@@ -16,7 +16,7 @@ FIXTURE_ORGANIZATION = "123e4567-e89b-12d3-a456-426614174000"
 
 
 @app.post("/__e2e/assessment")
-def create_assessment_fixture(failing: bool = False):
+def create_assessment_fixture(failing: bool = False, missing_provider: bool = False):
     """Seed a complete report only in this test-only server."""
     import sys
 
@@ -30,7 +30,8 @@ def create_assessment_fixture(failing: bool = False):
 
     fixture = fixtures.RuleEvaluationTest(methodName="runTest")
     fixture.setUp()
-    fixture.save_evidence()
+    if not missing_provider:
+        fixture.save_evidence()
     control = fixture.control
     if failing:
         control = {

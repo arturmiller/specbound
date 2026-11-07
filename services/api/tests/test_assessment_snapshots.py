@@ -163,6 +163,64 @@ class AssessmentSnapshotsTest(unittest.TestCase):
         finally:
             app.dependency_overrides.clear()
 
+    def test_missing_provider_is_unknown_with_explicit_coverage(self):
+        f = self.fixture
+        evaluation = f.evaluate()
+        self.assertEqual(evaluation["status"], "UNKNOWN")
+        snapshot = self.create("pull_request", evaluation, environment="test", pr=17)
+        app.dependency_overrides[get_current_principal] = lambda: "owner"
+        try:
+            with TestClient(app) as client:
+                overview = client.get(f"/organizations/{f.org}/overview").json()
+                assessment = next(
+                    item
+                    for item in overview["assessments"]
+                    if item["id"] == snapshot["id"]
+                )
+                self.assertEqual(assessment["counts"]["UNKNOWN"], 1)
+                self.assertEqual(assessment["counts"]["PASS"], 0)
+                self.assertIn("Nachweis fehlt", assessment["evaluations"][0]["reason"])
+                report = client.get(f"/assessments/{snapshot['id']}").json()
+                self.assertEqual(report["evaluations"][0]["status"], "UNKNOWN")
+                self.assertEqual(
+                    report["evaluations"][0]["coverage"]["status"], "covered"
+                )
+                self.assertEqual(report["evidence"], [])
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_report_keeps_missing_coverage_and_not_applicable_distinct(self):
+        f = self.fixture
+        unknown = f.evaluate(scan_id=None)
+        self.assertEqual(unknown["status"], "UNKNOWN")
+        unknown_snapshot = self.create(
+            "pull_request", unknown, environment="test", pr=17
+        )
+        not_applicable = f.evaluate(
+            control={**f.control, "target": {"kind": "api.schema"}}
+        )
+        self.assertEqual(not_applicable["status"], "NOT_APPLICABLE")
+        na_snapshot = self.create(
+            "pull_request", not_applicable, environment="test", pr=18
+        )
+        app.dependency_overrides[get_current_principal] = lambda: "owner"
+        try:
+            with TestClient(app) as client:
+                no_coverage = client.get(
+                    f"/assessments/{unknown_snapshot['id']}"
+                ).json()["evaluations"][0]
+                self.assertEqual(no_coverage["status"], "UNKNOWN")
+                self.assertIsNone(no_coverage["coverage"])
+                self.assertIn("Quellabdeckung", no_coverage["reason"])
+                na = client.get(f"/assessments/{na_snapshot['id']}").json()[
+                    "evaluations"
+                ][0]
+                self.assertEqual(na["status"], "NOT_APPLICABLE")
+                self.assertTrue(na["reason"])
+                self.assertEqual(na["coverage"]["status"], "covered")
+        finally:
+            app.dependency_overrides.clear()
+
     def test_invalid_context_scope_and_stale_evidence_are_rejected(self):
         f = self.fixture
         evaluation = self.evaluation("pr")

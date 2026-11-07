@@ -35,3 +35,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .assessment-report dd, .assessment-report p, .assessment-report pre { overflow-wrap: anywhere; }
 .assessment-report pre { white-space: pre-wrap; }
 .assessment-report .panel { margin: 12px 0; }
+.assessment-status { display: inline-block; border-radius: 4px; padding: 2px 6px; }
+.status-pass { color: #14532d; background: #dcfce7; }
+.status-fail { color: #7f1d1d; background: #fee2e2; }
+.status-unknown { color: #713f12; background: #fef3c7; }
+.status-not_applicable { color: #334155; background: #e2e8f0; }
