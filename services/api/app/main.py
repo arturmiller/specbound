@@ -9,6 +9,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from app.agents import router as agents_router
+from app.assessment_reports import router as assessment_reports_router
 from app.database import get_engine
 from app.github_repositories import router as github_repositories_router
 from app.github_webhook import router as github_webhook_router
@@ -30,6 +31,7 @@ app.include_router(github_webhook_router)
 app.include_router(github_repositories_router)
 app.include_router(pack_catalog_router)
 app.include_router(agents_router)
+app.include_router(assessment_reports_router)
 app.include_router(products_router)
 app.include_router(teams_router)
 

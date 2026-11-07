@@ -25,3 +25,10 @@ test('rejects an unsolicited authorization callback', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('Anmeldung konnte nicht initialisiert werden');
   await expect(page).not.toHaveURL(/code=/);
 });
+
+test('returns to the requested assessment after signing in', async ({ page }) => {
+  await page.goto('/assessments/example-report');
+  await page.getByRole('button', { name: 'Anmelden' }).click();
+  await expect(page).toHaveURL(/\/assessments\/example-report$/);
+  await expect(page.getByRole('alert')).toContainText('Assessment konnte nicht geladen werden');
+});
