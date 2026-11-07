@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import test_rule_evaluation as fixtures
 from app.database import get_engine
+from app.findings import get_history, list_findings
 from app.job_queue import LeaseLost, claim_next, fail_job, finish_job
 from app.pr_check import publish_check_once
 from app.pr_comment_delivery import publish_once
@@ -186,6 +187,13 @@ class WorkerQueueTest(unittest.TestCase):
         self.assertEqual(len([item for item in claims if item is not None]), 1)
 
     def test_expiration_during_finalization_rolls_back_snapshot(self):
+        control = {
+            **self.f.control,
+            "assertions": [
+                {"path": "publicly_reachable", "operator": "equals", "expected": True}
+            ],
+        }
+        self.evaluation = self.f.evaluate(control=control)
         lease = self.claim()
         moments = iter((NOW, NOW + timedelta(seconds=3)))
         with get_engine().begin() as db:
@@ -203,6 +211,45 @@ class WorkerQueueTest(unittest.TestCase):
                 .where(assessment_snapshots.c.organization_id == self.f.org)
             ).scalar_one()
             self.assertEqual(count, 0)
+            self.assertEqual(list_findings(db, self.f.org, self.f.product), [])
+
+    def test_completed_job_applies_finding_once(self):
+        control = {
+            **self.f.control,
+            "assertions": [
+                {"path": "publicly_reachable", "operator": "equals", "expected": True}
+            ],
+        }
+        self.evaluation = self.f.evaluate(control=control)
+        lease = self.claim()
+        snapshot_id = self.finish(lease, NOW)
+        self.assertEqual(self.finish(lease, NOW), snapshot_id)
+        with get_engine().connect() as db:
+            findings = list_findings(db, self.f.org, self.f.product)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["status"], "open")
+            history = get_history(db, self.f.org, findings[0]["id"])
+            self.assertEqual(
+                [(entry["outcome"], entry["snapshotId"]) for entry in history],
+                [("FAIL", snapshot_id)],
+            )
+
+    def test_finding_failure_rolls_back_snapshot_and_completion(self):
+        lease = self.claim()
+        with patch("app.job_queue.apply_snapshot", side_effect=RuntimeError("failed")):
+            with self.assertRaises(RuntimeError):
+                self.finish(lease, NOW)
+        self.assertEqual(self.state()["status"], "running")
+        with get_engine().connect() as db:
+            self.assertEqual(
+                db.execute(
+                    select(func.count())
+                    .select_from(assessment_snapshots)
+                    .where(assessment_snapshots.c.organization_id == self.f.org)
+                ).scalar_one(),
+                0,
+            )
+            self.assertEqual(list_findings(db, self.f.org, self.f.product), [])
 
     def test_expired_final_attempt_goes_to_dead_letter(self):
         for attempt in range(3):

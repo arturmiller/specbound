@@ -14,8 +14,12 @@ Head-SHA des Snapshots. Bei Fehler oder abgelaufener Lease wird der Snapshot per
 Savepoint zurückgerollt. Das Job-Ergebnis wird genau einmal zugeordnet; ein
 wiederholtes Bestätigen desselben abgeschlossenen Tokens liefert dieselbe ID, ohne
 den Handler erneut auszuführen. Ein alter Token kann keinen neuen Versuch beenden.
-Die Job-Unique-Constraint aus ADR 0023 begrenzt das Ergebnis auf einen Job je
+Der Abschluss wendet den Finding-Lebenszyklus in derselben Transaktion auf den
+Snapshot an; schlägt der Abschluss fehl oder läuft die Lease ab, werden auch
+Finding- und Historienänderungen zurückgerollt. Die Job-Unique-Constraint aus ADR 0023 begrenzt das Ergebnis auf einen Job je
 Repository-Bindung, PR und Head-SHA.
+Bereits vor dieser Änderung abgeschlossene Jobs werden dadurch nicht rückwirkend
+neu verarbeitet; für sie wird keine lückenlose Historie nachträglich behauptet.
 
 `queue_worker.run_queue` stellt das Polling für einen explizit übergebenen,
 vertrauenswürdigen Handler bereit. Der Compose-Worker bleibt standardmäßig untätig:
