@@ -65,6 +65,26 @@ test('local login uses an API access token and creates the first organization', 
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Übersicht', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Übersicht und Suche' })).toBeVisible();
   await expect(page.getByText('Keine Bewertungen vorhanden. Gesamtzustand: UNKNOWN.')).toBeVisible();
+  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Agenten', exact: true }).click();
+  await page.getByRole('link', { name: '+ Agent registrieren' }).click();
+  await page.getByLabel('Anzeigename').fill('Lokaler Agent');
+  await page.getByRole('button', { name: 'Agent anlegen und Teams zuordnen' }).click();
+  await page.getByRole('button', { name: 'Als Viewer hinzufügen' }).click();
+  await page.getByRole('link', { name: 'Rechte und Zugang ansehen' }).click();
+  await page.route('**/api/organizations/**/agents/**/credentials', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const response = await route.fetch();
+    const data = await response.json();
+    data.token = 'sba_fixture_only';
+    await route.fulfill({ response, json: data });
+  });
+  await page.getByRole('button', { name: 'Zugang ausstellen' }).click();
+  await expect(page.getByText('sba_fixture_only')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('sba_fixture_only')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Widerrufen' }).click();
+  await expect(page.getByRole('button', { name: 'Widerrufen' })).toHaveCount(0);
+  await expect(page.locator('.agent-credentials li')).toContainText('Widerrufen');
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
 
   await page.reload();

@@ -278,3 +278,4 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .agent-screen .team-table { min-width: 650px; }
 .agent-steps { display: flex; gap: 24px; flex-wrap: wrap; padding: 16px; margin: 18px 0; border: 1px solid #dce6f2; border-radius: 9px; background: white; color: #70859c; }.agent-steps strong { color: #1b67ed; }
 .agent-team-list { list-style: none; padding: 0; }.agent-team-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid #e8eef6; }
+.agent-credentials { list-style: none; padding: 0; }.agent-credentials li { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid #e8eef6; }.agent-credentials small { display: block; margin-top: 5px; }.agent-secret { display: block; overflow-wrap: anywhere; user-select: all; }.agent-audit-table { min-width: 700px; }

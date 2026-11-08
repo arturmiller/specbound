@@ -93,8 +93,14 @@ Findings führen zum jeweils aktuellen Finding und sind entsprechend beschriftet
 Agenten sind lokale nichtmenschliche Principals. Organisationsinhaber können
 sie registrieren und Teams als Viewer zuordnen; eine externe Git-Identität wird
 dabei nicht gespeichert und keine Ausführung gestartet. Fehlende Teamzugriffe
-werden als unbekannte Mitgliedschaften dargestellt. Weitere Berechtigungen und
-der Auditverlauf gehören zum nachfolgenden Task.
+werden als unbekannte Mitgliedschaften dargestellt.
+
+Agentenzugänge werden vom menschlichen Organisationsinhaber ausgestellt und
+widerrufen. Das einmalig ausgegebene Token bleibt ausschließlich im flüchtigen
+Ansichtszustand; nach Verlassen oder Neuladen ist es nicht erneut verfügbar.
+Die Zugangsliste liefert nur ID, Ablauf und Widerruf, keine Geheimnisse oder
+Hashes. Der Auditverlauf zeigt gespeicherte Specbound-Ereignisse; externe Git-
+Aktivität und Repository-Rechte werden nicht daraus abgeleitet.
 
 ## Phasen und Status
 
