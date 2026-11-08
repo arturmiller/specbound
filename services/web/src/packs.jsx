@@ -16,6 +16,14 @@ export function PackWorkspace({ organizationId, accessToken = '' }) {
   const currentApproval = approval?.revisionId === selected ? approval : null;
   const root = `/api/organizations/${encodeURIComponent(organizationId)}/packs`;
 
+  /** @param {string} id */
+  function selectPack(id) {
+    setSelected(id);
+    const url = new URL(location.href);
+    url.searchParams.set('pack', id);
+    history.replaceState(null, '', url);
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     fetch(root, { signal: controller.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} })
@@ -66,7 +74,7 @@ export function PackWorkspace({ organizationId, accessToken = '' }) {
       if (!response.ok) throw new Error(response.status === 409 ? 'Der Tag wurde verschoben; der gespeicherte Commit bleibt unverändert.' : 'Pack konnte nicht verbunden werden.');
       /** @type {Pack} */ const pack = await response.json();
       setPacks((current) => [...current.filter((item) => item.id !== pack.id), pack]);
-      setSelected(pack.id);
+      selectPack(pack.id);
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Pack konnte nicht verbunden werden.'); }
     finally { setBusy(false); }
   }
@@ -80,7 +88,7 @@ export function PackWorkspace({ organizationId, accessToken = '' }) {
       <div className="panel">
         <h3>Packs</h3>
         {packs.length === 0 && <p>Noch keine Packs verbunden.</p>}
-        <ul className="team-list">{packs.map((pack) => <li key={pack.id}><button className="team-choice" type="button" disabled={busy} aria-pressed={pack.id === selected} onClick={() => setSelected(pack.id)}>{pack.manifest.metadata.id} · {pack.tag}</button></li>)}</ul>
+        <ul className="team-list">{packs.map((pack) => <li key={pack.id}><button className="team-choice" type="button" disabled={busy} aria-pressed={pack.id === selected} onClick={() => selectPack(pack.id)}>{pack.manifest.metadata.id} · {pack.tag}</button></li>)}</ul>
         <form onSubmit={connect}>
           <label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label>
           <label className="field">Release-Tag<input required maxLength={200} value={tag} onChange={(event) => setTag(event.target.value)} placeholder="v1.0.0" /></label>
