@@ -110,6 +110,36 @@ def create_credential(
     return {"id": credential_id, "token": token, "expiresAt": expires}
 
 
+@router.get("/organizations/{organization_id}/agents/{agent_id}/credentials")
+def list_credentials(
+    organization_id: str,
+    agent_id: str,
+    principal: Principal,
+    db: Db,
+    response: Response,
+):
+    human_owner(db, organization_id, principal)
+    lock_agent(db, organization_id, agent_id)
+    rows = db.execute(
+        select(
+            agent_credentials.c.id,
+            agent_credentials.c.expires_at,
+            agent_credentials.c.revoked_at,
+        )
+        .where(agent_credentials.c.agent_id == agent_id)
+        .order_by(agent_credentials.c.expires_at.desc(), agent_credentials.c.id)
+    ).mappings()
+    response.headers["Cache-Control"] = "no-store"
+    return [
+        {
+            "id": row["id"],
+            "expiresAt": row["expires_at"],
+            "revokedAt": row["revoked_at"],
+        }
+        for row in rows
+    ]
+
+
 @router.delete(
     "/organizations/{organization_id}/agents/{agent_id}/credentials/{credential_id}",
     status_code=204,

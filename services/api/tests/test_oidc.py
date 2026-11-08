@@ -223,6 +223,23 @@ class OidcIntegrationTest(unittest.TestCase):
                 self.assertEqual(issued.headers["cache-control"], "no-store")
                 credential = issued.json()
                 agent_headers = {"Authorization": "Bearer " + credential["token"]}
+                listing = client.get(
+                    f"/organizations/{org}/agents/{agent}/credentials", headers=owner
+                )
+                self.assertEqual(listing.status_code, 200)
+                self.assertEqual(listing.headers["cache-control"], "no-store")
+                self.assertEqual(
+                    set(listing.json()[0]), {"id", "expiresAt", "revokedAt"}
+                )
+                self.assertEqual(listing.json()[0]["id"], credential["id"])
+                self.assertNotIn(credential["token"], listing.text)
+                self.assertEqual(
+                    client.get(
+                        f"/organizations/{org}/agents/{agent}/credentials",
+                        headers=agent_headers,
+                    ).status_code,
+                    403,
+                )
                 with db_engine.begin() as connection:
                     digest = connection.execute(
                         text("SELECT token_hash FROM agent_credentials WHERE id=:id"),
@@ -246,6 +263,13 @@ class OidcIntegrationTest(unittest.TestCase):
                 other_org = client.post(
                     "/organizations", json={"name": "Separate"}, headers=owner
                 ).json()["id"]
+                self.assertEqual(
+                    client.get(
+                        f"/organizations/{other_org}/agents/{agent}/credentials",
+                        headers=owner,
+                    ).status_code,
+                    404,
+                )
                 self.assertEqual(
                     client.get(
                         f"/organizations/{other_org}/teams", headers=agent_headers
@@ -309,6 +333,12 @@ class OidcIntegrationTest(unittest.TestCase):
                     )
                 other = {"Authorization": "Bearer " + self.token(f"other-{uuid4()}")}
                 self.assertEqual(
+                    client.get(
+                        f"/organizations/{org}/agents/{agent}/credentials", headers=other
+                    ).status_code,
+                    403,
+                )
+                self.assertEqual(
                     client.put(approval_url, headers=other).status_code, 403
                 )
                 self.assertEqual(
@@ -337,6 +367,10 @@ class OidcIntegrationTest(unittest.TestCase):
                 self.assertEqual(
                     client.get("/auth/me", headers=agent_headers).status_code, 401
                 )
+                listed_after_revoke = client.get(
+                    f"/organizations/{org}/agents/{agent}/credentials", headers=owner
+                ).json()
+                self.assertIsNotNone(listed_after_revoke[0]["revokedAt"])
                 expired = client.post(
                     f"/organizations/{org}/agents/{agent}/credentials", headers=owner
                 ).json()
