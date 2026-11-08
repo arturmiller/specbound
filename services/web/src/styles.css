@@ -189,3 +189,24 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .product-evaluations li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #e8eef6; }
 .product-evaluations small { display: block; margin-top: 5px; color: #71849c; line-height: 1.5; }
 @media (max-width: 650px) { .discovery-columns { grid-template-columns: minmax(0, 1fr); } .product-detail-nav { gap: 15px; flex-wrap: wrap; } }
+
+.packs-screen { font-size: 12px; }
+.pack-metrics { display: grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap: 12px; margin-bottom: 16px; }
+.pack-metrics .panel { min-width: 0; padding: 14px; }
+.pack-metrics span { display: block; color: #8a9bad; font-size: 10px; }
+.pack-metrics strong { display: block; margin-top: 9px; color: #345274; font-size: 11px; overflow-wrap: anywhere; }
+.pack-notice { margin-bottom: 16px; padding: 12px 16px; border: 1px solid #d7e5f7; border-radius: 10px; background: #f2f7ff; }
+.pack-notice p { margin: 6px 0; line-height: 1.5; }
+.pack-notice button { margin-top: 8px; font-size: 11px; }
+.pack-detail-columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 16px; }
+.pack-detail-columns > .panel { min-width: 0; min-height: 250px; }
+.pack-detail-columns .team-table { min-width: 520px; }
+.pack-scroll-hint { display: none; margin: 0; padding: 0 16px 10px; font-size: 11px; }
+.team-table-scroll:focus-visible { outline: 3px solid #8bb6ff; outline-offset: -3px; }
+.pack-control-link { padding: 0; color: #206ce7; background: transparent; font-weight: 700; text-align: left; }
+.pack-control-link[aria-pressed="true"] { text-decoration: underline; }
+.pack-json { max-width: 100%; overflow-x: auto; padding: 10px; border-radius: 6px; color: #233c5c; background: #f5f8fc; font-size: 11px; }
+.pack-manifest { margin-top: 16px; }
+.pack-manifest summary { cursor: pointer; font-weight: 700; color: #233c5c; }
+@media (max-width: 850px) { .pack-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pack-detail-columns { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 650px) { .pack-metrics { grid-template-columns: minmax(0, 1fr); } .pack-scroll-hint { display: block; } }

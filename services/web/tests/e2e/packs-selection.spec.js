@@ -12,7 +12,8 @@ test('retains the selected pack and its approval when the page reloads', async (
     let data;
     if (path === '/api/healthz') data = { status: 'ok' };
     else if (path === '/api/auth/config') data = { enabled: false };
-    else if (path === '/api/organizations') data = [{ id: org, name: 'Fixture Organization' }];
+    else if (path === '/api/auth/me') data = { id: 'user:fixture', kind: 'user' };
+    else if (path === '/api/organizations') data = [{ id: org, name: 'Fixture Organization', ownerPrincipalId: 'user:fixture' }];
     else if (path === `/api/organizations/${org}/packs`) {
       if (route.request().method() === 'POST') { data = pack('third'); packs.push(data); }
       else data = packs;
@@ -26,19 +27,21 @@ test('retains the selected pack and its approval when the page reloads', async (
   });
 
   await page.goto(`/packs?organization=${org}`);
-  await page.getByRole('button', { name: 'second · v1.0.0' }).click();
+  await page.getByRole('link', { name: 'second', exact: true }).click();
   await expect(page).toHaveURL(/pack=second/);
   await expect(page.getByText('Freigabestatus: Freigegeben von user:fixture')).toBeVisible();
   await page.goto(page.url());
-  await expect(page.getByRole('button', { name: 'second · v1.0.0' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'second', exact: true })).toBeVisible();
   await expect(page.getByText('Freigabestatus: Freigegeben von user:fixture')).toBeVisible();
 
+  await page.getByRole('link', { name: 'Zurück zum Katalog' }).click();
+  await page.getByRole('link', { name: 'Repository verbinden' }).click();
   await page.getByLabel('Repository', { exact: true }).fill('fixture/third');
   await page.getByLabel('Release-Tag').fill('v1.0.0');
   await page.getByRole('button', { name: 'Pack verbinden' }).click();
-  await expect(page.getByRole('button', { name: 'third · v1.0.0' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'third', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/pack=third/);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'third · v1.0.0' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'third', exact: true })).toBeVisible();
   await expect(page.getByText('Freigabestatus: Nicht freigegeben')).toBeVisible();
 });
