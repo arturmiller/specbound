@@ -27,6 +27,8 @@ export function ProductWorkspace({ organizationId, teams, accessToken = '' }) {
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [bindingsLoading, setBindingsLoading] = useState(false);
+  const [bindingsProductId, setBindingsProductId] = useState('');
+  const bindingsPending = Boolean(selectedId) && (bindingsLoading || bindingsProductId !== selectedId);
   const product = products.find((item) => item.id === selectedId);
 
   useEffect(() => {
@@ -46,14 +48,14 @@ export function ProductWorkspace({ organizationId, teams, accessToken = '' }) {
   }, [organizationId, accessToken]);
 
   useEffect(() => {
-    setBindings([]); setVerification('');
+    setBindings([]); setBindingsProductId(''); setVerification('');
     if (!selectedId) { setBindingsLoading(false); return; }
     const controller = new AbortController();
     setBindingsLoading(true);
     request(`/products/${encodeURIComponent(selectedId)}/repositories`, accessToken, { signal: controller.signal })
       .then((/** @type {Binding[]} */ data) => setBindings(data))
       .catch(() => { if (!controller.signal.aborted) setError('Repositories konnten nicht geladen werden.'); })
-      .finally(() => { if (!controller.signal.aborted) setBindingsLoading(false); });
+      .finally(() => { if (!controller.signal.aborted) { setBindingsProductId(selectedId); setBindingsLoading(false); } });
     return () => controller.abort();
   }, [selectedId, accessToken]);
 
@@ -119,11 +121,11 @@ export function ProductWorkspace({ organizationId, teams, accessToken = '' }) {
         <p><strong>{product.name}</strong></p>
         <p>Owner-Team: {teams.find((team) => team.id === product.ownerTeamId)?.name || product.ownerTeamId}</p>
         <h4>Git-Repositories</h4>
-        {bindingsLoading ? <p>Repositories werden geladen …</p> : bindings.length === 0 && <p>Noch kein Repository verbunden.</p>}
-        <ul>{bindings.map((binding) => <li key={binding.id}><span>{binding.repository}</span>{binding.provider.toLowerCase() === 'github' && <button type="button" disabled={busy} onClick={() => { setBusy(true); void verify(product.id, binding.id, binding.repository).finally(() => setBusy(false)); }}>Zugriff prüfen</button>}</li>)}</ul>
-        {verification && <p role="status">{verification}</p>}
+        {bindingsPending ? <p>Repositories werden geladen …</p> : bindings.length === 0 && <p>Noch kein Repository verbunden.</p>}
+        {!bindingsPending && <ul>{bindings.map((binding) => <li key={binding.id}><span>{binding.repository}</span>{binding.provider.toLowerCase() === 'github' && <button type="button" disabled={busy} onClick={() => { setBusy(true); void verify(product.id, binding.id, binding.repository).finally(() => setBusy(false)); }}>Zugriff prüfen</button>}</li>)}</ul>}
+        {!bindingsPending && verification && <p role="status">{verification}</p>}
         <form onSubmit={connect}><label className="field">Git-Repository<input required maxLength={200} placeholder="owner/repository" value={repository} onChange={(event) => setRepository(event.target.value)} /></label>
-          <button type="submit" disabled={busy || bindingsLoading}>Repository verbinden</button></form>
+          <button type="submit" disabled={busy || bindingsPending}>Repository verbinden</button></form>
       </> : <p>Wähle ein Produkt aus.</p>}</div>
     </div>
   </section>;
