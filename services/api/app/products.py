@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from app.authorization import organization_access, team_access, visible_teams
 from app.database import get_connection
 from app.identity import get_current_principal
-from app.tables import organizations, products, repo_bindings, teams
+from app.tables import organizations, products, repo_bindings, scanner_coverage, teams
 
 NonBlank = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -131,6 +131,38 @@ def list_products(organization_id: str, principal: Principal, db: Db):
 def get_product(product_id: str, principal: Principal, db: Db):
     item, team = _product(db, product_id, principal, "read")
     return _serialize(item, team["organization_id"])
+
+
+@router.get("/products/{product_id}/discovery")
+def product_discovery(product_id: str, principal: Principal, db: Db):
+    """Read persisted scan scopes for this product, without inferring components."""
+    _product(db, product_id, principal, "read")
+    rows = db.execute(
+        select(scanner_coverage, repo_bindings.c.repository, repo_bindings.c.provider)
+        .select_from(
+            scanner_coverage.join(
+                repo_bindings, scanner_coverage.c.binding_id == repo_bindings.c.id
+            )
+        )
+        .where(repo_bindings.c.product_id == product_id)
+        .order_by(scanner_coverage.c.observed_at.desc(), scanner_coverage.c.id.desc())
+    ).mappings()
+    return [
+        {
+            "id": row["id"],
+            "bindingId": row["binding_id"],
+            "repository": row["repository"],
+            "provider": row["provider"],
+            "scanner": row["scanner"],
+            "ref": row["ref"],
+            "status": row["status"],
+            "sourceRevision": row["source_revision"],
+            "observedAt": row["observed_at"],
+            "files": row["files"],
+            "errors": row["errors"],
+        }
+        for row in rows
+    ]
 
 
 @router.patch("/products/{product_id}")

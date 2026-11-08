@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ProductDetail } from './product-detail.jsx';
 
 /** @typedef {{id: string, name: string, ownerTeamId: string}} Product */
 /** @typedef {{id: string, repository: string, provider: string}} Binding */
@@ -28,7 +29,7 @@ function productUrl(organization, product = '', view = '') {
 export function ProductWorkspace({ organizationId, organization, teams, teamsLoading, accessToken = '', onBusyChange }) {
   const params = new URLSearchParams(window.location.search);
   const productId = params.get('product') || '';
-  const view = params.get('view') || (productId ? 'repository' : 'list');
+  const view = params.get('view') || (productId ? 'detail' : 'list');
   const [products, setProducts] = useState(/** @type {Product[]} */ ([]));
   const [ready, setReady] = useState(false);
   const [productError, setProductError] = useState('');
@@ -147,7 +148,7 @@ export function ProductWorkspace({ organizationId, organization, teams, teamsLoa
       <ProductSteps active={1} /><div className="team-columns"><div className="panel"><h2>Produktidentität</h2>
         {permissionsLoading ? <p role="status">Berechtigungen werden geladen …</p> : editableTeams.length === 0 ? <p>Für die Produktanlage ist ein Team mit Bearbeitungsrecht erforderlich.</p> : <form onSubmit={createProduct}><label className="field">Produktname<input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label><label className="field">Owner-Team<select value={ownerTeam} onChange={(event) => setOwnerTeam(event.target.value)} required><option value="" disabled>Team auswählen</option>{editableTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label><p>Produkttyp und Umgebung werden derzeit nicht gespeichert.</p><button type="submit" disabled={busy || !ownerTeam}>Produkt erstellen und weiter →</button></form>}</div>
         <div className="panel"><h2>Was geschieht als Nächstes?</h2><ol className="product-explainer"><li><strong>Git verbinden</strong><p>Ein Repository dem Produkt zuordnen und Zugriff prüfen.</p></li><li><strong>Discovery prüfen</strong><p>Verfügbare Informationen und Lücken werden gesondert dargestellt.</p></li><li><strong>Mit Packs bewerten</strong><p>Bewertungen verwenden die vorhandenen Packs.</p></li></ol></div></div><a className="team-back" href={listUrl}>← Zurück zu Produkten</a>
-    </> : !product ? <><h1 id="products-heading">Produkt nicht verfügbar</h1><p>Das Produkt existiert nicht oder ist für dich nicht sichtbar.</p><a href={listUrl}>Zum Produktverzeichnis</a></> : <>
+    </> : !product ? <><h1 id="products-heading">Produkt nicht verfügbar</h1><p>Das Produkt existiert nicht oder ist für dich nicht sichtbar.</p><a href={listUrl}>Zum Produktverzeichnis</a></> : view === 'detail' || view === 'discovery' ? <ProductDetail product={product} organizationId={organizationId} teamName={teams.find((team) => team.id === product.ownerTeamId)?.name || product.ownerTeamId} accessToken={accessToken} view={view} /> : <>
       <p className="eyebrow">PRODUKTE / QUELLEN VERBINDEN</p><div className="page-heading"><div><h1 id="products-heading">Produktquellen verbinden</h1><p>Schritt 2 von 3 — Git-Quellen für {product.name} verwalten.</p></div></div>
       <ProductSteps active={2} /><div className="team-columns"><div className="panel"><h2>Produktdetails</h2><p><strong>{product.name}</strong> · Team: {teams.find((team) => team.id === product.ownerTeamId)?.name || product.ownerTeamId}</p><h2>Git-Repositories</h2>
         {bindingsLoading ? <p role="status">Repositories werden geladen …</p> : bindingsError ? <p role="alert" className="alert">{bindingsError}</p> : bindings.length === 0 ? <p>Noch kein Repository verbunden.</p> : <ul className="product-bindings">{bindings.map((binding) => <li key={binding.id}><span className="break-value"><span>{binding.repository}</span> <small>({binding.provider})</small></span>{binding.provider.toLowerCase() === 'github' ? <button type="button" disabled={busy} onClick={() => { setBusy(true); void verify(binding).finally(() => setBusy(false)); }}>Zugriff prüfen</button> : <span>Prüfung nicht verfügbar</span>}</li>)}</ul>}
@@ -156,7 +157,7 @@ export function ProductWorkspace({ organizationId, organization, teams, teamsLoa
         {!permissionsLoading && !canEditProduct && <p>Du kannst dieses Produkt nur lesen.</p>}
         <h2 className="product-source-heading">Cloud-Quellen</h2><p>Nicht verfügbar.</p>
       </div><div className="panel"><h2>Zugriff und Quellen</h2><dl className="team-role-list"><div><dt>GitHub-Zugriff</dt><dd>Pro Repository prüfen</dd></div><div><dt>Cloud-Zuordnung</dt><dd>Nicht verfügbar</dd></div></dl><div className="team-info">Der Zugriff wird für das gespeicherte Repository geprüft. Ein Fehler entfernt weder Produkt noch Repository.</div></div></div>
-      <a className="team-back" href={listUrl}>← Zurück zu Produkten</a>
+      <div className="team-actions"><a className="team-back" href={listUrl}>← Zurück zu Produkten</a><a className="primary-link" href={productUrl(organizationId, product.id, 'discovery')}>Discovery ansehen →</a></div>
     </>}
   </section>;
 }

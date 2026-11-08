@@ -96,7 +96,7 @@ test('viewers can browse product sources but cannot create or connect', async ({
   await page.getByLabel('Produkte suchen').fill('other');
   await expect(page.getByText('Keine Produkte für diese Auswahl.')).toBeVisible();
   await page.getByLabel('Produkte suchen').clear();
-  await page.getByRole('link', { name: 'Service' }).click();
+  await page.getByRole('link', { name: 'Quellen ansehen' }).click();
   await expect(page.getByText('owner/service')).toBeVisible();
   await expect(page.getByText('Du kannst dieses Produkt nur lesen.')).toBeVisible();
   await expect(page.getByLabel('Git-Repository')).toHaveCount(0);

@@ -50,6 +50,10 @@ test('local login uses an API access token and creates the first organization', 
   await expect(page.getByText(/GitHub-Zugriff konnte nicht bestätigt werden/)).toBeVisible();
   await page.reload();
   await expect(page.getByText('fixture/local-e2e', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Discovery ansehen' }).click();
+  await expect(page.getByText('Keine Scanbeobachtungen vorhanden. Discovery-Zustand: UNKNOWN.')).toBeVisible();
+  await page.getByRole('link', { name: 'Produkt ansehen' }).click();
+  await expect(page.getByRole('heading', { name: 'Produktdetails' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Packs', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pack-Katalog', level: 2 })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
