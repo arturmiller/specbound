@@ -1,0 +1,45 @@
+name: Lokale Anmeldung
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  local-auth:
+    name: Compose OIDC und Portal
+    runs-on: ubuntu-latest
+    env:
+      SPECBOUND_IMAGE_TAG: local-auth-ci
+      SPECBOUND_LOCAL_TEST_USER: local-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/web/package-lock.json
+      - name: Start isolated local authentication stack
+        run: docker compose -p specbound-local-e2e -f compose.yaml -f compose.local-auth.yaml up -d --build --wait
+      - run: npm ci
+        working-directory: services/web
+      - run: npx playwright install --with-deps --only-shell chromium
+        working-directory: services/web
+      - name: Verify real local login and onboarding
+        run: npx playwright test --config playwright.local-auth.config.js --grep 'local login'
+        working-directory: services/web
+      - name: Restart and wait for the local stack
+        run: |
+          docker compose -p specbound-local-e2e -f compose.yaml -f compose.local-auth.yaml restart local-oidc api web
+          docker compose -p specbound-local-e2e -f compose.yaml -f compose.local-auth.yaml up -d --wait
+      - name: Verify onboarding data survives restart
+        run: npx playwright test --config playwright.local-auth.config.js --grep 'persists after restart'
+        working-directory: services/web
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -p specbound-local-e2e -f compose.yaml -f compose.local-auth.yaml logs --tail 100
+      - name: Remove isolated test stack
+        if: always()
+        run: docker compose -p specbound-local-e2e -f compose.yaml -f compose.local-auth.yaml down --volumes
