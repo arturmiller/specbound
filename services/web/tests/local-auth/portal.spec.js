@@ -56,6 +56,9 @@ test('local login uses an API access token and creates the first organization', 
   await expect(page.getByRole('heading', { name: 'Produktdetails' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Packs', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pack-Katalog', level: 1 })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Provider', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Evidence Provider Packs' })).toBeVisible();
+  await expect(page.getByText('Noch keine Provider-Packs verbunden.')).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
 
   await page.reload();
