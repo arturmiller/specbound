@@ -44,6 +44,15 @@ Zusätzliche fachliche Schreibvorgänge oder Collector-Freigaben werden dadurch
 nicht stillschweigend vorgezogen. Die Governance-Plattform verteilt keine
 Aufträge an Agenten. Zustände aus Git bleiben durch Git-Rechte begrenzt.
 
+Die Produkt-Discovery zeigt gespeicherte Scanbeobachtungen mit Repository, Ref,
+Revision, Zeitpunkt, abgedeckten Dateien und Fehlern als historische Befunde.
+Aus Dateien oder fehlenden Scans werden keine Komponenten oder vollständige
+Abdeckung abgeleitet. Produktdetails zeigen Subjects und Ergebnisse aus dem
+zuletzt gespeicherten Assessment mit dessen Umgebung, Kontext und Revision;
+dieser Snapshot ist keine zusammengefasste Aussage über alle Umgebungen. Fehlende
+Beobachtungen bleiben UNKNOWN. Der Discovery-Lesezugriff folgt denselben
+Teamrechten wie das zugehörige Produkt.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante
