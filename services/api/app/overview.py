@@ -19,7 +19,7 @@ router = APIRouter(dependencies=[Depends(get_current_principal)])
 def overview(
     organization_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     teams = visible_teams(db, organization_id, principal)
     team_ids = [team["id"] for team in teams]

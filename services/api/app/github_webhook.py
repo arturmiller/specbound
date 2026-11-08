@@ -29,7 +29,7 @@ def list_github_events(db: Connection, delivery_id: str):
 
 @router.post("/webhooks/github", status_code=status.HTTP_202_ACCEPTED)
 async def github_webhook(
-    request: Request, db: Annotated[Connection, Depends(get_connection)]
+    request: Request, db: Annotated[Connection, Depends(get_connection, scope="function")]
 ):
     body = bytearray()
     async for chunk in request.stream():

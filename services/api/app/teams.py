@@ -41,7 +41,7 @@ class MemberRoleInput(BaseModel):
 
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
-Db = Annotated[Connection, Depends(get_connection)]
+Db = Annotated[Connection, Depends(get_connection, scope="function")]
 Principal = Annotated[str, Depends(get_current_principal)]
 
 

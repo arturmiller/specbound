@@ -13,5 +13,6 @@ def get_engine():
 
 
 def get_connection():
+    """Use this dependency with function scope so commit precedes the response."""
     with get_engine().begin() as connection:
         yield connection
