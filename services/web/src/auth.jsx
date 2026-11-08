@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
 import { TeamWorkspace } from './teams.jsx';
-import { AssessmentReport } from './assessment-report.jsx';
+import { Documentation } from './docs.jsx';
 
 /** @typedef {{enabled: boolean, issuer: string, clientId: string, audience: string}} AuthConfig */
 
-export function AuthWorkspace() {
+/** @param {{apiStatus: string}} props */
+export function AuthWorkspace({ apiStatus }) {
   const [ready, setReady] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [error, setError] = useState('');
@@ -46,8 +47,15 @@ export function AuthWorkspace() {
           try {
             current = await oidc.signinRedirectCallback();
             const state = current?.state;
-            if (state && typeof state === 'object' && 'returnTo' in state && typeof state.returnTo === 'string'
-                && /^\/assessments\/[A-Za-z0-9_-]{1,100}$/.test(state.returnTo)) target = state.returnTo;
+            if (state && typeof state === 'object' && 'returnTo' in state && typeof state.returnTo === 'string') {
+              const requested = state.returnTo;
+              if (requested.startsWith('/') && !requested.startsWith('//')) {
+                const url = new URL(requested, window.location.origin);
+                if (url.origin === window.location.origin && /^(?:\/(?:settings|teams|products|packs|overview|agents|findings|pr-checks|evidence|providers|docs)?\/?|\/assessments\/[A-Za-z0-9_-]{1,100}\/?)$/.test(url.pathname)) {
+                  target = `${url.pathname}${url.search}${url.hash}`;
+                }
+              }
+            }
           }
           finally { window.history.replaceState(null, '', target); }
         } else {
@@ -63,13 +71,13 @@ export function AuthWorkspace() {
     return () => { active = false; cleanup(); };
   }, []);
 
-  if (!ready) return <p>Authentifizierung wird vorbereitet …</p>;
-  if (error) return <p role="alert">{error}</p>;
-  const reportId = /^\/assessments\/([A-Za-z0-9_-]{1,100})\/?$/.exec(window.location.pathname)?.[1];
-  if (!configured) return reportId ? <AssessmentReport id={reportId} /> : <TeamWorkspace />;
-  if (!user) return <section><p>Bitte anmelden, um fortzufahren.</p><button onClick={() => { void manager?.signinRedirect({ nonce: crypto.randomUUID(), state: { returnTo: window.location.pathname } }).catch(() => setError('Anmeldung konnte nicht gestartet werden.')); }}>Anmelden</button></section>;
-  return <>
-    <p>Angemeldet. <button onClick={() => { void manager?.removeUser().then(() => setUser(null)).catch(() => setError('Lokale Abmeldung fehlgeschlagen.')); }}>Lokal abmelden</button></p>
-    {reportId ? <AssessmentReport id={reportId} accessToken={user.access_token} /> : <TeamWorkspace key={user.profile.sub} accessToken={user.access_token} />}
-  </>;
+  if (!ready) return <main className="login-screen"><p>Authentifizierung wird vorbereitet …</p></main>;
+  if (error) return <main className="login-screen"><p role="alert">{error}</p></main>;
+  if (!configured) return <TeamWorkspace apiStatus={apiStatus} />;
+  if (!user) return <main className="login-screen"><div className="login-card"><span className="brand-mark" aria-hidden="true">◇</span><h1>Specbound</h1>
+    <p>Bitte anmelden, um fortzufahren.</p><button onClick={() => { void manager?.signinRedirect({ nonce: crypto.randomUUID(), state: { returnTo: `${window.location.pathname}${window.location.search}${window.location.hash}` } }).catch(() => setError('Anmeldung konnte nicht gestartet werden.')); }}>Anmelden</button>
+    <a className="public-doc-link" href="/docs">Dokumentation öffnen</a>
+    {window.location.pathname === '/docs' && <Documentation />}</div></main>;
+  return <TeamWorkspace key={user.profile.sub} accessToken={user.access_token} apiStatus={apiStatus} authConfigured
+    onSignOut={() => { void manager?.removeUser().then(() => setUser(null)).catch(() => setError('Lokale Abmeldung fehlgeschlagen.')); }} />;
 }

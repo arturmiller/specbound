@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('documentation categories show runnable examples and limitations', async ({ page }) => {
-  await page.goto('/#docs/getting-started');
+  await page.goto('/docs#docs/getting-started');
   const docs = page.getByRole('region', { name: 'Dokumentation' });
   const article = docs.getByRole('article', { name: 'Dokumentationsinhalt' });
   for (const [label, command] of [

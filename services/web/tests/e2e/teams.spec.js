@@ -6,7 +6,7 @@ test('creates a team and member and shows them after reload', async ({ page, req
   });
   expect(organization.status()).toBe(201);
   const { id } = await organization.json();
-  await page.goto(`/?organization=${encodeURIComponent(id)}`);
+  await page.goto(`/teams?organization=${encodeURIComponent(id)}`);
   await expect(page.getByLabel('Organisation')).toHaveValue(id);
   await page.getByLabel('Teamname').fill('Platform Team');
   await page.getByRole('button', { name: 'Team erstellen' }).click();
@@ -36,7 +36,7 @@ test('agent membership shows its read-only and approval limits', async ({ page, 
   const agent = await agentResponse.json();
   const membership = await request.post(`http://127.0.0.1:18762/teams/${team.id}/members`, { data: { principalId: agent.id, role: 'viewer' } });
   expect(membership.status()).toBe(201);
-  await page.goto(`/?organization=${org}&team=${team.id}`);
+  await page.goto(`/teams?organization=${org}&team=${team.id}`);
   await expect(page.getByText(agent.id, { exact: true })).toBeVisible();
   await expect(page.getByText('Agent: Lesen; keine Pack-Freigabe')).toBeVisible();
 });

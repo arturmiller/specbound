@@ -4,7 +4,7 @@ test('search and filters lead from actual findings to the exact report and produ
   const seeded = await request.post('http://127.0.0.1:18762/__e2e/assessment?failing=true');
   expect(seeded.status()).toBe(200);
   const item = await seeded.json();
-  await page.goto(`/?organization=${item.organizationId}`);
+  await page.goto(`/overview?organization=${item.organizationId}`);
   const overview = page.getByRole('region', { name: 'Übersicht und Suche' });
   await expect(overview.getByRole('link', { name: /TEST-1/ })).toHaveAttribute('href', `/assessments/${item.id}`);
   await overview.getByLabel('Teamfilter').selectOption(item.teamId);
@@ -15,7 +15,7 @@ test('search and filters lead from actual findings to the exact report and produ
   await overview.getByRole('link', { name: /TEST-1/ }).click();
   await expect(page).toHaveURL(new RegExp(`/assessments/${item.id}$`));
   await expect(page.getByText(item.id, { exact: true })).toBeVisible();
-  await page.goto(`/?organization=${item.organizationId}`);
+  await page.goto(`/overview?organization=${item.organizationId}`);
   await page.getByRole('region', { name: 'Übersicht und Suche' }).getByRole('link', { name: 'Product' }).click();
   await expect(page).toHaveURL(new RegExp(`product=${item.productId}`));
   await expect(page.getByRole('heading', { name: 'Produktdetails' })).toBeVisible();
@@ -28,7 +28,7 @@ test('a pack result opens the actual selected pack revision', async ({ page, req
   });
   expect(response.status()).toBe(201);
   const pack = await response.json();
-  await page.goto(`/?organization=${org}`);
+  await page.goto(`/overview?organization=${org}`);
   const overview = page.getByRole('region', { name: 'Übersicht und Suche' });
   await overview.getByLabel('Suche').fill('overview-pack');
   await overview.getByRole('link', { name: /v1.2.0/ }).click();

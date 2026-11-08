@@ -37,7 +37,7 @@ export function Overview({ organizationId, teams, accessToken = '' }) {
     && (matches(item.id, item.gitSha, item.environment) || item.evaluations.some((result) => matches(result.status, result.reason)))) || [];
   const packs = data?.packs.filter((item) => matches(item.name, item.repository, item.tag, item.kind)) || [];
   const scopes = [...new Set([...(data?.findings || []), ...(data?.assessments || [])].filter((item) => productIds.has(item.productId)).map((item) => item.environment))].sort();
-  const root = `/?organization=${encodeURIComponent(organizationId)}`;
+  const root = `?organization=${encodeURIComponent(organizationId)}`;
 
   return <section className="workspace" aria-labelledby="overview-heading">
     <div className="workspace-heading"><div><p className="eyebrow">ÜBERSICHT</p><h2 id="overview-heading">Übersicht und Suche</h2></div>
@@ -51,9 +51,9 @@ export function Overview({ organizationId, teams, accessToken = '' }) {
     {error && <p role="alert">{error}</p>}{!data && !error && <p>Übersicht wird geladen …</p>}
     {data && <div className="workspace-grid">
       <div className="panel"><h3>Produkte</h3>{products.length ? <ul>{products.map((item) => <li key={item.id}>
-        <a href={`${root}&product=${encodeURIComponent(item.id)}#products-heading`}>{item.name}</a></li>)}</ul> : <p>Keine passenden Produkte.</p>}</div>
+        <a href={`/products${root}&product=${encodeURIComponent(item.id)}#products-heading`}>{item.name}</a></li>)}</ul> : <p>Keine passenden Produkte.</p>}</div>
       <div className="panel"><h3>Packs</h3><p>Organisationsweit; nicht nach Team oder Umgebung zugeordnet.</p>{packs.length ? <ul>{packs.map((item) => <li key={item.id}>
-        <a href={`${root}&pack=${encodeURIComponent(item.id)}#packs-heading`}>{item.name} · {item.tag}</a></li>)}</ul> : <p>Keine passenden Packs.</p>}</div>
+        <a href={`/packs${root}&pack=${encodeURIComponent(item.id)}#packs-heading`}>{item.name} · {item.tag}</a></li>)}</ul> : <p>Keine passenden Packs.</p>}</div>
       <div className="panel"><h3>Findings</h3>{findings.length ? <ul>{findings.map((item) => <li key={item.id}>
         <a href={`/assessments/${encodeURIComponent(item.snapshotId)}`}>{item.controlId} · {item.status} · {item.environment}</a></li>)}</ul> : <p>Keine passenden Findings.</p>}</div>
       <div className="panel"><h3>Assessments</h3><p>Gespeicherte historische Stände.</p>{assessments.length ? <ul>{assessments.map((item) => <li key={item.id}>
