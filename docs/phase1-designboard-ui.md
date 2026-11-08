@@ -67,6 +67,13 @@ nicht bestimmbar datierte Evidence bleibt UNKNOWN. Die seitengesteuerte Liste
 ist nach Beobachtungszeit und ID stabil sortiert; bei gleichzeitig neu
 eintreffenden Datensätzen kann sich ein Offset zwischen Aufrufen verschieben.
 
+Die Übersicht summiert Bewertungen der passenden gespeicherten Snapshots;
+dies ist kein aktuelles Portfolio-Urteil und kann dieselbe Kontrolle in mehreren
+Snapshots enthalten. Teamfilter gelten für Produkte, Findings und Assessments,
+Umgebungsfilter für Findings und Assessments. Packs bleiben organisationsweit.
+Die Diagrammpunkte sind nach Erstellungszeit geordnet, ihre Abstände bilden keine
+Zeitintervalle ab; ohne gespeicherte Bewertungen bleibt der Gesamtzustand UNKNOWN.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante

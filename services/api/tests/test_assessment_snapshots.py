@@ -179,6 +179,8 @@ class AssessmentSnapshotsTest(unittest.TestCase):
                 )
                 self.assertEqual(assessment["counts"]["UNKNOWN"], 1)
                 self.assertEqual(assessment["counts"]["PASS"], 0)
+                self.assertEqual(assessment["context"], "pull_request")
+                self.assertTrue(assessment["createdAt"])
                 self.assertIn("Nachweis fehlt", assessment["evaluations"][0]["reason"])
                 report = client.get(f"/assessments/{snapshot['id']}").json()
                 self.assertEqual(report["evaluations"][0]["status"], "UNKNOWN")

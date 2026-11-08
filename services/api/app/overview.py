@@ -96,6 +96,8 @@ def overview(
                 "id": row["id"],
                 "productId": row["product_id"],
                 "environment": row["environment"],
+                "context": row["context"],
+                "createdAt": row["created_at"],
                 "gitSha": row["git_sha"],
                 "counts": row["counts"],
                 "evaluations": [

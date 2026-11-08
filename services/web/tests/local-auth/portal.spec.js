@@ -62,6 +62,9 @@ test('local login uses an API access token and creates the first organization', 
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Evidence', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Evidence-Register' })).toBeVisible();
   await expect(page.getByText('Keine Evidence auf dieser Seite vorhanden. Evidenzlage: UNKNOWN.')).toBeVisible();
+  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Übersicht', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Übersicht und Suche' })).toBeVisible();
+  await expect(page.getByText('Keine Bewertungen vorhanden. Gesamtzustand: UNKNOWN.')).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
 
   await page.reload();
