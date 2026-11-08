@@ -74,6 +74,15 @@ Umgebungsfilter für Findings und Assessments. Packs bleiben organisationsweit.
 Die Diagrammpunkte sind nach Erstellungszeit geordnet, ihre Abstände bilden keine
 Zeitintervalle ab; ohne gespeicherte Bewertungen bleibt der Gesamtzustand UNKNOWN.
 
+Die Finding-Ansicht verknüpft das Finding über dessen gespeichertes Ereignis
+und die zugehörige Bewertung mit genau dem Assessment und den darin referenzierten
+Evidence-Datensätzen. Organisation, Produkt, Control und Subject müssen
+übereinstimmen; ein nicht belegbarer Zusammenhang wird nicht angezeigt. Das
+historische Bewertungsergebnis und die aktuelle zeitliche Gültigkeit einer
+Evidence sind getrennte Angaben. Schweregrad, Provider-Identität und Vertrauen
+werden nicht aus anderen Feldern erraten; nicht gespeicherte Werte bleiben UNKNOWN.
+Korrekturmaßnahmen und die Finding-Inbox folgen in ihren eigenen Tasks.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante

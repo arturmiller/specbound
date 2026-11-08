@@ -8,6 +8,7 @@ import { currentSection, navigation, organizationHref, PortalShell } from './por
 import { TeamsScreen } from './teams-screen.jsx';
 import { ProviderPacks } from './provider-packs.jsx';
 import { EvidenceRegistry } from './evidence-registry.jsx';
+import { FindingDetail } from './finding-detail.jsx';
 
 /** @typedef {{id: string, name: string, ownerPrincipalId?: string}} Organization */
 /** @typedef {{id: string, name: string}} Team */
@@ -103,13 +104,14 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
   const section = currentSection();
   const currentOrganization = organizations.find((item) => item.id === organizationId);
   const needsOrganization = !['settings', 'docs', 'assessment', 'not-found'].includes(section);
-  const pending = navigation.find((item) => item.id === section && item.pending);
+  const findingId = new URLSearchParams(window.location.search).get('finding') || '';
+  const pending = navigation.find((item) => item.id === section && item.pending && !(section === 'findings' && findingId));
   const reportId = /^\/assessments\/([A-Za-z0-9_-]{1,100})\/?$/.exec(window.location.pathname)?.[1];
 
   /** @param {string} id */
   function changeOrganization(id) {
     const url = new URL(window.location.href);
-    for (const key of ['team', 'product', 'pack', 'view', 'capability', 'evidence', 'offset']) url.searchParams.delete(key);
+    for (const key of ['team', 'product', 'pack', 'view', 'capability', 'evidence', 'offset', 'finding', 'assessment']) url.searchParams.delete(key);
     url.searchParams.set('organization', id);
     history.replaceState(null, '', url);
     setTeams([]); setOrganizationId(id); setError('');
@@ -161,6 +163,7 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
     {section === 'packs' && organizationsReady && organizationId && <PackWorkspace key={`packs-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'providers' && organizationsReady && organizationId && <ProviderPacks key={`providers-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'evidence' && organizationsReady && organizationId && <EvidenceRegistry key={`evidence-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
+    {section === 'findings' && findingId && organizationsReady && organizationId && <FindingDetail key={`${organizationId}-${findingId}`} organizationId={organizationId} findingId={findingId} accessToken={accessToken} />}
     {section === 'overview' && organizationsReady && organizationId && <Overview key={`overview-${organizationId}`} organizationId={organizationId} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} />}
     {pending && organizationsReady && organizationId && <section className="unavailable"><p className="eyebrow">IN VORBEREITUNG</p><h1>{pending.label}</h1>
       <div className="panel"><h2>Dieser Bereich ist noch nicht verfügbar</h2><p>Die Oberfläche für diesen Bereich wird in Phase 1 ergänzt.</p></div></section>}
