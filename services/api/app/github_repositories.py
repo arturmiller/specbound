@@ -26,7 +26,7 @@ def github_repository_metadata(
     product_id: str,
     binding_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
     factory: Annotated[
         Callable[[str], GitHubSource], Depends(github_metadata_source_factory)
     ],

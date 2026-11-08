@@ -27,7 +27,7 @@ router = APIRouter(dependencies=[Depends(get_current_principal)])
 def assessment_report(
     snapshot_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     snapshot = (
         db.execute(

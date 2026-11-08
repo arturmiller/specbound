@@ -157,7 +157,7 @@ def verify_access_token(request: Request) -> tuple[str, str]:
 
 def get_current_principal(
     identity: Annotated[tuple[str, str], Depends(verify_access_token)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ) -> str:
     issuer, subject = identity
     if issuer == AGENT_TOKEN_ISSUER:

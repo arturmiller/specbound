@@ -75,7 +75,7 @@ def get_approval(
     organization_id: str,
     revision_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     organization_access(db, organization_id, principal, write=False)
     pack = (
@@ -108,7 +108,7 @@ def approve_pack(
     organization_id: str,
     revision_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     human_owner(db, organization_id, principal)
     pack = (
@@ -152,7 +152,7 @@ def revoke_approval(
     organization_id: str,
     revision_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     human_owner(db, organization_id, principal)
     removed = db.execute(
@@ -178,7 +178,7 @@ def revoke_approval(
 def list_packs(
     organization_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     organization_access(db, organization_id, principal, write=False)
     return [
@@ -194,7 +194,7 @@ def get_pack(
     organization_id: str,
     revision_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     organization_access(db, organization_id, principal, write=False)
     row = (
@@ -214,7 +214,7 @@ def connect_pack(
     organization_id: str,
     data: ConnectPack,
     principal: Annotated[str, Depends(get_current_principal)],
-    db: Annotated[Connection, Depends(get_connection)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
     factory: Annotated[Callable[[str], GitSource], Depends(github_source_factory)],
 ):
     organization_access(db, organization_id, principal, write=True)
