@@ -30,7 +30,7 @@ test('returns to the requested assessment after signing in', async ({ page }) =>
   await page.goto('/assessments/example-report');
   await page.getByRole('button', { name: 'Anmelden' }).click();
   await expect(page).toHaveURL(/\/assessments\/example-report$/);
-  await expect(page.getByRole('alert')).toContainText('Assessment konnte nicht geladen werden');
+  await expect(page.getByRole('alert')).toContainText('Assessment nicht gefunden');
 });
 
 test('returns to a portal route and its document anchor after signing in', async ({ page }) => {
