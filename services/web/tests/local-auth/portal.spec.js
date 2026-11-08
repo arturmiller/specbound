@@ -36,9 +36,10 @@ test('local login uses an API access token and creates the first organization', 
   await page.getByRole('button', { name: 'Organisation erstellen' }).click();
   await expect(page.getByRole('combobox', { name: 'Organisation', exact: true })).toHaveValue(/.+/);
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
+  await page.getByRole('link', { name: 'Team erstellen' }).click();
   await page.getByLabel('Teamname').fill('Lokales Team');
-  await page.getByRole('button', { name: 'Team erstellen' }).click();
-  await expect(page.getByRole('button', { name: 'Lokales Team' })).toBeVisible();
+  await page.getByRole('button', { name: 'Team erstellen und weiter' }).click();
+  await expect(page.getByRole('heading', { name: 'Mitglieder & Rollen' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Produkte', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Produkte', level: 2 })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Packs', exact: true }).click();
@@ -46,14 +47,14 @@ test('local login uses an API access token and creates the first organization', 
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
 
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Lokales Team' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Lokales Team' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Organisation', exact: true }).locator('option')).toHaveCount(1);
 });
 
 test('existing organization persists after restart', async ({ page }) => {
   await signIn(page);
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Lokales Team' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Lokales Team' })).toBeVisible();
   const organization = page.getByRole('combobox', { name: 'Organisation', exact: true });
   await expect(organization.locator('option')).toHaveCount(1);
   await expect(organization.locator('option')).toHaveText('Lokale Organisation');
