@@ -88,7 +88,7 @@ export function PackWorkspace({ organizationId, organization, accessToken = '', 
         throw new Error(messages[/** @type {403 | 409 | 422 | 503} */ (response.status)] || 'Pack konnte nicht verbunden werden.');
       }
       /** @type {Pack} */ const pack = await response.json();
-      window.location.assign(packUrl(organizationId, pack.id));
+      window.location.assign(pack.kind === 'provider' ? `/providers?${new URLSearchParams({ organization: organizationId, pack: pack.id })}` : packUrl(organizationId, pack.id));
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Pack konnte nicht verbunden werden.'); setBusy(false); }
   }
 
@@ -98,7 +98,7 @@ export function PackWorkspace({ organizationId, organization, accessToken = '', 
     {loading ? <p role="status">Packs werden geladen …</p> : error && view !== 'connect' ? null : view === 'list' ? <>
       <p className="eyebrow">GOVERNANCE / QUELLEN</p><div className="page-heading"><div><h1 id="packs-heading">Pack-Katalog</h1><p>Versionierte Packs und ihre geprüfte Git-Herkunft.</p></div>{isOwner && <a className="primary-link" href={packUrl(organizationId, '', 'connect')}>+ Repository verbinden</a>}</div>
       <div className="product-filters"><label>Packs suchen<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>
-      <div className="panel team-table-panel"><h2>Verbundene Packs</h2>{packs.length === 0 ? <p className="product-empty">Noch keine Packs verbunden.</p> : visible.length === 0 ? <p className="product-empty">Keine Packs für diese Suche.</p> : <div className="team-table-scroll"><table className="team-table"><thead><tr><th>PACK</th><th>GIT-REPOSITORY</th><th>RELEASE-TAG</th><th>KONTROLLEN</th><th>VALIDIERUNG</th></tr></thead><tbody>{visible.map((pack) => <tr key={pack.id}><td><a href={packUrl(organizationId, pack.id)}>{pack.manifest.metadata.id}</a><small>{pack.kind}</small></td><td className="break-value">{pack.repository}</td><td>{pack.tag}</td><td>{pack.controls.length}</td><td>Strukturell validiert</td></tr>)}</tbody></table></div>}</div>
+      <div className="panel team-table-panel"><h2>Verbundene Packs</h2>{packs.length === 0 ? <p className="product-empty">Noch keine Packs verbunden.</p> : visible.length === 0 ? <p className="product-empty">Keine Packs für diese Suche.</p> : <div className="team-table-scroll"><table className="team-table"><thead><tr><th>PACK</th><th>GIT-REPOSITORY</th><th>RELEASE-TAG</th><th>KONTROLLEN</th><th>VALIDIERUNG</th></tr></thead><tbody>{visible.map((pack) => <tr key={pack.id}><td><a href={pack.kind === 'provider' ? `/providers?${new URLSearchParams({ organization: organizationId, pack: pack.id })}` : packUrl(organizationId, pack.id)}>{pack.manifest.metadata.id}</a><small>{pack.kind}</small></td><td className="break-value">{pack.repository}</td><td>{pack.tag}</td><td>{pack.controls.length}</td><td>Strukturell validiert</td></tr>)}</tbody></table></div>}</div>
     </> : view === 'connect' ? <>
       <p className="eyebrow">PACKS / REPOSITORY VERBINDEN</p><div className="page-heading"><div><h1 id="packs-heading">Pack verbinden</h1><p>Git-Repository und Release-Tag auswählen und validieren.</p></div></div>
       <ol className="team-steps" aria-label="Pack-Verbindung"><li aria-current="step"><span>1</span>Quelle auswählen</li><li><span>2</span>Revision prüfen</li><li><span>3</span>Freigabe</li></ol>

@@ -83,6 +83,22 @@ class FixtureSource:
     def fetch(self, ref):
         if ref != "a" * 40:
             raise ValueError("Unexpected fixture commit")
+        if self.repository.startswith("fixture/provider"):
+            fixtures = Path(__file__).parent / "fixtures" / "provider"
+            schema = (fixtures / "schema.json").read_bytes()
+            manifest = (fixtures / "provider.yaml").read_bytes()
+            if self.repository.endswith("-invalid"):
+                manifest = b"kind: InvalidProvider\n"
+            return GitSnapshot(
+                ref,
+                {
+                    "provider.yaml": manifest,
+                    "contracts/collect-request.json": schema,
+                    "contracts/observation.json": schema,
+                    "schemas/reachability.json": schema,
+                    "tests/reachability.yaml": b"name: fixture\n",
+                },
+            )
         fixtures = Path(__file__).parent / "fixtures" / "governance"
         return GitSnapshot(
             ref,

@@ -53,6 +53,12 @@ dieser Snapshot ist keine zusammengefasste Aussage über alle Umgebungen. Fehlen
 Beobachtungen bleiben UNKNOWN. Der Discovery-Lesezugriff folgt denselben
 Teamrechten wie das zugehörige Produkt.
 
+Der Provider-Pack-Katalog speichert das eingelesene Manifest und Capability-
+Referenzen, nicht die Inhalte der referenzierten Schema- und Fixture-Dateien.
+Die Vertragsansicht zeigt deshalb Dateipfade und kennzeichnet die Inhalte als
+nicht verfügbar. Ein erfolgreicher Import belegt die strukturelle Validierung,
+aber weder ausgeführte Tests noch eine Berechtigung zum Collector-Start.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante

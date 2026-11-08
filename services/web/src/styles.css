@@ -210,3 +210,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .pack-manifest summary { cursor: pointer; font-weight: 700; color: #233c5c; }
 @media (max-width: 850px) { .pack-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pack-detail-columns { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 650px) { .pack-metrics { grid-template-columns: minmax(0, 1fr); } .pack-scroll-hint { display: block; } }
+
+.provider-screen { font-size: 12px; }
+.provider-screen .team-detail-metrics strong { overflow-wrap: anywhere; }
+.provider-code { overflow: auto; max-width: 100%; padding: 18px; box-sizing: border-box; border-radius: 9px; color: #d8e7ff; background: #14243e; font: 11px/1.6 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.provider-screen .team-table { min-width: 620px; }
