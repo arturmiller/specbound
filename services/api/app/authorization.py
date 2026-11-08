@@ -24,6 +24,8 @@ def _forbidden():
 def organization_access(
     db: Connection, organization_id: str, principal: str, *, write: bool
 ):
+    if write and principal.startswith("agent:"):
+        _forbidden()
     org = (
         db.execute(select(organizations).where(organizations.c.id == organization_id))
         .mappings()
@@ -49,6 +51,8 @@ def organization_access(
 
 
 def team_access(db: Connection, team_id: str, principal: str, action: str):
+    if principal.startswith("agent:") and action != "read":
+        _forbidden()
     team = (
         db.execute(select(teams).where(teams.c.id == team_id)).mappings().one_or_none()
     )

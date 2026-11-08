@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated
@@ -13,6 +14,8 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from app.database import get_connection
+
+AGENT_TOKEN_ISSUER = "urn:specbound:local-agent-credential"
 
 
 @dataclass(frozen=True)
@@ -83,6 +86,10 @@ def verify_access_token(request: Request) -> tuple[str, str]:
     ):
         raise _unauthorized()
     token = parts[1]
+    if token.startswith("sba_"):
+        if not re.fullmatch(r"sba_[A-Za-z0-9_-]{43}", token):
+            raise _unauthorized()
+        return AGENT_TOKEN_ISSUER, hashlib.sha256(token.encode("ascii")).hexdigest()
     try:
         header = jwt.get_unverified_header(token)
         if (
@@ -144,6 +151,19 @@ def get_current_principal(
     db: Annotated[Connection, Depends(get_connection)],
 ) -> str:
     issuer, subject = identity
+    if issuer == AGENT_TOKEN_ISSUER:
+        agent = db.execute(
+            text(
+                "SELECT a.principal_id FROM agent_credentials c "
+                "JOIN agents a ON a.principal_id=c.agent_id "
+                "JOIN principals p ON p.id=a.principal_id AND p.kind='agent' "
+                "WHERE c.token_hash=:digest AND c.revoked_at IS NULL AND c.expires_at > CURRENT_TIMESTAMP"
+            ),
+            {"digest": subject},
+        ).scalar_one_or_none()
+        if agent is None:
+            raise _unauthorized()
+        return agent
     principal_id = (
         "user:" + hashlib.sha256(f"{issuer}\0{subject}".encode("utf-8")).hexdigest()
     )
@@ -186,4 +206,7 @@ def public_auth_config():
 
 @router.get("/me")
 def current_user(principal: Annotated[str, Depends(get_current_principal)]):
-    return {"id": principal, "kind": "user"}
+    return {
+        "id": principal,
+        "kind": "agent" if principal.startswith("agent:") else "user",
+    }

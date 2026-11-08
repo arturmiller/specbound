@@ -115,6 +115,11 @@ def main():
     with get_engine().begin() as db:
         db.execute(
             text(
+                "INSERT INTO principals (id, kind, issuer, subject) VALUES ('user:e2e', 'user', 'test:e2e', 'test-user') ON CONFLICT DO NOTHING"
+            )
+        )
+        db.execute(
+            text(
                 "INSERT INTO organizations (id, name, owner_principal_id) VALUES (:id, :name, :owner) ON CONFLICT DO NOTHING"
             ),
             {
