@@ -260,3 +260,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .finding-evidence { list-style: none; padding: 0; }.finding-evidence li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid #e8eef6; overflow-wrap: anywhere; }
 @media (max-width: 850px) { .finding-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }.finding-columns { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 650px) { .finding-metrics, .finding-trace { grid-template-columns: minmax(0, 1fr); } }
+
+.pr-screen { font-size: 12px; }
+.pr-columns { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 14px; }
+.pr-columns > .panel { min-width: 0; }
+.pr-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.pr-meta > div { background: white; border: 1px solid #dce6f2; border-radius: 9px; padding: 12px; min-width: 0; }
+.pr-meta span, .pr-meta strong { display: block; overflow-wrap: anywhere; }.pr-meta span { color: #8a9bad; font-size: 10px; }.pr-meta strong { margin-top: 7px; }
+.pr-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }.pr-tabs a { padding: 8px 12px; border: 1px solid #dce6f2; border-radius: 7px; background: white; text-decoration: none; }.pr-tabs a[aria-current] { background: #eaf2ff; color: #1b67ed; font-weight: 700; }
+.pr-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }.pr-counts > div { text-align: center; border: 1px solid #e4edf7; background: #f5f9fe; border-radius: 8px; padding: 14px 4px; }.pr-counts strong, .pr-counts span { display: block; }.pr-counts strong { font-size: 21px; }.pr-counts span { color: #6b819b; margin-top: 4px; }
+.pr-findings { list-style: none; padding: 0; }.pr-findings li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e8eef6; padding: 9px 0; }.pr-findings p { margin: 4px 0; }
+.pr-evaluation { padding: 10px 0; border-top: 1px solid #e8eef6; overflow-wrap: anywhere; }.pr-evaluation pre { overflow: auto; }.pr-evidence { margin-top: 14px; }
+@media (max-width: 850px) { .pr-columns { grid-template-columns: minmax(0, 1fr); }.pr-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .pr-meta { grid-template-columns: minmax(0, 1fr); }.pr-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }.pr-findings li { flex-wrap: wrap; } }
