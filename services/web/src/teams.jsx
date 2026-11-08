@@ -155,7 +155,7 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
     {needsOrganization && !loading && organizationsReady && !organizationId && <div className="panel"><h1>Organisation erforderlich</h1>
       <p>Lege zuerst eine Organisation an oder wähle eine zugängliche Organisation aus.</p><a href="/settings">Zu den Einstellungen</a></div>}
     {section === 'teams' && organizationsReady && organizationId && <TeamsScreen key={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} request={request} errorMessage={errorMessage} onBusyChange={setBusy} />}
-    {section === 'products' && organizationsReady && organizationId && <ProductWorkspace key={`products-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
+    {section === 'products' && organizationsReady && organizationId && <ProductWorkspace key={`products-${organizationId}`} organizationId={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'packs' && organizationsReady && organizationId && <PackWorkspace key={`packs-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
     {section === 'overview' && organizationsReady && organizationId && <Overview key={`overview-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
     {pending && organizationsReady && organizationId && <section className="unavailable"><p className="eyebrow">IN VORBEREITUNG</p><h1>{pending.label}</h1>

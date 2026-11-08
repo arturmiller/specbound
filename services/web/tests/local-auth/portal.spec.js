@@ -41,7 +41,15 @@ test('local login uses an API access token and creates the first organization', 
   await page.getByRole('button', { name: 'Team erstellen und weiter' }).click();
   await expect(page.getByRole('heading', { name: 'Mitglieder & Rollen' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Produkte', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Produkte', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Produkte', level: 1 })).toBeVisible();
+  await page.getByRole('link', { name: 'Produkt registrieren' }).click();
+  await page.getByLabel('Produktname').fill('Lokales Produkt');
+  await page.getByRole('button', { name: 'Produkt erstellen und weiter' }).click();
+  await page.getByLabel('Git-Repository').fill('fixture/local-e2e');
+  await page.getByRole('button', { name: 'Repository verbinden' }).click();
+  await expect(page.getByText(/GitHub-Zugriff konnte nicht bestätigt werden/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('fixture/local-e2e', { exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Packs', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pack-Katalog', level: 2 })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
