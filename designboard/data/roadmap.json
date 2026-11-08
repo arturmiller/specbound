@@ -350,7 +350,8 @@
               "T023",
               "T009"
             ],
-            "tags": []
+            "tags": [],
+            "phase": "Later"
           },
           {
             "id": "T025",
@@ -379,7 +380,8 @@
               "T016",
               "T023"
             ],
-            "tags": []
+            "tags": [],
+            "phase": "Later"
           },
           {
             "id": "T027",
@@ -391,7 +393,8 @@
             ],
             "tags": [
               "later"
-            ]
+            ],
+            "phase": "Later"
           }
         ]
       }
@@ -553,7 +556,7 @@
   {
     "id": "E08",
     "title": "Bestandsfindings & Regeländerungen",
-    "phase": "V1",
+    "phase": "Phase 2",
     "goal": "Änderungen an Governance oder Infrastruktur lassen sich separat bewerten.",
     "features": [
       {
@@ -692,7 +695,8 @@
               "T045",
               "T002"
             ],
-            "tags": []
+            "tags": [],
+            "phase": "Later"
           },
           {
             "id": "T047",
@@ -705,7 +709,8 @@
             ],
             "tags": [
               "later"
-            ]
+            ],
+            "phase": "Later"
           },
           {
             "id": "T048",
@@ -728,6 +733,339 @@
               "T025"
             ],
             "tags": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "E11",
+    "title": "Produktoberfläche nach Designboard",
+    "phase": "Phase 1",
+    "goal": "Alle 44 Referenz-Screens mit echter API-Anbindung und klaren Grenzen umsetzen.",
+    "features": [
+      {
+        "id": "F18",
+        "title": "Portalrahmen und Einstieg",
+        "goal": "Designsystem, Navigation und Organisationseinstieg.",
+        "tasks": [
+          {
+            "id": "T050",
+            "title": "Portalrahmen und Organisationseinstieg",
+            "output": "Übernimm die echte App-Shell aus dem Board: Seitenleiste, aktiver Navigationspunkt, Kopfbereich, Breadcrumb und Inhaltsbereich. Anmeldung, Abmeldung, erste Organisation und Organisationswechsel nutzen die vorhandene OIDC- und Organisations-API. Die Navigation führt zu stabilen Routen und nicht zu den bisher untereinander gerenderten Bereichen; direkte Links und Browser-Zurück bleiben nutzbar.",
+            "accept": "Frischer angemeldeter Benutzer legt eine Organisation an; Reload erhält sie, bestehende Organisationen bleiben erhalten. Navigation, aktiver Zustand, tiefe URL, Browser-Zurück, Abmeldung und fehlende Berechtigung sind browsergetestet; nicht verfügbare Zielbereiche behaupten keine Funktion. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "workspace"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "F19",
+        "title": "Teams und Verantwortung",
+        "goal": "Teamverzeichnis, Details und Mitgliedschaften.",
+        "tasks": [
+          {
+            "id": "T051",
+            "title": "Teams, Mitglieder und Rollen",
+            "output": "Setze Teamliste, Anlage, Detail und Mitgliedschaften mit den Referenzlayouts um. Nutze organisationsbezogene Team- und Member-Endpunkte für Anlegen, Lesen und die im Backend erlaubten Rollenänderungen; stelle nur vorhandene Felder dar und berücksichtige Viewer- und Admin-Rechte.",
+            "accept": "Team anlegen, öffnen, Mitglied mit Rolle verwalten und nach Reload wiederfinden; Viewer erhält keine schreibende Aktion. Leere Liste, Lade- und Fehlerzustand sowie 403 werden verständlich angezeigt; keine erfundenen Produkt- oder Mitgliederzahlen. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T050"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "teams",
+              "team-create",
+              "team-members",
+              "team-detail"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "F20",
+        "title": "Produkte und Discovery",
+        "goal": "Produktinventar, Git-Quellen und Herkunft technischer Fakten.",
+        "tasks": [
+          {
+            "id": "T052",
+            "title": "Produkte anlegen und Git verbinden",
+            "output": "Baue Produktverzeichnis, Anlage und Git-Verbindung nach Referenz. Verbinde Produkt- und Repository-APIs einschließlich GitHub-Zugriffsprüfung; ein Produkt gehört einem realen Team. Nicht unterstützte Cloud-Quellen sind im Design sichtbar als nicht verfügbar gekennzeichnet.",
+            "accept": "Benutzer legt ein Produkt für ein Team an, verbindet ein Repository und öffnet es nach Reload erneut. Erfolg und Fehler der GitHub-Prüfung werden angezeigt; bei Fehler bleiben Produkt und Repository erhalten. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T050",
+              "T051"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "products",
+              "product-create",
+              "product-repository"
+            ]
+          },
+          {
+            "id": "T053",
+            "title": "Produktdetails und Discovery-Zustand",
+            "output": "Stelle Produktdetails und Discovery-Review in der Struktur der Screens dar. Zeige ausschließlich API-seitig tatsächlich verfügbare Produktdaten, Prüfergebnisse, Scope und Herkunft; erweitere einen organisationsgeschützten Leseendpunkt nur dort, wo vorhandene persistierte Daten anders nicht lesbar sind.",
+            "accept": "Mit Fixture für vorhandene und fehlende Daten sind Zugehörigkeit, belegte Fakten und Lücken nachvollziehbar; fehlende Beobachtungen sind UNKNOWN statt erfunden. Direktlink und Reload öffnen das richtige Produkt; fehlende Berechtigung, leere und fehlerhafte Ergebnisse sind geprüft. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T052"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "product-discovery",
+              "product-detail"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "F21",
+        "title": "Governance und Evidence Packs",
+        "goal": "Packkataloge und nachvollziehbare Providerdaten.",
+        "tasks": [
+          {
+            "id": "T054",
+            "title": "Governance-Pack verbinden und Revision prüfen",
+            "output": "Übertrage Katalog, Verbindung und Revisionsdetail in die App. Verwende die Packkatalog- und Governance-Freigabe-APIs für Git-Repository, Tag, gepinnten Commit, Manifest, Validierung und menschliche Freigabe. Eine Freigabe aktiviert kein Pack und gewährt keine Collector-Rechte.",
+            "accept": "Verbinden, Revisionsdetail und menschliche Freigabe samt Widerruf funktionieren gegen echte API-Fixtures; Agenten dürfen nicht freigeben. Tag, Commit und Validierungsfehler sind sichtbar; fremde Organisationen und unberechtigte Nutzer bleiben ausgeschlossen. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T050"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "packs",
+              "pack-connect",
+              "pack-detail"
+            ]
+          },
+          {
+            "id": "T055",
+            "title": "Evidence-Pack-Katalog und Capability-Vertrag",
+            "output": "Setze die Provider-Pack-Screens anhand des Boards um. Nutze vorhandenen Packimport und validierte Provider-Manifeste; zeige reale Capabilities, Schemareferenzen und gepinnte Herkunft. Ein Pack-Import startet keine Ausführung und umgeht keine Freigaben.",
+            "accept": "Ein valides Provider-Pack wird verbunden, nach Reload geöffnet und mit seinen tatsächlich gelieferten Manifestdaten angezeigt. Ungültiges Manifest und fehlende Daten sind sichtbar; nicht vorhandene Schema- oder Fixture-Inhalte werden nicht erfunden. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T054"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "ep-catalog",
+              "ep-connect",
+              "ep-manifest",
+              "ep-contract"
+            ]
+          },
+          {
+            "id": "T056",
+            "title": "Provider und Evidence nachvollziehbar anzeigen",
+            "output": "Gestalte Providerliste, Detail, Evidence-Register und Observation. Verwende persistierte Evidence und Assessment-Daten; falls für diese keine passende sichere Leseschnittstelle existiert, ergänze eine organisationsgeschützte, paginierbare Leseschnittstelle mit Provenienz und Frische. Kein Collectorstart und keine Secret-Freigabe in diesem Task.",
+            "accept": "Persistierte Observation zeigt Provider-/Packrevision, Quelle, Zeit, Scope und Frische; fehlende oder abgelaufene Daten bleiben ausdrücklich unbekannt. Isolation zwischen Organisationen und Pagination sowie ein Browserpfad vom Register zum Detail sind getestet. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T055"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "providers",
+              "provider-detail",
+              "evidence-register",
+              "ep-observation"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "F22",
+        "title": "Übersicht, Findings und Nachweise",
+        "goal": "Echte Zustände, Assessment-Herkunft und die Finding-Reise.",
+        "tasks": [
+          {
+            "id": "T057",
+            "title": "Übersicht mit Suche und Filtern",
+            "output": "Baue das Dashboard nach dem Overview-Screen und ersetze die einfache Liste durch die vorgesehenen Karten und Übersichten. Verwende die vorhandene organisationsgebundene Overview-API und ihre Team-, Scope- und Suchfilter; Kennzahlen nur aus vorhandenen Daten ableiten.",
+            "accept": "Ein Test mit mehreren Teams, Produkten und Assessments beweist korrekte Suche, Filter, Zahlen und Detailnavigation. Leere, ladende, fehlerhafte und UNKNOWN-Zustände sind sichtbar; keine Beispiele als echte Bestände darstellen. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T050"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "overview"
+            ]
+          },
+          {
+            "id": "T058",
+            "title": "Finding und Evidence im Assessment erklären",
+            "output": "Setze Finding- und Nachweisdetail aus dem Board um. Verknüpfe über existierende Assessment-/Finding-Daten die tatsächliche Revision, Kontrolle, Ergebnisgründe und Evidence-Herkunft; ergänze nur benötigte autorisierte Lesezugriffe auf bereits persistierte Daten.",
+            "accept": "Aus einem echten Finding führt der Link zum richtigen Assessment und dessen Evidenz; Commit, Kontroll- und Packrevision bleiben unterscheidbar. FAIL, UNKNOWN, N/A und fehlende oder abgelaufene Evidence sind semantisch korrekt; Fremdorganisation erhält keinen Zugriff. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T057"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "finding",
+              "evidence-detail"
+            ]
+          },
+          {
+            "id": "T063",
+            "title": "Remediation und Lösungsweg darstellen",
+            "output": "Setze Remediation-Plan und Resolution-Loop als referenzgetreue Ansichten um. Zeige nur tatsächlich gespeicherte Prüfung, Git-Bezüge und Revisionshistorie; eine Reparatur oder Zuweisung wird nicht von Specbound beauftragt.",
+            "accept": "Der Weg vom Finding zur zugehörigen belegten Prüfung bleibt revisionsgenau; nicht verfügbare Git-/Recheck-Daten sind ausdrücklich gekennzeichnet. Keine simulierte Erledigung, automatische Aufgabenvergabe oder unbelegte Erfolgszustände. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T058"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "remediation",
+              "resolution"
+            ]
+          },
+          {
+            "id": "T065",
+            "title": "Finding-Inbox und geplante Baseline-Triage",
+            "output": "Übertrage Inbox, Triage und Abschlussansicht. Vorhandene PR-Findings aus der Overview-API sind nutzbar; Baseline-Findings und deren Reassessment hängen von #65–#68 ab und bleiben klar als noch nicht verfügbar gekennzeichnet.",
+            "accept": "Verfügbare Findings lassen sich passend zu Produkt und Snapshot öffnen und filtern; Herkunft bleibt erkennbar. Nicht vorhandene Zuweisung, Frist oder Abschlussaktion wird nicht vorgetäuscht; leere und nicht verfügbare Zustände sind barrierefrei. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T057",
+              "T058"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "change-inbox",
+              "change-triage",
+              "change-closed"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "F23",
+        "title": "PR-Bericht und Dokumentation",
+        "goal": "Versionsgenauer Bericht und nutzbare Hilfen.",
+        "tasks": [
+          {
+            "id": "T059",
+            "title": "PR-Prüfung und revisionsgenauer Bericht",
+            "output": "Stelle die PR-Reise anhand der fünf Screens dar. Ein gespeicherter Assessment-Link zeigt exakt seinen Snapshot, Status, Counts und Herkunft; vorhandenes GitHub-Feedback bleibt getrennt von der Portalansicht. Keine Aufgabenverteilung an Menschen oder Agenten.",
+            "accept": "Ein vorhandener Snapshot öffnet seinen versionsgenauen Bericht; fehlender oder fremder Snapshot liefert einen passenden Zustand. PR-Inbox, Recheck oder GitHub-Links nur bei nachweislich vorhandener Datenquelle anbieten; ansonsten mit Erklärung als nicht verfügbar darstellen, keine grünen Prüfungen erfinden. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T058"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "pr-inbox",
+              "pr-check",
+              "pr-findings",
+              "pr-dispatch",
+              "pr-green"
+            ]
+          },
+          {
+            "id": "T062",
+            "title": "Dokumentation im Portalrahmen",
+            "output": "Übertrage die Docs-Ansicht und Navigation aus dem Designboard und integriere die bestehenden Guides in den Portalrahmen. Erhalte echte ausführbare Beispiele und sichere Rücknavigation.",
+            "accept": "Alle bestehenden Kategorien sind direkt verlinkbar, nach Reload erreichbar und mit Tastatur bedienbar. Beispiele, Einrichtungsgrenzen und Links sind korrekt; fehlende Inhalte nicht durch scheinbar funktionierende Demoaktionen ersetzen. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T050"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "docs-screen"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "F24",
+        "title": "Agentenidentitäten",
+        "goal": "Registrierung, Teams, Rechte und Audit.",
+        "tasks": [
+          {
+            "id": "T060",
+            "title": "Agenten registrieren und Teams zuordnen",
+            "output": "Setze Agentenliste, Registrierung und Teamzuordnung mit bestehenden Agent- und Teammitgliedschafts-APIs um. Organisationsinhaber verwalten Agenten; verknüpfte Teams und erlaubte Rollen werden aus echten Daten geladen.",
+            "accept": "Agent anlegen, anzeigen und Teams zuordnen sowie nach Reload wiederfinden; Organisations- und Berechtigungsgrenzen sind geprüft. Keine externe Git-Identität oder automatisch gestartete Agentenausführung vortäuschen. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T050",
+              "T051"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "agent-list",
+              "agent-create",
+              "agent-team"
+            ]
+          },
+          {
+            "id": "T061",
+            "title": "Agentenrechte, Zugang und Audit",
+            "output": "Zeige die realen Rechte aus ADR 0032, zeitlich begrenzte einmalig angezeigte lokale Zugangsdaten und vorhandene Audit-Ereignisse. Git-Rechte sind separat; Git-Commits oder PR-Aktivität nur anzeigen, wenn eine echte Datenquelle dies hergibt.",
+            "accept": "Menschlicher Owner stellt Zugang aus und widerruft ihn; Token wird nur einmal angezeigt und nicht in Browser-Logs oder dauerhaftem Speicher abgelegt. Agent kann keine Packfreigabe erteilen; Audit und nicht verfügbare externe Aktivitäten werden korrekt dargestellt. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T060"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "agent-scope",
+              "agent-history"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "F25",
+        "title": "Governance-Änderungen",
+        "goal": "Geplante Baseline-Oberflächen ohne vorgetäuschte Funktionen.",
+        "tasks": [
+          {
+            "id": "T064",
+            "title": "Releases, Simulation und Aktivierung als geplante Ansichten",
+            "output": "Baue die vier Referenzansichten und navigierbare Zustände nach. Bestehende Packrevisionen können gelesen werden; Simulation, Baseline-Auswirkungen und Aktivierung bleiben klar und zugänglich als noch nicht verfügbar gekennzeichnet, bis #67 und #68 umgesetzt sind.",
+            "accept": "Die Layouts sind mit echten Packdaten oder ehrlichem Leerzustand prüfbar; Simulation und Aktivierung starten keine Scheinfunktion. Die Erklärung verweist auf die spätere Funktion; keine Bewertungszahlen oder aktive Revisionen aus Fixtures als echte Daten ausgeben. Designboard-Referenz und Browsernachweis gemäß Phase-1-Abnahme.",
+            "deps": [
+              "T054"
+            ],
+            "tags": [
+              "afk"
+            ],
+            "screens": [
+              "impact",
+              "pack-activation",
+              "change-releases",
+              "change-impact"
+            ]
           }
         ]
       }

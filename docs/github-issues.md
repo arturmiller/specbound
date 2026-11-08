@@ -1,10 +1,10 @@
 # Designboard auf GitHub
 
-Die vorhandene Hierarchie wurde unverändert übertragen: 10 Epics, 17 Features, 49 Tasks.
+Die ursprüngliche Hierarchie wurde übertragen und um Phase 1 ergänzt: 11 Epics, 25 Features, 65 Tasks.
 
 Quelle: [Roadmap](https://github.com/arturmiller/specbound/blob/1727aabf895e8a91ada7a5e00258b479c6fdaddb/designboard/data/roadmap.json).
 
-Elternbeziehungen und Task-Abhängigkeiten sind als native GitHub-Verknüpfungen sowie im Beschreibungstext hinterlegt. Die JSON-Zuordnung in `github-issues.json` enthält die stabilen Board-IDs. Die GitHub-Issues enthalten den aktuellen lokalen Docker-Compose-Umfang; das ursprüngliche Designboard bleibt ein historischer Plan. T046 und T047 sind zurückgestellt. Dies ist ein Veröffentlichungsstand, keine laufende Synchronisierung von Status oder Browser-Markierungen.
+Elternbeziehungen und Task-Abhängigkeiten sind als native GitHub-Verknüpfungen sowie im Beschreibungstext hinterlegt. Die JSON-Zuordnung in `github-issues.json` enthält die stabilen Board-IDs. Die Planung umfasst den lokalen Docker-Compose-Betrieb und die Phase-1-Oberfläche. T024, T026, T046 und T047 sind zurückgestellt; Phase 2 enthält die bisherige V1-Baseline-Arbeit. Das archivierte Original bleibt unverändert. Dies ist ein Veröffentlichungsstand, keine laufende Synchronisierung von Status oder Browser-Markierungen.
 
 | Board-ID | GitHub-Issue | Ebene | Parent |
 | --- | --- | --- | --- |
@@ -84,3 +84,33 @@ Elternbeziehungen und Task-Abhängigkeiten sind als native GitHub-Verknüpfungen
 | T047 | [#74 AWS ECS-Deployment als Adapter](https://github.com/arturmiller/specbound/issues/74) | task | F17 |
 | T048 | [#75 Storage-Port und lokales Objektbackend](https://github.com/arturmiller/specbound/issues/75) | task | F17 |
 | T049 | [#76 Operatives Monitoring und Recovery](https://github.com/arturmiller/specbound/issues/76) | task | F17 |
+
+## Phase 1: Produktoberfläche
+
+| Board-ID | GitHub-Issue | Ebene | Parent |
+| --- | --- | --- | --- |
+| E11 | [#122 Produktoberfläche nach Designboard](https://github.com/arturmiller/specbound/issues/122) | epic | — |
+| F18 | [#123 Portalrahmen und Einstieg](https://github.com/arturmiller/specbound/issues/123) | feature | E11 |
+| F19 | [#124 Teams und Verantwortung](https://github.com/arturmiller/specbound/issues/124) | feature | E11 |
+| F20 | [#125 Produkte und Discovery](https://github.com/arturmiller/specbound/issues/125) | feature | E11 |
+| F21 | [#126 Governance und Evidence Packs](https://github.com/arturmiller/specbound/issues/126) | feature | E11 |
+| F22 | [#127 Übersicht, Findings und Nachweise](https://github.com/arturmiller/specbound/issues/127) | feature | E11 |
+| F23 | [#128 PR-Bericht und Dokumentation](https://github.com/arturmiller/specbound/issues/128) | feature | E11 |
+| F24 | [#129 Agentenidentitäten](https://github.com/arturmiller/specbound/issues/129) | feature | E11 |
+| F25 | [#130 Governance-Änderungen](https://github.com/arturmiller/specbound/issues/130) | feature | E11 |
+| T050 | [#131 Portalrahmen und Organisationseinstieg](https://github.com/arturmiller/specbound/issues/131) | task | F18 |
+| T051 | [#132 Teams, Mitglieder und Rollen](https://github.com/arturmiller/specbound/issues/132) | task | F19 |
+| T052 | [#133 Produkte anlegen und Git verbinden](https://github.com/arturmiller/specbound/issues/133) | task | F20 |
+| T053 | [#134 Produktdetails und Discovery-Zustand](https://github.com/arturmiller/specbound/issues/134) | task | F20 |
+| T054 | [#135 Governance-Pack verbinden und Revision prüfen](https://github.com/arturmiller/specbound/issues/135) | task | F21 |
+| T055 | [#136 Evidence-Pack-Katalog und Capability-Vertrag](https://github.com/arturmiller/specbound/issues/136) | task | F21 |
+| T056 | [#137 Provider und Evidence nachvollziehbar anzeigen](https://github.com/arturmiller/specbound/issues/137) | task | F21 |
+| T057 | [#138 Übersicht mit Suche und Filtern](https://github.com/arturmiller/specbound/issues/138) | task | F22 |
+| T058 | [#139 Finding und Evidence im Assessment erklären](https://github.com/arturmiller/specbound/issues/139) | task | F22 |
+| T059 | [#140 PR-Prüfung und revisionsgenauer Bericht](https://github.com/arturmiller/specbound/issues/140) | task | F23 |
+| T060 | [#141 Agenten registrieren und Teams zuordnen](https://github.com/arturmiller/specbound/issues/141) | task | F24 |
+| T061 | [#142 Agentenrechte, Zugang und Audit](https://github.com/arturmiller/specbound/issues/142) | task | F24 |
+| T062 | [#143 Dokumentation im Portalrahmen](https://github.com/arturmiller/specbound/issues/143) | task | F23 |
+| T063 | [#144 Remediation und Lösungsweg darstellen](https://github.com/arturmiller/specbound/issues/144) | task | F22 |
+| T064 | [#145 Releases, Simulation und Aktivierung als geplante Ansichten](https://github.com/arturmiller/specbound/issues/145) | task | F25 |
+| T065 | [#146 Finding-Inbox und geplante Baseline-Triage](https://github.com/arturmiller/specbound/issues/146) | task | F22 |

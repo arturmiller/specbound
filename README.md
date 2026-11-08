@@ -1,8 +1,10 @@
 # Specbound
 
 Das lebende Designboard verbindet 44 Portal-Screens in 9 Stories mit einer
-interaktiven Systemarchitektur und einer Planung aus 10 Epics, 17 Features und
-49 Tasks. Die Portalabläufe sind ein Prototyp mit Beispieldaten.
+interaktiven Systemarchitektur und einer Planung aus 11 Epics, 25 Features und
+65 Tasks. Die Designboard-Portalabläufe sind ein Prototyp mit Beispieldaten;
+die Umsetzung der Produktoberfläche ist in [Phase 1](docs/phase1-designboard-ui.md)
+geplant.
 
 ## Lokal starten
 

@@ -14,13 +14,34 @@ const taskIds = tasks.map(t => t.id);
 const nodeIds = nodes.map(n => n.id);
 const archive = await fs.readFile(new URL('../docs/original/specbound-designboard.html', import.meta.url), 'utf8');
 
-test('all authored datasets survive extraction exactly', () => {
-  for (const [name, value] of Object.entries({ defaults: screens, stories, VIEW_EPICS: epics, ARCH_NODES: nodes, ARCH_EDGES: edges })) {
+test('original screens and architecture remain unchanged while roadmap evolves', () => {
+  for (const [name, value] of Object.entries({ defaults: screens, stories, ARCH_NODES: nodes, ARCH_EDGES: edges })) {
     assert.deepEqual(value, JSON.parse(archive.match(new RegExp(`^const ${name}=(.*);$`, 'm'))[1]));
+  }
+  const original = JSON.parse(archive.match(/^const VIEW_EPICS=(.*);$/m)[1]);
+  for (const originalEpic of original) {
+    const current = structuredClone(epics.find(e => e.id === originalEpic.id));
+    assert.ok(current, `Original epic ${originalEpic.id} missing`);
+    if (current.id === 'E08') current.phase = originalEpic.phase;
+    for (const feature of current.features) for (const task of feature.tasks) delete task.phase;
+    assert.deepEqual(current, originalEpic);
   }
   assert.equal(screens.length, 44);
   assert.equal(stories.length, 9);
-  assert.equal(tasks.length, 49);
+});
+
+test('phase 1 covers every reference screen and later tasks are correctly phased', () => {
+  const uiEpic = epics.find(e => e.id === 'E11');
+  assert.equal(uiEpic.phase, 'Phase 1');
+  const uiTasks = uiEpic.features.flatMap(f => f.tasks);
+  assert.equal(uiTasks.length, 16);
+  const covered = uiTasks.flatMap(t => t.screens);
+  assert.deepEqual(covered.sort(), screens.map(s => s.id).sort());
+  assert.equal(new Set(covered).size, covered.length);
+  for (const id of ['T024', 'T026', 'T027', 'T046', 'T047']) {
+    assert.equal(tasks.find(t => t.id === id).phase, 'Later');
+  }
+  assert.equal(epics.find(e => e.id === 'E08').phase, 'Phase 2');
 });
 
 test('stories and architecture have no missing references; tasks form a DAG', () => {

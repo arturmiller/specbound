@@ -23,11 +23,13 @@ Quellen anwenden.
 5. Quellen zusammen mit der Produktänderung reviewen und versionieren.
    `dist/` wird gebaut und nicht von Hand geändert.
 
-Task-Markierungen sind lokale Planungshilfen. Die vorhandenen 10 Epics,
+Task-Markierungen sind lokale Planungshilfen. Die ursprünglichen 10 Epics,
 17 Features und 49 Tasks wurden als GitHub Issues übernommen, einschließlich
 Elternbeziehungen und Task-Abhängigkeiten. Die Zuordnung der stabilen Board-IDs
 steht in [GitHub-Issues](github-issues.md) und maschinenlesbar in
-`github-issues.json`. Es gibt weiterhin keine laufende GitHub-Synchronisierung;
+`github-issues.json`. Das zusätzliche Epic E11 plant die 44 Designboard-Screens
+in Phase 1 mit acht Features und 16 Tasks. Die ursprüngliche V1-Baseline-Arbeit
+ist Phase 2; T024 und T026 sind Later. Es gibt keine laufende GitHub-Synchronisierung;
 lokale Task-Markierungen spiegeln den tatsächlichen Issue-Status nicht wider.
 
 ## Speicherung
@@ -42,7 +44,9 @@ Das Format `specbound-workspace`, Version 1, enthält `board` (bisheriges
 Der Import prüft Referenzen, Koordinaten, IDs und Versionen vor der Übernahme.
 Dateien werden als Daten gelesen, nicht als Code ausgeführt. Ältere Board-Exporte
 ersetzen keine Task-Markierungen. Für spätere Änderungen am Screen-/Task-Inventar
-ist eine explizite Formatmigration erforderlich.
+ist zu prüfen, ob eine explizite Formatmigration erforderlich ist. Die hier
+ergänzten Task-IDs erhalten alle bisherigen IDs; ältere gültige Sicherungen
+bleiben importierbar, neue Tasks beginnen ohne lokale Fortschrittsmarkierung.
 
 ## Prüfung der ersten Migration
 
