@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { PackWorkspace } from './packs.jsx';
 import { ProductWorkspace } from './products.jsx';
 import { Overview } from './overview.jsx';
+import { Documentation } from './docs.jsx';
+import { AssessmentReport } from './assessment-report.jsx';
+import { currentSection, navigation, organizationHref, PortalShell } from './portal-shell.jsx';
 
-/** @typedef {{id: string, name: string}} Organization */
+/** @typedef {{id: string, name: string, ownerPrincipalId?: string}} Organization */
 /** @typedef {{id: string, name: string}} Team */
 /** @typedef {{id: string, principalId: string, role: string}} Member */
 
@@ -33,8 +36,8 @@ function errorMessage(error) {
   return 'Die Anfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.';
 }
 
-/** @param {{accessToken?: string}} props */
-export function TeamWorkspace({ accessToken = '' }) {
+/** @param {{accessToken?: string, onSignOut?: () => void, authConfigured?: boolean, apiStatus?: string}} props */
+export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = false, apiStatus = 'API wird geprüft …' }) {
   const [organizations, setOrganizations] = useState(/** @type {Organization[]} */ ([]));
   const [teams, setTeams] = useState(/** @type {Team[]} */ ([]));
   const [members, setMembers] = useState(/** @type {Member[]} */ ([]));
@@ -144,58 +147,87 @@ export function TeamWorkspace({ accessToken = '' }) {
     finally { setBusy(false); }
   }
 
-  return (
-    <section className="workspace" aria-labelledby="teams-heading">
-      <div className="workspace-heading">
-        <div><p className="eyebrow">VERANTWORTUNG</p><h2 id="teams-heading">Teams</h2></div>
-        <p>Teams und Mitgliedschaften einer Organisation verwalten.</p>
+  const section = currentSection();
+  const currentOrganization = organizations.find((item) => item.id === organizationId);
+  const needsOrganization = !['settings', 'docs', 'assessment', 'not-found'].includes(section);
+  const pending = navigation.find((item) => item.id === section && item.pending);
+  const reportId = /^\/assessments\/([A-Za-z0-9_-]{1,100})\/?$/.exec(window.location.pathname)?.[1];
+
+  /** @param {string} id */
+  function changeOrganization(id) {
+    const url = new URL(window.location.href);
+    for (const key of ['team', 'product', 'pack']) url.searchParams.delete(key);
+    url.searchParams.set('organization', id);
+    history.replaceState(null, '', url);
+    setTeams([]); setMembers([]); setTeamId(''); setOrganizationId(id); setError('');
+  }
+
+  return <PortalShell section={section} organizationId={organizationId} organizations={organizations}
+    onOrganizationChange={changeOrganization} organizationBusy={busy} onSignOut={onSignOut} apiStatus={apiStatus}>
+    {error && <p role="alert" className="alert">{error}</p>}
+    {loading && <p role="status">Organisationen werden geladen …</p>}
+    {section === 'settings' && <section aria-labelledby="settings-heading">
+      <p className="eyebrow">ORGANISATION / EINSTELLUNGEN</p>
+      <div className="page-heading"><div><h1 id="settings-heading">Workspace-Einstellungen</h1>
+        <p>Organisationsidentität, Teamverantwortung und Systemverbindungen verwalten.</p></div>
+        {currentOrganization && <a className="primary-link" href={organizationHref('/teams', organizationId)}>Teams verwalten <span aria-hidden="true">→</span></a>}
       </div>
-      {error && <p role="alert" className="alert">{error}</p>}
-      {loading && <p>Organisationen werden geladen …</p>}
-      {!loading && organizationsReady && organizations.length === 0 && <>
-        <p>Keine Organisationen verfügbar.</p>
-        <form onSubmit={createOrganization}>
-          <label className="field">Organisationsname<input required maxLength={200} value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} /></label>
-          <button type="submit" disabled={busy}>Organisation erstellen</button>
-        </form>
-      </>}
-      {organizations.length > 0 && <>
-        <label className="field">Organisation
-          <select value={organizationId} disabled={busy} onChange={(event) => { setTeams([]); setMembers([]); setTeamId(''); setOrganizationId(event.target.value); setError(''); }}>
-            {organizations.map((organization) => <option value={organization.id} key={organization.id}>{organization.name}</option>)}
-          </select>
-        </label>
-        <div className="workspace-grid">
-          <div className="panel">
-            <h3>Teamliste</h3>
-            {teamsLoading ? <p>Teams werden geladen …</p> : teams.length === 0 && <p>Noch keine Teams vorhanden.</p>}
-            <ul className="team-list">{teams.map((team) => <li key={team.id}>
-              <button type="button" className="team-choice" disabled={busy} aria-pressed={team.id === teamId} onClick={() => { setTeamId(team.id); setError(''); }}>{team.name}</button>
-            </li>)}</ul>
-            <form onSubmit={createTeam}>
-              <label className="field">Teamname<input value={teamName} onChange={(event) => setTeamName(event.target.value)} required maxLength={200} /></label>
-              <button type="submit" disabled={busy || teamsLoading}>Team erstellen</button>
-            </form>
-          </div>
-          <div className="panel">
-            <h3>Mitglieder</h3>
-            {!teamId ? <p>Wähle ein Team aus.</p> : <>
-              {membersLoading ? <p>Mitglieder werden geladen …</p> : members.length === 0 && <p>Noch keine Mitglieder vorhanden.</p>}
-              <ul className="members">{members.map((member) => <li key={member.id}><span>{member.principalId}</span><span className="role">{member.principalId.startsWith('agent:') ? 'Agent: Lesen; keine Pack-Freigabe' : member.role}</span></li>)}</ul>
-              <form onSubmit={addMember}>
-                <label className="field">Principal-ID<input value={principalId} onChange={(event) => setPrincipalId(event.target.value)} required maxLength={200} /></label>
-                <label className="field">Rolle<select value={role} onChange={(event) => setRole(event.target.value)}>
-                  <option value="viewer">Viewer</option><option value="maintainer">Maintainer</option><option value="admin">Admin</option>
-                </select></label>
-                <button type="submit" disabled={busy || membersLoading}>Mitglied hinzufügen</button>
-              </form>
-            </>}
-          </div>
+      <div className="settings-grid">
+        <div className="panel settings-card"><h2>{currentOrganization?.name || 'Organisation'}</h2>
+          {currentOrganization ? <><div className="workspace-avatar" aria-hidden="true">{currentOrganization.name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0].toLocaleUpperCase()).join('')}</div>
+            <dl className="settings-list"><div><dt>Workspace-ID</dt><dd>{currentOrganization.id}</dd></div>
+              <div><dt>Teams</dt><dd>{teamsLoading ? 'Wird geladen …' : teams.length}</dd></div>
+              <div><dt>Eigentümer</dt><dd className="break-value">{currentOrganization.ownerPrincipalId || 'Nicht verfügbar'}</dd></div></dl>
+            <a className="small-link" href={organizationHref('/teams', organizationId)}>Teams ansehen →</a></>
+            : !loading && organizationsReady ? <><p>Keine Organisationen verfügbar.</p>
+              <form onSubmit={createOrganization}>
+                <label className="field">Organisationsname<input required maxLength={200} value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} /></label>
+                <button type="submit" disabled={busy}>Organisation erstellen</button>
+              </form></> : <p>Organisationsdaten werden geladen …</p>}
         </div>
-      </>}
-      {organizationId && <ProductWorkspace key={`products-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
-      {organizationId && <PackWorkspace key={`packs-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
-      {organizationId && <Overview key={`overview-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
-    </section>
-  );
+        <div className="panel settings-card"><h2>Identität und Zugriff</h2><dl className="settings-list">
+          <div><dt>Anmeldung</dt><dd>{authConfigured ? 'OIDC konfiguriert' : 'Nicht konfiguriert'}</dd></div>
+          <div><dt>Teamrollen</dt><dd>Admin · Maintainer · Viewer</dd></div>
+          <div><dt>Produktverantwortung</dt><dd>Team erforderlich</dd></div></dl>
+          <p className="info-note">Teams bilden Verantwortungsbereiche. Git-Rechte werden separat verwaltet.</p>
+        </div>
+        <div className="panel settings-card"><h2>Plattformverbindungen</h2><dl className="settings-list">
+          <div><dt>GitHub</dt><dd>Nicht geprüft</dd></div>
+          <div><dt>Weitere Verbindungen</dt><dd>Derzeit nicht verfügbar</dd></div></dl>
+          <p>Verbindungen und ihre Rechte werden gesondert eingerichtet.</p>
+        </div>
+      </div>
+      {currentOrganization && <div className="next-step"><div><strong>Ein verantwortliches Team einrichten</strong>
+        <p>Produkte werden einem Team zugeordnet; Teammitgliedschaften und Organisationszugriff sind getrennt.</p></div>
+        <a className="primary-link" href={organizationHref('/teams', organizationId)}>Teams öffnen →</a></div>}
+    </section>}
+    {needsOrganization && !loading && organizationsReady && !organizationId && <div className="panel"><h1>Organisation erforderlich</h1>
+      <p>Lege zuerst eine Organisation an oder wähle eine zugängliche Organisation aus.</p><a href="/settings">Zu den Einstellungen</a></div>}
+    {section === 'teams' && organizationsReady && organizationId && <section className="workspace" aria-labelledby="teams-heading">
+      <div className="workspace-heading"><div><p className="eyebrow">VERANTWORTUNG</p><h1 id="teams-heading">Teams</h1></div>
+        <p>Teams und Mitgliedschaften einer Organisation verwalten.</p></div>
+      <div className="workspace-grid"><div className="panel"><h2>Teamliste</h2>
+        {teamsLoading ? <p>Teams werden geladen …</p> : teams.length === 0 && <p>Noch keine Teams vorhanden.</p>}
+        <ul className="team-list">{teams.map((team) => <li key={team.id}>
+          <button type="button" className="team-choice" disabled={busy} aria-pressed={team.id === teamId} onClick={() => { setTeamId(team.id); setError(''); }}>{team.name}</button>
+        </li>)}</ul><form onSubmit={createTeam}>
+          <label className="field">Teamname<input value={teamName} onChange={(event) => setTeamName(event.target.value)} required maxLength={200} /></label>
+          <button type="submit" disabled={busy || teamsLoading}>Team erstellen</button></form></div>
+        <div className="panel"><h2>Mitglieder</h2>{!teamId ? <p>Wähle ein Team aus.</p> : <>
+          {membersLoading ? <p>Mitglieder werden geladen …</p> : members.length === 0 && <p>Noch keine Mitglieder vorhanden.</p>}
+          <ul className="members">{members.map((member) => <li key={member.id}><span>{member.principalId}</span><span className="role">{member.principalId.startsWith('agent:') ? 'Agent: Lesen; keine Pack-Freigabe' : member.role}</span></li>)}</ul>
+          <form onSubmit={addMember}><label className="field">Principal-ID<input value={principalId} onChange={(event) => setPrincipalId(event.target.value)} required maxLength={200} /></label>
+            <label className="field">Rolle<select value={role} onChange={(event) => setRole(event.target.value)}><option value="viewer">Viewer</option><option value="maintainer">Maintainer</option><option value="admin">Admin</option></select></label>
+            <button type="submit" disabled={busy || membersLoading}>Mitglied hinzufügen</button></form></>}
+        </div></div>
+    </section>}
+    {section === 'products' && organizationsReady && organizationId && <ProductWorkspace key={`products-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
+    {section === 'packs' && organizationsReady && organizationId && <PackWorkspace key={`packs-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
+    {section === 'overview' && organizationsReady && organizationId && <Overview key={`overview-${organizationId}`} organizationId={organizationId} teams={teams} accessToken={accessToken} />}
+    {pending && organizationsReady && organizationId && <section className="unavailable"><p className="eyebrow">IN VORBEREITUNG</p><h1>{pending.label}</h1>
+      <div className="panel"><h2>Dieser Bereich ist noch nicht verfügbar</h2><p>Die Oberfläche für diesen Bereich wird in Phase 1 ergänzt.</p></div></section>}
+    {section === 'docs' && <Documentation />}
+    {section === 'assessment' && reportId && <AssessmentReport id={reportId} accessToken={accessToken} />}
+    {section === 'not-found' && <section><h1>Seite nicht gefunden</h1><a href={organizationHref('/settings', organizationId)}>Zu den Einstellungen</a></section>}
+  </PortalShell>;
 }

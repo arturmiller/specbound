@@ -32,3 +32,10 @@ test('returns to the requested assessment after signing in', async ({ page }) =>
   await expect(page).toHaveURL(/\/assessments\/example-report$/);
   await expect(page.getByRole('alert')).toContainText('Assessment konnte nicht geladen werden');
 });
+
+test('returns to a portal route and its document anchor after signing in', async ({ page }) => {
+  await page.goto('/docs#docs/security');
+  await page.getByRole('button', { name: 'Anmelden' }).click();
+  await expect(page).toHaveURL(/\/docs#docs\/security$/);
+  await expect(page.getByRole('article', { name: 'Dokumentationsinhalt' }).getByRole('heading', { name: 'Security', exact: true })).toBeVisible();
+});

@@ -4,7 +4,7 @@ test('missing provider evidence stays UNKNOWN with reason and coverage', async (
   const seeded = await request.post('http://127.0.0.1:18762/__e2e/assessment?missing_provider=true');
   expect(seeded.status()).toBe(200);
   const item = await seeded.json();
-  await page.goto(`/?organization=${item.organizationId}`);
+  await page.goto(`/overview?organization=${item.organizationId}`);
   const overview = page.getByRole('region', { name: 'Übersicht und Suche' });
   const assessments = overview.locator('.panel').filter({ has: page.getByRole('heading', { name: 'Assessments', exact: true }) });
   await expect(assessments.getByText(/UNKNOWN: 1/)).toBeVisible();

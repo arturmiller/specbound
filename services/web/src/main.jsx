@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AuthWorkspace } from './auth.jsx';
-import { Documentation } from './docs.jsx';
 import './styles.css';
 
 function App() {
@@ -24,13 +23,7 @@ function App() {
   }, []);
 
   return (
-    <main>
-      <h1>Specbound</h1>
-      <p>Lokale Entwicklungsumgebung</p>
-      <p role="status">{status}</p>
-      <AuthWorkspace />
-      <Documentation />
-    </main>
+    <AuthWorkspace apiStatus={status} />
   );
 }
 

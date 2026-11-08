@@ -25,7 +25,7 @@ test('retains the selected pack and its approval when the page reloads', async (
     await route.fulfill({ json: data });
   });
 
-  await page.goto(`/?organization=${org}`);
+  await page.goto(`/packs?organization=${org}`);
   await page.getByRole('button', { name: 'second · v1.0.0' }).click();
   await expect(page).toHaveURL(/pack=second/);
   await expect(page.getByText('Freigabestatus: Freigegeben von user:fixture')).toBeVisible();

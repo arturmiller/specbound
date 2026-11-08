@@ -5,7 +5,7 @@ test('creates a product, verifies its repository and reopens details after reloa
   const team = await request.post(`http://127.0.0.1:18762/organizations/${org}/teams`, { data: { name: 'Produktteam' } });
   expect(team.status()).toBe(201);
   const { id: teamId } = await team.json();
-  await page.goto(`/?organization=${org}`);
+  await page.goto(`/products?organization=${org}`);
   await page.getByLabel('Produktname').fill('Catalog Service');
   await page.getByLabel('Owner-Team').selectOption(teamId);
   await page.getByRole('button', { name: 'Produkt erstellen' }).click();
@@ -28,7 +28,7 @@ test('keeps the product and repository when GitHub verification fails', async ({
   expect(team.status()).toBe(201);
   const { id: teamId } = await team.json();
   await page.route('**/products/*/repositories/*/github', (route) => route.fulfill({ status: 503, body: '{}' }));
-  await page.goto(`/?organization=${org}`);
+  await page.goto(`/products?organization=${org}`);
   await page.getByLabel('Produktname').fill('Unverified Service');
   await page.getByLabel('Owner-Team').selectOption(teamId);
   await page.getByRole('button', { name: 'Produkt erstellen' }).click();
@@ -49,7 +49,7 @@ test('waits for the selected product repositories before allowing a connection',
   const team = await request.post(`http://127.0.0.1:18762/organizations/${org}/teams`, { data: { name: 'Ladeteam' } });
   expect(team.status()).toBe(201);
   const { id: teamId } = await team.json();
-  await page.goto(`/?organization=${org}`);
+  await page.goto(`/products?organization=${org}`);
   await page.getByLabel('Produktname').fill('Loading Service');
   await page.getByLabel('Owner-Team').selectOption(teamId);
   let release;
