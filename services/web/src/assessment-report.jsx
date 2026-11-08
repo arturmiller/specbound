@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 
 /** @typedef {{id: string, outcome: string, state: string, reason: string}} Finding */
-/** @typedef {{id: string, status: string, reason: string, evidenceIds: string[], control: {id: string}, subject: {id: string, provenance?: {sourceRef?: string}}, coverage: {status: string, revision: string, errors: {path: string, reason: string}[]} | null}} Evaluation */
+/** @typedef {{id: string, status: string, reason: string, evidenceIds: string[], control: {id: string}, subject: {id: string, provenance?: {sourceRef?: string}}, coverage: {status: string, revision: string | null, errors: {path: string, reason: string}[]} | null}} Evaluation */
 /** @typedef {{id: string, capability: string, provenance?: {sourceRef?: string}, observedAt: string, expiresAt: string, value: unknown}} Evidence */
-/** @typedef {{assessment: {id: string, organizationId: string, gitSha: string, packSha: string, pullRequestNumber: number | null, environment: string, counts: {PASS: number, FAIL: number, UNKNOWN: number, NOT_APPLICABLE: number}}, evaluations: Evaluation[], evidence: Evidence[], findings: Finding[]}} Report */
+/** @typedef {{assessment: {id: string, organizationId: string, productId: string, context: string, gitSha: string, packSha: string, pullRequestNumber: number | null, environment: string, counts: {PASS: number, FAIL: number, UNKNOWN: number, NOT_APPLICABLE: number}}, evaluations: Evaluation[], evidence: Evidence[], findings: Finding[]}} Report */
 
 /** @param {{id: string, accessToken?: string}} props */
 export function AssessmentReport({ id, accessToken = '' }) {
@@ -11,45 +11,35 @@ export function AssessmentReport({ id, accessToken = '' }) {
   const [error, setError] = useState('');
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/assessments/${encodeURIComponent(id)}`, {
-      signal: controller.signal,
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    }).then(async (response) => {
-      if (response.status === 403) throw new Error('Für dieses Assessment fehlen die erforderlichen Rechte.');
-      if (response.status === 401) throw new Error('Für dieses Assessment ist eine Anmeldung erforderlich.');
-      if (!response.ok) throw new Error('Assessment konnte nicht geladen werden.');
-      return response.json();
-    }).then(setReport).catch((failure) => { if (!controller.signal.aborted) setError(failure.message); });
+    fetch(`/api/assessments/${encodeURIComponent(id)}`, { signal: controller.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} })
+      .then((response) => {
+        if (response.status === 403) throw new Error('Für dieses Assessment fehlen die erforderlichen Rechte.');
+        if (response.status === 401) throw new Error('Für dieses Assessment ist eine Anmeldung erforderlich.');
+        if (response.status === 404) throw new Error('Assessment nicht gefunden.');
+        if (!response.ok) throw new Error('Assessment konnte nicht geladen werden.');
+        return response.json();
+      }).then(setReport).catch((failure) => { if (!controller.signal.aborted) setError(failure.message); });
     return () => controller.abort();
   }, [id, accessToken]);
 
   if (error) return <p role="alert">{error}</p>;
-  if (!report) return <p>Assessment wird geladen …</p>;
+  if (!report) return <p role="status">Assessment wird geladen …</p>;
   const { assessment, evaluations, evidence, findings } = report;
-  return <section className="workspace assessment-report" aria-labelledby="assessment-heading">
-    <h2 id="assessment-heading">Assessment-Bericht</h2>
-    <dl><dt>Assessment</dt><dd>{assessment.id}</dd><dt>Revision</dt><dd>{assessment.gitSha}</dd>
-      <dt>Governance-Pack</dt><dd>{assessment.packSha}</dd><dt>Pull Request</dt><dd>{assessment.pullRequestNumber ?? '–'}</dd>
-      <dt>Umgebung</dt><dd>{assessment.environment}</dd></dl>
-    <p>Passed: {assessment.counts.PASS} | Failed: {assessment.counts.FAIL} | Unknown: {assessment.counts.UNKNOWN} | N/A: {assessment.counts.NOT_APPLICABLE}</p>
-    <h3>Findings</h3>
-    {findings.length === 0 ? <p>Für diesen Snapshot wurden keine Finding-Ereignisse gespeichert.</p> :
-      <ul>{findings.map((item) => <li key={item.id}><a href={`/findings?${new URLSearchParams({ organization: assessment.organizationId, finding: item.id })}`}>{item.outcome}: {item.state}</a> – {item.reason}</li>)}</ul>}
-    <h3>Controls und Bewertungen</h3>
-    {evaluations.map((item) => <article key={item.id} className="panel">
-      <h4>{item.control.id}: <span className={`assessment-status status-${item.status.toLowerCase()}`}>{item.status === 'NOT_APPLICABLE' ? 'N/A' : item.status}</span></h4><p>Grund: {item.reason}</p>
-      <p>Quellabdeckung: {item.coverage ? item.coverage.status : 'Nicht vorhanden'}
-        {item.coverage && <> · Scan-Revision: {item.coverage.revision || 'Nicht verfügbar'}
-          {item.coverage.revision !== assessment.gitSha && ' (abweichende Revision)'}</>} (historischer Scan)</p>
-      {item.coverage?.errors?.map((error, index) => <p key={index}>Abdeckungsfehler: {error.path} {error.reason}</p>)}
-      <p>Subject: {item.subject.id}</p><p>Quellverweis: {item.subject.provenance?.sourceRef || 'Nicht verfügbar'}</p>
-      <p>Evidence: {item.evidenceIds.length ? item.evidenceIds.join(', ') : 'Keine'}</p>
-      <details><summary>Control</summary><pre>{JSON.stringify(item.control, null, 2)}</pre></details>
-    </article>)}
-    <h3>Evidence und Fakten</h3>
-    {evidence.length === 0 ? <p>Keine Evidence für diesen Snapshot.</p> : evidence.map((item) => <article key={item.id} className="panel">
-      <h4>{item.capability}</h4><p>Evidence: <a href={`/evidence?${new URLSearchParams({ organization: assessment.organizationId, evidence: item.id, view: 'detail' })}`}>{item.id}</a></p><p>Quelle: {item.provenance?.sourceRef || 'Nicht verfügbar'}</p>
-      <p>Beobachtet: {item.observedAt} · Gültig bis: {item.expiresAt}</p><pre>{JSON.stringify(item.value, null, 2)}</pre>
-    </article>)}
+  const selectedView = new URLSearchParams(window.location.search).get('view') || 'report';
+  const view = assessment.context === 'pull_request' && ['summary', 'report', 'iterations', 'review'].includes(selectedView) ? selectedView : 'report';
+  /** @param {string} target */
+  const reportUrl = (target) => `/assessments/${encodeURIComponent(id)}${target === 'report' ? '' : `?view=${target}`}`;
+  const counts = [['Passed', assessment.counts.PASS], ['Failed', assessment.counts.FAIL], ['Unknown', assessment.counts.UNKNOWN], ['N/A', assessment.counts.NOT_APPLICABLE]];
+  const countCards = <div className="pr-counts">{counts.map(([label, count]) => <div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div>;
+  return <section className="pr-screen assessment-report" aria-labelledby="assessment-heading">
+    <p className="eyebrow">{assessment.context === 'pull_request' ? `PULL REQUEST ${assessment.pullRequestNumber == null ? '' : `#${assessment.pullRequestNumber}`} / ` : ''}ASSESSMENT</p>
+    <div className="page-heading"><div><h1 id="assessment-heading">Assessment-Bericht</h1><p>{assessment.context === 'pull_request' ? 'Gespeicherter Snapshot; GitHub-Feedback und aktueller Merge-Status sind davon getrennt.' : 'Gespeicherter Assessment-Snapshot mit revisionsgenauer Herkunft.'}</p></div></div>
+    {assessment.context === 'pull_request' && <nav className="pr-tabs" aria-label="Assessment-Ansichten"><a href={reportUrl('summary')} aria-current={view === 'summary' ? 'page' : undefined}>Zusammenfassung</a><a href={reportUrl('report')} aria-current={view === 'report' ? 'page' : undefined}>Bericht</a><a href={reportUrl('iterations')} aria-current={view === 'iterations' ? 'page' : undefined}>Recheck</a><a href={reportUrl('review')} aria-current={view === 'review' ? 'page' : undefined}>Review</a></nav>}
+    <div className="pr-meta"><div><span>ASSESSMENT</span><strong>{assessment.id}</strong></div><div><span>PRODUKT-REVISION</span><strong>{assessment.gitSha}</strong></div><div><span>PACKREVISION</span><strong>{assessment.packSha}</strong></div><div><span>UMGEBUNG / KONTEXT</span><strong>{assessment.environment} · {assessment.context}</strong></div></div>
+    {view === 'summary' && <div className="pr-columns"><div className="panel"><h2>Bewertungen im Snapshot</h2>{countCards}<p>Die Zahlen stammen aus diesem gespeicherten Assessment.</p><a href={reportUrl('report')}>Vollständigen Bericht öffnen →</a></div><div className="panel"><h2>GitHub-Feedback</h2><p>Ein veröffentlichter Kommentar oder Check-Status wird hier nicht aus dem Snapshot abgeleitet.</p><div className="team-info">GitHub-Kommentar, aktuelle Revision und Merge-Gate sind über diese Ansicht nicht nachgewiesen.</div></div></div>}
+    {view === 'iterations' && <div className="pr-columns"><div className="panel"><h2>Push und erneute Prüfung</h2><p>Dieser Bericht gehört unveränderlich zu Revision <strong className="break-value">{assessment.gitSha}</strong>.</p><div className="team-info">Ein manueller Recheck und eine vollständige PR-Historie sind hier nicht verfügbar. Neue Ergebnisse werden als eigene Snapshots gespeichert.</div></div><div className="panel"><h2>Gespeicherter Stand</h2>{countCards}<a href={reportUrl('report')}>Bericht öffnen →</a></div></div>}
+    {view === 'review' && <div className="pr-columns"><div className="panel"><h2>Review und Merge</h2><p>Der aktuelle GitHub-Check, die neueste PR-Revision und der Review-Status sind hier nicht verfügbar.</p><div className="team-info">Ein gespeichertes Bewertungsergebnis bestätigt weder den aktuellen Merge-Status noch den Zustand einer produktiven Umgebung.</div></div><div className="panel"><h2>Bewertung dieses Snapshots</h2>{countCards}<a href={reportUrl('report')}>Bericht öffnen →</a></div></div>}
+    {view === 'report' && <><div className="pr-columns"><div className="panel"><h2>Findings für diese Revision</h2>{findings.length === 0 ? <p>Für diesen Snapshot wurden keine Finding-Ereignisse gespeichert.</p> : <ul className="pr-findings">{findings.map((item) => <li key={item.id}><div><strong>{item.outcome}: {item.state}</strong><p>{item.reason}</p></div><a href={`/findings?${new URLSearchParams({ organization: assessment.organizationId, finding: item.id })}`}>Aktuelles Finding →</a></li>)}</ul>}<h2>Controls und Bewertungen</h2>{evaluations.map((item) => <article key={item.id} className="pr-evaluation"><h3>{item.control.id}: <span className={`assessment-status status-${item.status.toLowerCase()}`}>{item.status === 'NOT_APPLICABLE' ? 'N/A' : item.status}</span></h3><p>Grund: {item.reason}</p><p>Quellabdeckung: {item.coverage ? item.coverage.status : 'Nicht vorhanden'}{item.coverage && <> · Scan-Revision: {item.coverage.revision || 'Nicht verfügbar'}{item.coverage.revision !== assessment.gitSha && ' (abweichende Revision)'}</>} (historischer Scan)</p>{item.coverage?.errors?.map((entry, index) => <p key={index}>Abdeckungsfehler: {entry.path} {entry.reason}</p>)}<p>Subject: {item.subject.id}</p><p>Quellverweis: {item.subject.provenance?.sourceRef || 'Nicht verfügbar'}</p><p>Evidence: {item.evidenceIds.length ? item.evidenceIds.join(', ') : 'Keine'}</p><details><summary>Control</summary><pre>{JSON.stringify(item.control, null, 2)}</pre></details></article>)}</div><div className="panel"><h2>Herkunft und Umfang</h2>{countCards}<dl className="team-role-list evidence-details"><div><dt>Assessment</dt><dd>{assessment.id}</dd></div><div><dt>Produkt</dt><dd>{assessment.productId}</dd></div><div><dt>Pull Request</dt><dd>{assessment.pullRequestNumber == null ? 'Nicht verfügbar' : `#${assessment.pullRequestNumber}`}</dd></div><div><dt>Revision</dt><dd>{assessment.gitSha}</dd></div><div><dt>Governance-Pack</dt><dd>{assessment.packSha}</dd></div></dl><div className="team-info">Der Snapshot beschreibt nur den gespeicherten Kontext und ersetzt keinen aktuellen GitHub-Check.</div></div></div><div className="panel pr-evidence"><h2>Evidence und Fakten</h2>{evidence.length === 0 ? <p>Keine Evidence für diesen Snapshot.</p> : evidence.map((item) => <article key={item.id} className="pr-evaluation"><h3>{item.capability}</h3><p>Evidence: <a href={`/evidence?${new URLSearchParams({ organization: assessment.organizationId, evidence: item.id, view: 'detail' })}`}>{item.id}</a></p><p>Quelle: {item.provenance?.sourceRef || 'Nicht verfügbar'}</p><p>Beobachtet: {item.observedAt} · Gültig bis: {item.expiresAt}</p><pre>{JSON.stringify(item.value, null, 2)}</pre></article>)}</div></>}
+    <a className="team-back" href={`${assessment.context === 'pull_request' ? '/pr-checks' : '/overview'}?${new URLSearchParams({ organization: assessment.organizationId })}`}>← {assessment.context === 'pull_request' ? 'Zu PR-Assessments' : 'Zur Übersicht'}</a>
   </section>;
 }

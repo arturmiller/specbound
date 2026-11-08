@@ -83,6 +83,13 @@ Evidence sind getrennte Angaben. Schweregrad, Provider-Identität und Vertrauen
 werden nicht aus anderen Feldern erraten; nicht gespeicherte Werte bleiben UNKNOWN.
 Korrekturmaßnahmen und die Finding-Inbox folgen in ihren eigenen Tasks.
 
+Die PR-Ansicht listet ausschließlich sichtbare, gespeicherte PR-Assessments;
+sie ist keine vollständige GitHub-PR-Inbox. Der Bericht und seine Zähler beziehen
+sich immer auf den gewählten unveränderlichen Snapshot. GitHub-Kommentar,
+aktuelle PR-Revision, Review- und Merge-Status sowie ein manueller Recheck werden
+ohne nachweisbare Datenquelle nicht behauptet oder als Aktion angeboten. Links zu
+Findings führen zum jeweils aktuellen Finding und sind entsprechend beschriftet.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante
