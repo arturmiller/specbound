@@ -54,7 +54,16 @@ def oidc_config() -> OidcConfig | None:
     audience = os.environ.get("OIDC_AUDIENCE", "").strip()
     if not all((issuer, jwks_url, client_id, audience)):
         return None
-    if not _trusted_url(issuer) or not _trusted_url(jwks_url) or client_id == audience:
+    local_jwks = (
+        os.environ.get("SPECBOUND_LOCAL_DEV_OIDC") == "1"
+        and issuer == "http://127.0.0.1:15556"
+        and jwks_url == "http://local-oidc:5556/jwks"
+    )
+    if (
+        not _trusted_url(issuer)
+        or (not _trusted_url(jwks_url) and not local_jwks)
+        or client_id == audience
+    ):
         return None
     if urlsplit(issuer).scheme == "https" and urlsplit(jwks_url).scheme != "https":
         return None

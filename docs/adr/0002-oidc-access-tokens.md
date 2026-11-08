@@ -14,6 +14,9 @@ HTTPS; HTTP ist ausschließlich für Loopback-Testserver erlaubt. Die öffentlic
 Parameter heißen `OIDC_ISSUER`, `OIDC_JWKS_URL`, `OIDC_CLIENT_ID` und
 `OIDC_AUDIENCE`; JWKS und Issuer müssen zum selben vertrauenswürdigen Provider
 gehören. Die freizugebende Redirect-URI ist der Ursprung der Web-App mit `/`.
+Eine eng begrenzte, ausdrücklich aktivierte Ausnahme für den lokalen
+Entwicklungsanbieter und seine interne Docker-JWKS-Adresse beschreibt
+[ADR 0033](0033-local-development-oidc.md).
 Der Provider muss für diesen Client ausschließlich interaktive
 Benutzeranmeldungen ausstellen; ein Access-Token allein beweist nicht, dass
 der zugrunde liegende Account ein Mensch ist. Ein bereits registrierter

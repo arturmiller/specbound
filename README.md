@@ -62,6 +62,43 @@ den Resource-Parameter unterstützen. Ohne gültige Konfiguration bleiben
 geschützte APIs gesperrt. Die genauen Anforderungen und Grenzen stehen in
 [ADR 0002](docs/adr/0002-oidc-access-tokens.md).
 
+### Portal mit lokalem Entwicklungslogin
+
+Für einen vollständigen lokalen Einstieg ohne Cloud-Konto gibt es ein separates
+Compose-Projekt mit einem **ausschließlich für Entwicklung geeigneten** OIDC-
+Testanbieter. Es verwendet eigene Daten-Volumes und verändert die Volumes des
+normalen Compose-Projekts nicht.
+
+```sh
+docker compose -p specbound-local -f compose.yaml -f compose.local-auth.yaml up -d --build
+```
+
+1. <http://127.0.0.1:5173> öffnen und **Anmelden** wählen. Diese Adresse ist
+   als Redirect registriert; `localhost:5173` funktioniert dafür nicht.
+2. Beim lokalen Testanbieter Benutzer `local-developer` und Passwort
+   `local-only` eingeben und die Berechtigung mit **Continue** bestätigen.
+3. Unter Teams einen Organisationsnamen eingeben und **Organisation erstellen**
+   wählen. Anschließend stehen Teams, Produkte und Packs zur Verfügung.
+
+Der Testanbieter akzeptiert beliebige Zugangsdaten und nutzt öffentlich bekannte
+Entwicklungsschlüssel. Er ist keine echte Benutzerverwaltung und darf nur auf
+einem vertrauenswürdigen lokalen Rechner ohne echte Geheimnisse oder produktive
+Daten verwendet werden. Bei einem Neustart des Anbieters kann eine erneute
+Anmeldung erforderlich sein. Die Organisation wird nur vom Benutzer angelegt;
+ein Neustart verändert bestehende Daten nicht.
+
+Zum Beenden (die Volumes bleiben erhalten):
+
+```sh
+docker compose -p specbound-local -f compose.yaml -f compose.local-auth.yaml down
+```
+
+Für den regulären Anbieter wieder die `OIDC_*`-Variablen wie oben beschrieben
+setzen und `docker compose up --build` ohne das lokale Overlay starten. Ohne
+einen passenden Anbieter bleiben geschützte APIs weiterhin gesperrt. Die
+Netzwerkentscheidung und Grenzen stehen in
+[ADR 0033](docs/adr/0033-local-development-oidc.md).
+
 MinIO stellt die S3-kompatible API lokal unter <http://127.0.0.1:9000> und die
 Konsole unter <http://127.0.0.1:9001> bereit. Compose legt den Bucket
 `specbound` beim Start an. Die voreingestellten lokalen Zugangsdaten sind

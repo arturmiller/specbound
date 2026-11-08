@@ -1,0 +1,25 @@
+# Explicit development-only overlay. The provider has no real user security.
+services:
+  migrate:
+    image: specbound-api:${SPECBOUND_IMAGE_TAG:-local-auth}
+  worker:
+    image: specbound-worker:${SPECBOUND_IMAGE_TAG:-local-auth}
+  web:
+    image: specbound-web:${SPECBOUND_IMAGE_TAG:-local-auth}
+  local-oidc:
+    build:
+      context: .
+      dockerfile: tools/local-oidc/Dockerfile
+    ports:
+      - "127.0.0.1:15556:5556"
+  api:
+    image: specbound-api:${SPECBOUND_IMAGE_TAG:-local-auth}
+    environment:
+      OIDC_ISSUER: http://127.0.0.1:15556
+      OIDC_JWKS_URL: http://local-oidc:5556/jwks
+      OIDC_CLIENT_ID: specbound-web
+      OIDC_AUDIENCE: urn:specbound:api
+      SPECBOUND_LOCAL_DEV_OIDC: '1'
+    depends_on:
+      local-oidc:
+        condition: service_started

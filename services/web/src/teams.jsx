@@ -40,10 +40,12 @@ export function TeamWorkspace({ accessToken = '' }) {
   const [members, setMembers] = useState(/** @type {Member[]} */ ([]));
   const [organizationId, setOrganizationId] = useState(() => new URLSearchParams(location.search).get('organization') || '');
   const [teamId, setTeamId] = useState(() => new URLSearchParams(location.search).get('team') || '');
+  const [organizationName, setOrganizationName] = useState('');
   const [teamName, setTeamName] = useState('');
   const [principalId, setPrincipalId] = useState('');
   const [role, setRole] = useState('viewer');
   const [loading, setLoading] = useState(true);
+  const [organizationsReady, setOrganizationsReady] = useState(false);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,9 +53,11 @@ export function TeamWorkspace({ accessToken = '' }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    setOrganizationsReady(false);
     request('/organizations', { signal: controller.signal }, accessToken)
       .then((/** @type {Organization[]} */ data) => {
         setOrganizations(data);
+        setOrganizationsReady(true);
         setOrganizationId((current) => data.some((org) => org.id === current) ? current : (data[0]?.id || ''));
       })
       .catch((failure) => { if (!controller.signal.aborted) setError(errorMessage(failure)); })
@@ -95,6 +99,21 @@ export function TeamWorkspace({ accessToken = '' }) {
   }, [organizationId, teamId]);
 
   /** @param {React.FormEvent<HTMLFormElement>} event */
+  async function createOrganization(event) {
+    event.preventDefault();
+    if (!organizationName.trim()) return;
+    setBusy(true); setError('');
+    try {
+      /** @type {Organization} */
+      const organization = await request('/organizations', {
+        method: 'POST', body: JSON.stringify({ name: organizationName.trim() }),
+      }, accessToken);
+      setOrganizations([organization]); setOrganizationId(organization.id); setOrganizationName('');
+    } catch (failure) { setError(errorMessage(failure)); }
+    finally { setBusy(false); }
+  }
+
+  /** @param {React.FormEvent<HTMLFormElement>} event */
   async function createTeam(event) {
     event.preventDefault();
     if (!teamName.trim() || !organizationId) return;
@@ -133,7 +152,13 @@ export function TeamWorkspace({ accessToken = '' }) {
       </div>
       {error && <p role="alert" className="alert">{error}</p>}
       {loading && <p>Organisationen werden geladen …</p>}
-      {!loading && organizations.length === 0 && !error && <p>Keine Organisationen verfügbar.</p>}
+      {!loading && organizationsReady && organizations.length === 0 && <>
+        <p>Keine Organisationen verfügbar.</p>
+        <form onSubmit={createOrganization}>
+          <label className="field">Organisationsname<input required maxLength={200} value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} /></label>
+          <button type="submit" disabled={busy}>Organisation erstellen</button>
+        </form>
+      </>}
       {organizations.length > 0 && <>
         <label className="field">Organisation
           <select value={organizationId} disabled={busy} onChange={(event) => { setTeams([]); setMembers([]); setTeamId(''); setOrganizationId(event.target.value); setError(''); }}>
