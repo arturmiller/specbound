@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const org = '123e4567-e89b-12d3-a456-426614174000';
 
 test('connects a provider pack and shows the real manifest and contract references', async ({ page }) => {
-  await page.goto(`/providers?organization=${org}`);
+  await page.goto(`/providers?organization=${org}&view=catalog`);
   await expect(page.getByRole('heading', { name: 'Evidence Provider Packs' })).toBeVisible();
   await page.getByRole('link', { name: 'Git-Repository verbinden' }).click();
   await page.getByLabel('Repository', { exact: true }).fill('fixture/provider-valid');
@@ -24,7 +24,7 @@ test('connects a provider pack and shows the real manifest and contract referenc
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Provider-Manifest' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Packs', exact: true }).click();
-  await page.getByRole('link', { name: 'org.acme.aws-network' }).click();
+  await page.getByRole('row').filter({ hasText: 'fixture/provider-valid' }).getByRole('link', { name: 'org.acme.aws-network' }).click();
   await expect(page.getByRole('heading', { name: 'Provider-Manifest' })).toBeVisible();
 });
 
@@ -48,7 +48,7 @@ test('viewers can inspect the mobile catalogue without a write action', async ({
     if (path === '/api/organizations/org/packs') return route.fulfill({ json: [provider] });
     return route.fulfill({ json: [] });
   });
-  await page.goto('/providers?organization=org');
+  await page.goto('/providers?organization=org&view=catalog');
   await expect(page.getByRole('link', { name: 'fixture.provider' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Git-Repository verbinden' })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

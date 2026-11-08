@@ -8,7 +8,7 @@ export const navigation = [
   { id: 'packs', label: 'Packs', icon: '▧', href: '/packs' },
   { id: 'findings', label: 'Findings', icon: '⚑', href: '/findings', pending: true },
   { id: 'pr-checks', label: 'PR Checks', icon: '⑂', href: '/pr-checks', pending: true },
-  { id: 'evidence', label: 'Evidence', icon: '◈', href: '/evidence', pending: true },
+  { id: 'evidence', label: 'Evidence', icon: '◈', href: '/evidence' },
   { id: 'providers', label: 'Provider', icon: '⌁', href: '/providers' },
   { id: 'docs', label: 'Dokumentation', icon: '▤', href: '/docs' },
   { id: 'settings', label: 'Einstellungen', icon: '⚙', href: '/settings' },

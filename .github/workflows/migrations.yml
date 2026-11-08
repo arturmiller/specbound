@@ -96,6 +96,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_evidence_records.py' -v
+      - name: Verify paginated evidence registry access
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_evidence_registry.py' -v
       - name: Verify persisted control evaluation
         working-directory: services/api
         env:
