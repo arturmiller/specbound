@@ -215,3 +215,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .provider-screen .team-detail-metrics strong { overflow-wrap: anywhere; }
 .provider-code { overflow: auto; max-width: 100%; padding: 18px; box-sizing: border-box; border-radius: 9px; color: #d8e7ff; background: #14243e; font: 11px/1.6 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .provider-screen .team-table { min-width: 620px; }
+.evidence-screen { font-size: 12px; }
+.evidence-screen .team-table { min-width: 780px; }
+.evidence-details dd { overflow-wrap: anywhere; min-width: 0; }
+.evidence-pages { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; }
+.evidence-pages .team-back { margin-top: 0; }

@@ -59,6 +59,14 @@ Die Vertragsansicht zeigt deshalb Dateipfade und kennzeichnet die Inhalte als
 nicht verfügbar. Ein erfolgreicher Import belegt die strukturelle Validierung,
 aber weder ausgeführte Tests noch eine Berechtigung zum Collector-Start.
 
+Das Evidence-Register liest nur Datensätze sichtbarer Produktteams und zeigt
+Collector-Revision, Image, Produktrevision, Scope und Ablaufzeit unverändert.
+Eine gespeicherte Collector-Revision wird nicht als eindeutige Provider-ID
+ausgegeben. Zeitliche Gültigkeit ist kein Vertrauensurteil; abgelaufene oder
+nicht bestimmbar datierte Evidence bleibt UNKNOWN. Die seitengesteuerte Liste
+ist nach Beobachtungszeit und ID stabil sortiert; bei gleichzeitig neu
+eintreffenden Datensätzen kann sich ein Offset zwischen Aufrufen verschieben.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante
