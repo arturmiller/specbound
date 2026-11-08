@@ -5,9 +5,12 @@ from typing import Annotated, Callable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, StringConstraints
-from sqlalchemy import JSON, bindparam, select, text
+from sqlalchemy import JSON, bindparam, delete, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Connection
 
+from app.agents import human_owner
+from app.audit import record_agent_event
 from app.authorization import organization_access
 from app.database import get_connection
 from app.git_source import GitSource, GitSourceError
@@ -17,7 +20,7 @@ from app.identity import get_current_principal
 from app.manifest_io import ManifestError
 from app.pack_revisions import TagMoved, pin_release
 from app.provider_pack import load_provider_pack
-from app.tables import pack_catalog, pack_revisions
+from app.tables import pack_approvals, pack_catalog, pack_revisions
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
 NonBlank = Annotated[
@@ -64,6 +67,110 @@ def _query(organization_id):
             )
         )
         .where(pack_revisions.c.organization_id == organization_id)
+    )
+
+
+@router.get("/organizations/{organization_id}/packs/{revision_id}/approval")
+def get_approval(
+    organization_id: str,
+    revision_id: str,
+    principal: Annotated[str, Depends(get_current_principal)],
+    db: Annotated[Connection, Depends(get_connection)],
+):
+    organization_access(db, organization_id, principal, write=False)
+    pack = (
+        db.execute(_query(organization_id).where(pack_revisions.c.id == revision_id))
+        .mappings()
+        .one_or_none()
+    )
+    if pack is None:
+        raise HTTPException(status_code=404, detail="Pack not found")
+    approval = (
+        db.execute(
+            select(pack_approvals).where(
+                pack_approvals.c.revision_id == revision_id,
+                pack_approvals.c.organization_id == organization_id,
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    return {
+        "revisionId": revision_id,
+        "approved": approval is not None,
+        "approvedBy": approval["approved_by"] if approval else None,
+        "approvedAt": approval["approved_at"] if approval else None,
+    }
+
+
+@router.put("/organizations/{organization_id}/packs/{revision_id}/approval")
+def approve_pack(
+    organization_id: str,
+    revision_id: str,
+    principal: Annotated[str, Depends(get_current_principal)],
+    db: Annotated[Connection, Depends(get_connection)],
+):
+    human_owner(db, organization_id, principal)
+    pack = (
+        db.execute(_query(organization_id).where(pack_revisions.c.id == revision_id))
+        .mappings()
+        .one_or_none()
+    )
+    if pack is None:
+        raise HTTPException(status_code=404, detail="Pack not found")
+    if pack["kind"] != "governance":
+        raise HTTPException(
+            status_code=422, detail="Only governance packs can be approved here"
+        )
+    inserted = db.execute(
+        pg_insert(pack_approvals)
+        .values(
+            revision_id=revision_id,
+            organization_id=organization_id,
+            repository=pack["repository"],
+            approved_by=principal,
+        )
+        .on_conflict_do_nothing(index_elements=[pack_approvals.c.revision_id])
+        .returning(pack_approvals.c.revision_id)
+    ).scalar_one_or_none()
+    if inserted:
+        record_agent_event(
+            db,
+            organization_id=organization_id,
+            actor_id=principal,
+            action="governance.approved",
+            target_id=revision_id,
+            details={"commit": pack["commit_sha"]},
+        )
+    return get_approval(organization_id, revision_id, principal, db)
+
+
+@router.delete(
+    "/organizations/{organization_id}/packs/{revision_id}/approval", status_code=204
+)
+def revoke_approval(
+    organization_id: str,
+    revision_id: str,
+    principal: Annotated[str, Depends(get_current_principal)],
+    db: Annotated[Connection, Depends(get_connection)],
+):
+    human_owner(db, organization_id, principal)
+    removed = db.execute(
+        delete(pack_approvals)
+        .where(
+            pack_approvals.c.revision_id == revision_id,
+            pack_approvals.c.organization_id == organization_id,
+        )
+        .returning(pack_approvals.c.revision_id)
+    ).scalar_one_or_none()
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    record_agent_event(
+        db,
+        organization_id=organization_id,
+        actor_id=principal,
+        action="governance.approval.revoked",
+        target_id=revision_id,
     )
 
 

@@ -1,9 +1,12 @@
 """Organization-scoped agent records and audited lifecycle."""
 
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, StringConstraints
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import Connection
@@ -12,7 +15,15 @@ from app.audit import record_agent_event
 from app.authorization import organization_access
 from app.database import get_connection
 from app.identity import get_current_principal
-from app.tables import agents, audit_events, members, organizations, principals, teams
+from app.tables import (
+    agent_credentials,
+    agents,
+    audit_events,
+    members,
+    organizations,
+    principals,
+    teams,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
 Db = Annotated[Connection, Depends(get_connection)]
@@ -51,6 +62,87 @@ def _response(row):
         "organizationId": row["organization_id"],
         "name": row["name"],
     }
+
+
+def human_owner(db: Connection, organization_id: str, principal: str):
+    organization_access(db, organization_id, principal, write=True)
+    kind = db.execute(
+        select(principals.c.kind).where(principals.c.id == principal)
+    ).scalar_one_or_none()
+    if kind != "user":
+        raise HTTPException(
+            status_code=403, detail="A human organization owner is required"
+        )
+
+
+@router.post(
+    "/organizations/{organization_id}/agents/{agent_id}/credentials", status_code=201
+)
+def create_credential(
+    organization_id: str,
+    agent_id: str,
+    principal: Principal,
+    db: Db,
+    response: Response,
+):
+    human_owner(db, organization_id, principal)
+    lock_agent(db, organization_id, agent_id)
+    credential_id = str(uuid4())
+    token = "sba_" + secrets.token_urlsafe(32)
+    expires = datetime.now(timezone.utc) + timedelta(hours=1)
+    db.execute(
+        insert(agent_credentials).values(
+            id=credential_id,
+            agent_id=agent_id,
+            token_hash=hashlib.sha256(token.encode("ascii")).hexdigest(),
+            expires_at=expires,
+        )
+    )
+    record_agent_event(
+        db,
+        organization_id=organization_id,
+        actor_id=principal,
+        action="agent.credential.created",
+        target_id=agent_id,
+        details={"credentialId": credential_id},
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"id": credential_id, "token": token, "expiresAt": expires}
+
+
+@router.delete(
+    "/organizations/{organization_id}/agents/{agent_id}/credentials/{credential_id}",
+    status_code=204,
+)
+def revoke_credential(
+    organization_id: str,
+    agent_id: str,
+    credential_id: str,
+    principal: Principal,
+    db: Db,
+):
+    human_owner(db, organization_id, principal)
+    lock_agent(db, organization_id, agent_id)
+    updated = db.execute(
+        update(agent_credentials)
+        .where(
+            agent_credentials.c.id == credential_id,
+            agent_credentials.c.agent_id == agent_id,
+            agent_credentials.c.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
+        .returning(agent_credentials.c.id)
+    ).scalar_one_or_none()
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    record_agent_event(
+        db,
+        organization_id=organization_id,
+        actor_id=principal,
+        action="agent.credential.revoked",
+        target_id=agent_id,
+        details={"credentialId": credential_id},
+    )
 
 
 @router.post(

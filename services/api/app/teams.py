@@ -91,6 +91,10 @@ def _member(item):
 
 @router.post("/organizations", status_code=status.HTTP_201_CREATED)
 def create_organization(data: NameInput, principal: Principal, db: Db):
+    if principal.startswith("agent:"):
+        raise HTTPException(
+            status_code=403, detail="Agents cannot create organizations"
+        )
     item = (
         db.execute(
             insert(organizations)

@@ -51,6 +51,8 @@ Die Suche über zugängliche Produkte, Packs und Findings ist in
 [ADR 0030](docs/adr/0030-overview-search.md) beschrieben.
 Ergebniszustände und die angezeigte Quellabdeckung erläutert
 [ADR 0031](docs/adr/0031-unknown-and-coverage.md).
+Agentenrechte und Governance-Pack-Freigaben beschreibt
+[ADR 0032](docs/adr/0032-agent-credentials-and-approvals.md).
 
 Für den Login muss ein öffentlicher OIDC-Client mit Code-Flow und PKCE sowie
 ein eigener API-Resource-Identifier eingerichtet sein. Vor `docker compose up`

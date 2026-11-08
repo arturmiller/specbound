@@ -156,7 +156,7 @@ export function TeamWorkspace({ accessToken = '' }) {
             <h3>Mitglieder</h3>
             {!teamId ? <p>Wähle ein Team aus.</p> : <>
               {membersLoading ? <p>Mitglieder werden geladen …</p> : members.length === 0 && <p>Noch keine Mitglieder vorhanden.</p>}
-              <ul className="members">{members.map((member) => <li key={member.id}><span>{member.principalId}</span><span className="role">{member.role}</span></li>)}</ul>
+              <ul className="members">{members.map((member) => <li key={member.id}><span>{member.principalId}</span><span className="role">{member.principalId.startsWith('agent:') ? 'Agent: Lesen; keine Pack-Freigabe' : member.role}</span></li>)}</ul>
               <form onSubmit={addMember}>
                 <label className="field">Principal-ID<input value={principalId} onChange={(event) => setPrincipalId(event.target.value)} required maxLength={200} /></label>
                 <label className="field">Rolle<select value={role} onChange={(event) => setRole(event.target.value)}>

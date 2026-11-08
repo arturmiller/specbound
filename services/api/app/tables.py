@@ -47,6 +47,11 @@ agents = Table(
     Column("organization_id", String),
     Column("name", String),
 )
+agent_credentials = Table(
+    "agent_credentials", metadata,
+    Column("id", String), Column("agent_id", String), Column("token_hash", String),
+    Column("expires_at", DateTime(timezone=True)), Column("revoked_at", DateTime(timezone=True)),
+)
 audit_events = Table(
     "audit_events",
     metadata,
@@ -110,6 +115,11 @@ pack_catalog = Table(
     "pack_catalog", metadata,
     Column("revision_id", String), Column("kind", String), Column("manifest", JSON),
     Column("controls", JSON), Column("capabilities", JSON),
+)
+pack_approvals = Table(
+    "pack_approvals", metadata,
+    Column("revision_id", String), Column("organization_id", String), Column("repository", String),
+    Column("approved_by", String), Column("approved_at", DateTime(timezone=True)),
 )
 evidence_records = Table(
     "evidence_records", metadata,
