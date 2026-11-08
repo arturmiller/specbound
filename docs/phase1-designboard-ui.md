@@ -90,6 +90,12 @@ aktuelle PR-Revision, Review- und Merge-Status sowie ein manueller Recheck werde
 ohne nachweisbare Datenquelle nicht behauptet oder als Aktion angeboten. Links zu
 Findings führen zum jeweils aktuellen Finding und sind entsprechend beschriftet.
 
+Agenten sind lokale nichtmenschliche Principals. Organisationsinhaber können
+sie registrieren und Teams als Viewer zuordnen; eine externe Git-Identität wird
+dabei nicht gespeichert und keine Ausführung gestartet. Fehlende Teamzugriffe
+werden als unbekannte Mitgliedschaften dargestellt. Weitere Berechtigungen und
+der Auditverlauf gehören zum nachfolgenden Task.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante

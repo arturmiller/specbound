@@ -10,6 +10,7 @@ async function mockPortal(page, initialOrganizations = []) {
     let data;
     if (path === '/api/healthz') data = { status: 'ok' };
     else if (path === '/api/auth/config') data = { enabled: false };
+    else if (path === '/api/auth/me') data = { id: 'user:owner', kind: 'user' };
     else if (path === '/api/organizations' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON();
       data = { ...first, name: body.name };
@@ -38,16 +39,16 @@ test('creates an organization and navigates with stable URLs and browser history
   await page.reload();
   await expect(page.getByRole('combobox', { name: 'Organisation' })).toHaveValue(first.id);
   await page.goto('/agents?organization=org-one');
-  await expect(page.getByRole('heading', { name: 'Dieser Bereich ist noch nicht verfügbar' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Agentenidentitäten' })).toBeVisible();
 });
 
 test('organization switch clears selections from the previous organization', async ({ page }) => {
   await mockPortal(page, [first, second]);
-  await page.goto('/teams?organization=org-one&team=team-old&product=product-old&pack=pack-old');
+  await page.goto('/teams?organization=org-one&team=team-old&product=product-old&pack=pack-old&agent=agent-old');
   await expect(page.getByRole('combobox', { name: 'Organisation' })).toHaveValue(first.id);
   await page.getByRole('combobox', { name: 'Organisation' }).selectOption(second.id);
   await expect(page).toHaveURL(/organization=org-two/);
-  await expect(page).not.toHaveURL(/team=|product=|pack=/);
+  await expect(page).not.toHaveURL(/team=|product=|pack=|agent=/);
   await page.reload();
   await expect(page.getByRole('combobox', { name: 'Organisation' })).toHaveValue(second.id);
 });

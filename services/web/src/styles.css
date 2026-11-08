@@ -273,3 +273,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .pr-evaluation { padding: 10px 0; border-top: 1px solid #e8eef6; overflow-wrap: anywhere; }.pr-evaluation pre { overflow: auto; }.pr-evidence { margin-top: 14px; }
 @media (max-width: 850px) { .pr-columns { grid-template-columns: minmax(0, 1fr); }.pr-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 650px) { .pr-meta { grid-template-columns: minmax(0, 1fr); }.pr-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }.pr-findings li { flex-wrap: wrap; } }
+
+.agent-screen { font-size: 12px; }
+.agent-screen .team-table { min-width: 650px; }
+.agent-steps { display: flex; gap: 24px; flex-wrap: wrap; padding: 16px; margin: 18px 0; border: 1px solid #dce6f2; border-radius: 9px; background: white; color: #70859c; }.agent-steps strong { color: #1b67ed; }
+.agent-team-list { list-style: none; padding: 0; }.agent-team-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid #e8eef6; }

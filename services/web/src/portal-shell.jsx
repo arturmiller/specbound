@@ -4,7 +4,7 @@ export const navigation = [
   { id: 'overview', label: 'Übersicht', icon: '◫', href: '/overview' },
   { id: 'products', label: 'Produkte', icon: '▦', href: '/products' },
   { id: 'teams', label: 'Teams', icon: '♧', href: '/teams' },
-  { id: 'agents', label: 'Agenten', icon: '✦', href: '/agents', pending: true },
+  { id: 'agents', label: 'Agenten', icon: '✦', href: '/agents' },
   { id: 'packs', label: 'Packs', icon: '▧', href: '/packs' },
   { id: 'findings', label: 'Findings', icon: '⚑', href: '/findings', pending: true },
   { id: 'pr-checks', label: 'PR Checks', icon: '⑂', href: '/pr-checks' },

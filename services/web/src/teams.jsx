@@ -10,6 +10,7 @@ import { ProviderPacks } from './provider-packs.jsx';
 import { EvidenceRegistry } from './evidence-registry.jsx';
 import { FindingDetail } from './finding-detail.jsx';
 import { PullRequestAssessments } from './pull-request-assessments.jsx';
+import { AgentWorkspace } from './agent-workspace.jsx';
 
 /** @typedef {{id: string, name: string, ownerPrincipalId?: string}} Organization */
 /** @typedef {{id: string, name: string}} Team */
@@ -112,7 +113,7 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
   /** @param {string} id */
   function changeOrganization(id) {
     const url = new URL(window.location.href);
-    for (const key of ['team', 'product', 'pack', 'view', 'capability', 'evidence', 'offset', 'finding', 'assessment']) url.searchParams.delete(key);
+    for (const key of ['team', 'product', 'pack', 'view', 'capability', 'evidence', 'offset', 'finding', 'assessment', 'agent']) url.searchParams.delete(key);
     url.searchParams.set('organization', id);
     history.replaceState(null, '', url);
     setTeams([]); setOrganizationId(id); setError('');
@@ -166,6 +167,7 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
     {section === 'evidence' && organizationsReady && organizationId && <EvidenceRegistry key={`evidence-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
     {section === 'findings' && findingId && organizationsReady && organizationId && <FindingDetail key={`${organizationId}-${findingId}`} organizationId={organizationId} findingId={findingId} accessToken={accessToken} />}
     {section === 'pr-checks' && organizationsReady && organizationId && <PullRequestAssessments key={organizationId} organizationId={organizationId} accessToken={accessToken} />}
+    {section === 'agents' && organizationsReady && organizationId && <AgentWorkspace key={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} request={request} errorMessage={errorMessage} onBusyChange={setBusy} />}
     {section === 'overview' && organizationsReady && organizationId && <Overview key={`overview-${organizationId}`} organizationId={organizationId} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} />}
     {pending && organizationsReady && organizationId && <section className="unavailable"><p className="eyebrow">IN VORBEREITUNG</p><h1>{pending.label}</h1>
       <div className="panel"><h2>Dieser Bereich ist noch nicht verfügbar</h2><p>Die Oberfläche für diesen Bereich wird in Phase 1 ergänzt.</p></div></section>}
