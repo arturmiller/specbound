@@ -154,3 +154,20 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 850px) { .team-detail-columns, .team-detail-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 650px) { .team-metrics, .team-columns { grid-template-columns: minmax(0, 1fr); } .team-metrics .panel { min-height: 0; } .team-steps { flex-wrap: wrap; gap: 12px; } .team-member-list li { flex-wrap: wrap; } }
+
+.products-screen { font-size: 12px; }
+.product-filters { display: flex; align-items: end; gap: 12px; margin-bottom: 16px; }
+.product-filters label { display: grid; gap: 5px; color: #72849b; font-size: 11px; }
+.product-filters label:last-child { margin-left: auto; width: min(260px, 100%); }
+.product-filters input, .product-filters select { font-size: 12px; }
+.product-empty { padding: 0 16px 16px; }
+.product-summary { margin-top: 16px; }
+.product-summary .panel { min-height: 120px; }
+.product-explainer { padding-left: 23px; }
+.product-explainer li { padding: 5px 0 8px 7px; color: #234f98; }
+.product-explainer p { color: #8294a9; }
+.product-bindings { list-style: none; padding: 0; margin: 0; }
+.product-bindings li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #e8eef6; }
+.product-bindings button { flex: 0 0 auto; padding: 7px 9px; font-size: 11px; }
+.product-source-heading { margin-top: 25px !important; }
+@media (max-width: 650px) { .product-filters { align-items: stretch; flex-direction: column; } .product-filters label:last-child { width: 100%; margin-left: 0; } }
