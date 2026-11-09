@@ -1,0 +1,63 @@
+import { expect, test } from '@playwright/test';
+
+const org = '123e4567-e89b-12d3-a456-426614174000';
+
+test('navigates planned views using a real pinned governance revision without writes', async ({ page, request }) => {
+  const created = await request.post(`http://127.0.0.1:18762/organizations/${org}/packs`, { data: { repository: 'fixture/governance145', tag: 'v1.2.0', kind: 'governance' } });
+  expect(created.status()).toBe(201);
+  const pack = await created.json();
+  const writes = [];
+  page.on('request', (entry) => { if (entry.url().includes('/api/') && !['GET', 'HEAD'].includes(entry.method())) writes.push(entry.method()); });
+  await page.goto(`/packs?organization=${org}`);
+  await page.getByRole('link', { name: 'Governance-Releases' }).click();
+  await expect(page.getByRole('heading', { name: 'Governance-Releases', exact: true })).toBeVisible();
+  await page.locator('.governance-releases li').filter({ hasText: pack.repository }).getByRole('link', { name: `${pack.manifest.metadata.id} · ${pack.tag}` }).click();
+  await expect(page.locator('dl').getByText(pack.repository, { exact: true })).toBeVisible();
+  await expect(page.getByText('Aktive Revision', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Auswirkungsansicht öffnen' }).click();
+  await expect(page.getByRole('heading', { name: 'Auswirkungsanalyse' })).toBeVisible();
+  await expect(page.getByText('Ohne Simulation liegen keine vorhergesagten Produktergebnisse vor.')).toBeVisible();
+  await expect(page.getByText(pack.commit, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /simulation|aktivier/i })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Aktivierungsansicht' }).click();
+  await expect(page.getByRole('heading', { name: 'Pack-Aktivierung' })).toBeVisible();
+  await expect(page.locator('dl div').filter({ has: page.getByText('Gespeicherte Controls', { exact: true }) }).locator('dd')).toHaveText(String(pack.controls.length));
+  await expect(page.getByText('Umgebung und Durchsetzung sind nicht festgelegt.')).toBeVisible();
+  await page.getByRole('link', { name: 'Baseline-Auswirkung', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Auswirkung auf Baselines' })).toBeVisible();
+  await expect(page.getByText(/Keine Simulation vorhanden/)).toBeVisible();
+  await expect(page.getByRole('link', { name: '#67' })).toHaveAttribute('href', 'https://github.com/arturmiller/specbound/issues/67');
+  await expect(page.getByRole('link', { name: '#68' })).toHaveAttribute('href', 'https://github.com/arturmiller/specbound/issues/68');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Auswirkung auf Baselines' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Pack-Aktivierung' })).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
+test('loading, forbidden and empty governance states stay distinct on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/auth/config', (route) => route.fulfill({ json: { enabled: false } }));
+  await page.route('**/api/auth/me', (route) => route.fulfill({ json: { id: 'user:owner', kind: 'user' } }));
+  await page.route('**/api/organizations', (route) => route.fulfill({ json: [{ id: 'org', name: 'Org', ownerPrincipalId: 'user:owner' }] }));
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  await page.route('**/api/organizations/org/packs', async (route) => { await pending; await route.fulfill({ status: 403, body: '{}' }); });
+  await page.goto('/packs?organization=org&view=releases');
+  await expect(page.getByText('Packs werden geladen …')).toBeVisible();
+  release();
+  await expect(page.getByRole('alert')).toContainText('fehlen die erforderlichen Rechte');
+  await expect(page.getByText('Keine Governance-Releases gespeichert.')).toHaveCount(0);
+  await page.unroute('**/api/organizations/org/packs');
+  await page.route('**/api/organizations/org/packs', (route) => route.fulfill({ json: [] }));
+  await page.reload();
+  await expect(page.getByText('Keine Governance-Releases gespeichert.')).toBeVisible();
+  await page.getByRole('link', { name: 'Auswirkung', exact: true }).click();
+  await expect(page.getByText('Keine Governance-Revision ausgewählt.')).toBeVisible();
+  await expect(page.getByText('UNKNOWN', { exact: true }).first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Specbound' })).toBeFocused();
+  await page.goto('/packs?organization=org&pack=missing&view=activation');
+  await expect(page.getByRole('alert')).toContainText('nicht verfügbar oder nicht sichtbar');
+});
