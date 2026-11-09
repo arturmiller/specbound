@@ -27,7 +27,7 @@ test('documentation categories show runnable examples and limitations', async ({
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await docs.getByRole('link', { name: 'Getting Started', exact: true }).click();
-  const code = article.getByLabel('Codebeispiel, horizontal scrollbar').first();
+  const code = article.getByLabel('Codebeispiel, horizontal scrollbar').filter({ hasText: 'docker compose -p specbound-local' });
   expect(await code.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
   await code.focus();
   await page.keyboard.press('ArrowRight');
