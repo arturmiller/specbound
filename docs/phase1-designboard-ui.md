@@ -115,6 +115,11 @@ Kategorien werden als fehlend angezeigt. Die Anleitungen unterscheiden den
 Entwicklungslogin von einer geschützten OIDC-Konfiguration und beschreiben die
 optionalen GitHub-Publisher mit ihren tatsächlichen Voraussetzungen.
 
+Die Governance-Ansichten zeigen gespeicherte Release-Tags und gepinnte Commits.
+Eine aktive Revision, Release-Differenz oder Auswirkung auf Produkte wird daraus
+nicht abgeleitet. Simulation, Baseline-Auswirkungen und Aktivierung bleiben bis
+zu #67 und #68 ausdrücklich nicht verfügbar; ihre Ansichten ändern keine Daten.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante
