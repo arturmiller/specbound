@@ -88,6 +88,8 @@ def overview(
                 "environment": row["environment"],
                 "status": row["status"],
                 "snapshotId": row["last_snapshot_id"],
+                "context": row["context"],
+                "pullRequestNumber": row["pull_request_number"],
             }
             for row in finding_rows
         ],
