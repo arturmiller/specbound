@@ -8,6 +8,8 @@ from sqlalchemy.engine import Connection
 
 from app.database import get_connection
 from app.evidence_records import _serialize as serialize_evidence
+from app.findings import _serialize as serialize_finding
+from app.findings import get_history
 from app.identity import get_current_principal
 from app.products import _product
 from app.snapshots import _serialize as serialize_snapshot
@@ -21,6 +23,65 @@ from app.tables import (
 )
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
+
+
+@router.get("/organizations/{organization_id}/findings/{finding_id}/history")
+def finding_history_report(
+    organization_id: str,
+    finding_id: str,
+    principal: Annotated[str, Depends(get_current_principal)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
+):
+    finding = (
+        db.execute(
+            select(findings).where(
+                findings.c.id == finding_id,
+                findings.c.organization_id == organization_id,
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if finding is None:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    _, team = _product(db, finding["product_id"], principal, "read")
+    if team["organization_id"] != organization_id:
+        raise HTTPException(status_code=403, detail="Insufficient permission")
+    history = get_history(db, organization_id, finding_id)
+    snapshot_ids = [item["snapshotId"] for item in history]
+    snapshots = (
+        db.execute(
+            select(assessment_snapshots).where(
+                assessment_snapshots.c.id.in_(snapshot_ids),
+                assessment_snapshots.c.organization_id == organization_id,
+                assessment_snapshots.c.product_id == finding["product_id"],
+                assessment_snapshots.c.binding_id == finding["binding_id"],
+                assessment_snapshots.c.context == finding["context"],
+                assessment_snapshots.c.pull_request_number
+                == finding["pull_request_number"],
+                assessment_snapshots.c.environment == finding["environment"],
+            )
+        )
+        .mappings()
+        .all()
+    )
+    by_id = {snapshot["id"]: snapshot for snapshot in snapshots}
+    if (
+        len(by_id) != len(snapshot_ids)
+        or (history and history[-1]["snapshotId"] != finding["last_snapshot_id"])
+    ):
+        raise HTTPException(status_code=409, detail="Finding provenance is incomplete")
+    return {
+        "finding": serialize_finding(finding),
+        "history": [
+            {
+                **event,
+                "gitSha": by_id[event["snapshotId"]]["git_sha"],
+                "packSha": by_id[event["snapshotId"]]["pack_sha"],
+            }
+            for event in history
+        ],
+    }
 
 
 @router.get("/assessments/{snapshot_id}")

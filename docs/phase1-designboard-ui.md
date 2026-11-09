@@ -81,7 +81,14 @@ Evidence-Datensätzen. Organisation, Produkt, Control und Subject müssen
 historische Bewertungsergebnis und die aktuelle zeitliche Gültigkeit einer
 Evidence sind getrennte Angaben. Schweregrad, Provider-Identität und Vertrauen
 werden nicht aus anderen Feldern erraten; nicht gespeicherte Werte bleiben UNKNOWN.
-Korrekturmaßnahmen und die Finding-Inbox folgen in ihren eigenen Tasks.
+Die Finding-Inbox folgt in einem eigenen Task; die Oberfläche beauftragt keine
+Korrekturmaßnahmen.
+
+Der Lösungsweg zeigt ausschließlich gespeicherte Ereignisse desselben Findings
+mit den zugehörigen Produkt- und Packrevisionen. Historische Berichtslinks öffnen
+den jeweiligen Snapshot; ein PR-Kontext belegt weder Merge noch Reparatur oder
+einen manuellen Recheck. Änderungen des Findings während des Ladens führen zu
+einem Hinweis statt einer vermischten Ansicht. Specbound weist keine Arbeit zu.
 
 Die PR-Ansicht listet ausschließlich sichtbare, gespeicherte PR-Assessments;
 sie ist keine vollständige GitHub-PR-Inbox. Der Bericht und seine Zähler beziehen

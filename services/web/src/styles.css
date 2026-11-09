@@ -266,6 +266,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .finding-evidence { list-style: none; padding: 0; }.finding-evidence li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid #e8eef6; overflow-wrap: anywhere; }
 @media (max-width: 850px) { .finding-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }.finding-columns { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 650px) { .finding-metrics, .finding-trace { grid-template-columns: minmax(0, 1fr); } }
+.journey-events { padding-left: 20px; }.journey-events li { padding: 10px 0; border-bottom: 1px solid #e8eef6; overflow-wrap: anywhere; }.journey-events p { margin: 5px 0; }.journey-event-meta span, .journey-event-meta a { display: block; margin-top: 5px; }.journey-event-meta span { color: #6b819b; }
+.journey-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; text-align: center; }.journey-steps strong, .journey-steps span { display: block; }.journey-steps span { color: #6b819b; margin-top: 8px; }.journey-history { margin-top: 14px; }.journey-note { margin-top: 14px; }
+@media (max-width: 650px) { .journey-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .pr-screen { font-size: 12px; }
 .pr-columns { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 14px; }
