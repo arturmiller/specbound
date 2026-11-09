@@ -90,16 +90,22 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .members li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid #e7edf5; }
 .role { color: #53677f; }
 .alert { border: 1px solid #e5a6a6; background: #fff4f4; color: #8a2525; padding: 12px; border-radius: 6px; }
-.documentation { margin-top: 40px; }
-.docs-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
-.docs-nav a { color: #174da9; padding: 8px 10px; border-radius: 6px; }
-.docs-nav a[aria-current="page"] { background: #dceaff; font-weight: 700; }
+.documentation { font-size: 12px; }
+.docs-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; border-bottom: 1px solid #dce6f2; }
+.docs-nav a { color: #627d9e; padding: 10px 12px; text-decoration: none; border-bottom: 2px solid transparent; }
+.docs-nav a[aria-current="page"] { color: #1765ed; border-color: #1765ed; font-weight: 700; }
 .docs-nav a:focus-visible { outline: 3px solid #8bb6ff; outline-offset: 2px; }
 .docs-content { line-height: 1.55; }
 .docs-content h3 { margin-bottom: 8px; }
 .docs-content h4 { margin: 22px 0 8px; }
 .docs-content pre { overflow-x: auto; padding: 14px; border-radius: 6px; color: #e9f2ff; background: #17304f; }
+.docs-content pre:focus-visible { outline: 3px solid #8bb6ff; outline-offset: 2px; }
 .docs-content li { margin: 8px 0; }
+.docs-columns { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 14px; }
+.docs-columns > * { min-width: 0; }.docs-hero { background: #eff6ff; border-color: #cfe1fb; }.docs-hero > span { display: inline-flex; padding: 11px; color: #1765ed; background: #dceaff; border-radius: 8px; font-size: 20px; }.docs-hero p { max-width: 520px; line-height: 1.6; }.docs-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }.docs-actions .team-back { margin: 0; }
+.docs-popular ul { list-style: none; padding: 0; margin: 0; }.docs-popular li { border-bottom: 1px solid #e8eef6; }.docs-popular a { display: block; padding: 12px 0; font-weight: 600; }
+.docs-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 14px 0; }.docs-steps strong { color: #99bff4; font-size: 22px; }.docs-steps p { line-height: 1.6; }
+@media (max-width: 700px) { .docs-columns, .docs-steps { grid-template-columns: minmax(0, 1fr); } }
 .assessment-report dd, .assessment-report p, .assessment-report pre { overflow-wrap: anywhere; }
 .assessment-report pre { white-space: pre-wrap; }
 .assessment-report .panel { margin: 12px 0; }

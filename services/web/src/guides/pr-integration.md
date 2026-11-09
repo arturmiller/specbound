@@ -15,4 +15,4 @@ Die Ausgabe enthält example/repo, PR 17 und einen vollständigen Beispiel-Commi
 ## Einschränkungen
 
 - Das Beispiel sendet kein Webhook-Ereignis und erzeugt keinen Job. Live-Zustellungen benötigen eine konfigurierte, für GitHub erreichbare URL.
-- Der Standard-Worker hat noch keinen produktiven Job-Handler. GitHub-Kommentare und Check-Runs sind noch nicht implementiert; die vorhandene App besitzt dafür keine Schreibrechte.
+- Der Standard-Worker hat noch keinen freigegebenen Assessment-Job-Handler. Die optionalen Publisher für Kommentare und Check-Runs benötigen abgeschlossene Jobs, eine passende Konfiguration und die entsprechenden GitHub-App-Rechte; sie sind standardmäßig deaktiviert.
