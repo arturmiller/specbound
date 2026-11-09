@@ -102,6 +102,12 @@ Die Zugangsliste liefert nur ID, Ablauf und Widerruf, keine Geheimnisse oder
 Hashes. Der Auditverlauf zeigt gespeicherte Specbound-Ereignisse; externe Git-
 Aktivität und Repository-Rechte werden nicht daraus abgeleitet.
 
+Die Portal-Dokumentation verwendet die versionierten Guides und deren lokale
+Beispiele. Kategorien bleiben über ihre URL-Fragmente erreichbar; unbekannte
+Kategorien werden als fehlend angezeigt. Die Anleitungen unterscheiden den
+Entwicklungslogin von einer geschützten OIDC-Konfiguration und beschreiben die
+optionalen GitHub-Publisher mit ihren tatsächlichen Voraussetzungen.
+
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante
