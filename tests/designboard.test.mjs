@@ -30,7 +30,7 @@ test('original screens and architecture remain unchanged while roadmap evolves',
   assert.equal(stories.length, 9);
 });
 
-test('phase 1 covers every reference screen and later tasks are correctly phased', () => {
+test('phase 1 covers every reference screen and former later tasks use phase 3', () => {
   const uiEpic = epics.find(e => e.id === 'E11');
   assert.equal(uiEpic.phase, 'Phase 1');
   const uiTasks = uiEpic.features.flatMap(f => f.tasks);
@@ -39,8 +39,9 @@ test('phase 1 covers every reference screen and later tasks are correctly phased
   assert.deepEqual(covered.sort(), screens.map(s => s.id).sort());
   assert.equal(new Set(covered).size, covered.length);
   for (const id of ['T024', 'T026', 'T027', 'T046', 'T047']) {
-    assert.equal(tasks.find(t => t.id === id).phase, 'Later');
+    assert.equal(tasks.find(t => t.id === id).phase, 'Phase 3');
   }
+  assert.equal(tasks.filter(t => t.phase === 'Phase 3').length, 5);
   assert.equal(epics.find(e => e.id === 'E08').phase, 'Phase 2');
 });
 
