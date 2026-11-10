@@ -29,7 +29,8 @@ Elternbeziehungen und Task-Abhängigkeiten. Die Zuordnung der stabilen Board-IDs
 steht in [GitHub-Issues](github-issues.md) und maschinenlesbar in
 `github-issues.json`. Das zusätzliche Epic E11 plant die 44 Designboard-Screens
 in Phase 1 mit acht Features und 16 Tasks. Die ursprüngliche V1-Baseline-Arbeit
-ist Phase 2; T024 und T026 sind Later. Es gibt keine laufende GitHub-Synchronisierung;
+ist Phase 2; T024, T026, T027, T046 und T047 sind Phase 3. Kubernetes und AWS
+bleiben zurückgestellt. Es gibt keine laufende GitHub-Synchronisierung;
 lokale Task-Markierungen spiegeln den tatsächlichen Issue-Status nicht wider.
 
 ## Speicherung

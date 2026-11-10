@@ -13,7 +13,7 @@ Funktion einen klar benannten, zugänglichen Nicht-verfügbar-Zustand zeigen.
 Dadurch wird die spätere Funktion nicht als implementiert deklariert. Insbesondere
 Baseline-Simulation und Pack-Aktivierung hängen weiterhin von #65–#68 in Phase 2
 ab; Ausführungsfreigaben und der externe Beispielprovider bleiben #51 und #53 in
-Later. Kubernetes und AWS bleiben zurückgestellt.
+Phase 3. Kubernetes und AWS bleiben zurückgestellt.
 
 ## Verbindliche Abnahme für jeden UI-Task
 
@@ -129,7 +129,8 @@ zu #67 und #68 ausdrücklich nicht verfügbar; ihre Ansichten ändern keine Date
 ## Phasen und Status
 
 `MVP` bezeichnet den vorhandenen technischen Kern, `Phase 1` die hier geplante
-Produktoberfläche, `Phase 2` den funktionalen Baseline-Ausbau und `Later`
-ausdrücklich spätere Aufgaben. #51 und #53 behalten ihre HITL-Kennzeichnung.
+Produktoberfläche, `Phase 2` den funktionalen Baseline-Ausbau und `Phase 3`
+die zuvor als Later geplanten Aufgaben. #51 und #53 behalten ihre HITL-
+Kennzeichnung; Kubernetes und AWS bleiben zurückgestellt.
 Die lokale Fortschrittsmarkierung im Designboard ist keine Synchronisierung mit
 GitHub; Issue-Zustände sind dort die Quelle für den Umsetzungsstatus.
