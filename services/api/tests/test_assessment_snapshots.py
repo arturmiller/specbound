@@ -156,6 +156,8 @@ class AssessmentSnapshotsTest(unittest.TestCase):
                 self.assertEqual([p["id"] for p in body["products"]], [f.product])
                 self.assertNotIn(second_product, [p["id"] for p in body["products"]])
                 self.assertEqual(body["findings"][0]["snapshotId"], snapshot["id"])
+                self.assertEqual(body["findings"][0]["context"], "pull_request")
+                self.assertEqual(body["findings"][0]["pullRequestNumber"], 17)
                 app.dependency_overrides[get_current_principal] = lambda: "outsider"
                 self.assertEqual(
                     client.get(f"/organizations/{f.org}/overview").status_code, 403

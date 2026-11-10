@@ -4,13 +4,14 @@ import { ProductWorkspace } from './products.jsx';
 import { Overview } from './overview.jsx';
 import { Documentation } from './docs.jsx';
 import { AssessmentReport } from './assessment-report.jsx';
-import { currentSection, navigation, organizationHref, PortalShell } from './portal-shell.jsx';
+import { currentSection, organizationHref, PortalShell } from './portal-shell.jsx';
 import { TeamsScreen } from './teams-screen.jsx';
 import { ProviderPacks } from './provider-packs.jsx';
 import { EvidenceRegistry } from './evidence-registry.jsx';
 import { FindingDetail } from './finding-detail.jsx';
 import { PullRequestAssessments } from './pull-request-assessments.jsx';
 import { AgentWorkspace } from './agent-workspace.jsx';
+import { FindingInbox } from './finding-inbox.jsx';
 
 /** @typedef {{id: string, name: string, ownerPrincipalId?: string}} Organization */
 /** @typedef {{id: string, name: string}} Team */
@@ -107,7 +108,6 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
   const currentOrganization = organizations.find((item) => item.id === organizationId);
   const needsOrganization = !['settings', 'docs', 'assessment', 'not-found'].includes(section);
   const findingId = new URLSearchParams(window.location.search).get('finding') || '';
-  const pending = navigation.find((item) => item.id === section && item.pending && !(section === 'findings' && findingId));
   const reportId = /^\/assessments\/([A-Za-z0-9_-]{1,100})\/?$/.exec(window.location.pathname)?.[1];
 
   /** @param {string} id */
@@ -166,11 +166,10 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
     {section === 'providers' && organizationsReady && organizationId && <ProviderPacks key={`providers-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'evidence' && organizationsReady && organizationId && <EvidenceRegistry key={`evidence-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
     {section === 'findings' && findingId && organizationsReady && organizationId && <FindingDetail key={`${organizationId}-${findingId}`} organizationId={organizationId} findingId={findingId} teams={teams} accessToken={accessToken} />}
+    {section === 'findings' && !findingId && organizationsReady && organizationId && <FindingInbox key={organizationId} organizationId={organizationId} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} />}
     {section === 'pr-checks' && organizationsReady && organizationId && <PullRequestAssessments key={organizationId} organizationId={organizationId} accessToken={accessToken} />}
     {section === 'agents' && organizationsReady && organizationId && <AgentWorkspace key={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} request={request} errorMessage={errorMessage} onBusyChange={setBusy} />}
     {section === 'overview' && organizationsReady && organizationId && <Overview key={`overview-${organizationId}`} organizationId={organizationId} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} />}
-    {pending && organizationsReady && organizationId && <section className="unavailable"><p className="eyebrow">IN VORBEREITUNG</p><h1>{pending.label}</h1>
-      <div className="panel"><h2>Dieser Bereich ist noch nicht verfügbar</h2><p>Die Oberfläche für diesen Bereich wird in Phase 1 ergänzt.</p></div></section>}
     {section === 'docs' && <Documentation />}
     {section === 'assessment' && reportId && <AssessmentReport id={reportId} accessToken={accessToken} />}
     {section === 'not-found' && <section><h1>Seite nicht gefunden</h1><a href={organizationHref('/settings', organizationId)}>Zu den Einstellungen</a></section>}

@@ -6,7 +6,7 @@ export const navigation = [
   { id: 'teams', label: 'Teams', icon: '♧', href: '/teams' },
   { id: 'agents', label: 'Agenten', icon: '✦', href: '/agents' },
   { id: 'packs', label: 'Packs', icon: '▧', href: '/packs' },
-  { id: 'findings', label: 'Findings', icon: '⚑', href: '/findings', pending: true },
+  { id: 'findings', label: 'Findings', icon: '⚑', href: '/findings' },
   { id: 'pr-checks', label: 'PR Checks', icon: '⑂', href: '/pr-checks' },
   { id: 'evidence', label: 'Evidence', icon: '◈', href: '/evidence' },
   { id: 'providers', label: 'Provider', icon: '⌁', href: '/providers' },
