@@ -116,6 +116,12 @@ pack_catalog = Table(
     Column("revision_id", String), Column("kind", String), Column("manifest", JSON),
     Column("controls", JSON), Column("capabilities", JSON),
 )
+provider_test_runs = Table(
+    "provider_test_runs", metadata,
+    Column("id", String), Column("organization_id", String),
+    Column("pack_revision_id", String), Column("pack_commit", String),
+    Column("status", String), Column("created_at", DateTime(timezone=True)),
+)
 pack_approvals = Table(
     "pack_approvals", metadata,
     Column("revision_id", String), Column("organization_id", String), Column("repository", String),

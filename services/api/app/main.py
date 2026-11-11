@@ -19,6 +19,7 @@ from app.metrics import render_metrics
 from app.overview import router as overview_router
 from app.pack_catalog import router as pack_catalog_router
 from app.products import router as products_router
+from app.provider_test_runs import router as provider_test_runs_router
 from app.readiness import check_readiness
 from app.teams import router as teams_router
 
@@ -37,6 +38,7 @@ app.include_router(assessment_reports_router)
 app.include_router(overview_router)
 app.include_router(evidence_registry_router)
 app.include_router(products_router)
+app.include_router(provider_test_runs_router)
 app.include_router(teams_router)
 
 request_logger = logging.getLogger("specbound.http")
