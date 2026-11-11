@@ -41,6 +41,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_authorization.py' -v
+      - name: Verify synthetic provider test run isolation
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_provider_test_runs.py' -v
       - name: Verify OIDC access tokens and organization isolation
         working-directory: services/api
         env:

@@ -9,7 +9,7 @@ test('missing provider evidence stays UNKNOWN with reason and coverage', async (
   const assessments = overview.locator('.panel').filter({ has: page.getByRole('heading', { name: 'Assessments', exact: true }) });
   await expect(assessments.getByText(/UNKNOWN: 1/)).toBeVisible();
   await assessments.getByRole('link', { name: new RegExp(item.sha.slice(0, 12)) }).click();
-  await expect(page).toHaveURL(new RegExp(`/assessments/${item.id}$`));
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/assessments/${item.id}`);
   const status = page.locator('.assessment-status');
   await expect(status).toHaveText('UNKNOWN');
   await expect(status).toHaveClass(/status-unknown/);
