@@ -62,6 +62,7 @@ def _serialize(row):
         "finishedAt": row["finished_at"],
         "errorCode": row["error_code"],
         "result": row["result"],
+        "assessmentId": row["assessment_id"],
     }
 
 

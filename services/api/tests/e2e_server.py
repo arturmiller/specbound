@@ -26,12 +26,16 @@ def process_public_license_scan_fixture():
 
     def fixture(repository, ref):
         return {"status": "ok", "result": {
-            "requestedRef": ref, "sourceRevision": "a" * 40, "coverage": "covered",
+            "requestedRef": ref, "sourceRevision": "a" * 40, "coverage": "covered", "sourceCoverage": "covered",
             "reason": "Fixture lockfile; no installation is implied.", "files": ["uv.lock"],
             "unsupportedFiles": [], "packages": [
                 {"path": "uv.lock", "name": "sample-gpl", "version": "1.0", "source": "pypi",
                  "markers": [], "licenseExpression": "GPL-3.0-only", "status": "FAIL",
-                 "metadata": {"status": "OBSERVED", "artifacts": [{"sourceUrl": "https://pypi.org/example"}]}},
+                 "metadata": {"status": "OBSERVED", "artifacts": [{
+                     "sourceUrl": "https://files.pythonhosted.org/packages/ab/sample.whl.metadata",
+                     "sourceKind": "distribution-metadata", "artifactSha256": "a" * 64,
+                     "metadataSha256": "b" * 64, "licenseExpression": "GPL-3.0-only",
+                 }]}},
             ],
         }}
 

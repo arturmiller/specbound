@@ -8,6 +8,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+from app.public_license_assessment import create_public_license_assessment
 from app.tables import products, public_license_scans, repo_bindings, teams
 from sqlalchemy import and_, func, or_, select, update
 
@@ -102,11 +103,13 @@ def _run(repository, ref):
         return {"status": "error", "errorCode": "scanner-failed"}
 
 
-def finish(db, lease, response, *, now):
+def finish(db, lease, response, *, now, clock=_clock):
     # Repository edits and deletion take the product lock first. Hold the same
     # lock until completion so the source cannot change after our scope check.
     if not db.execute(
-        select(products.c.id).where(products.c.id == lease["product_id"]).with_for_update()
+        select(products.c.id)
+        .where(products.c.id == lease["product_id"])
+        .with_for_update()
     ).first():
         return False
     row = (
@@ -144,11 +147,30 @@ def finish(db, lease, response, *, now):
         response = {"status": "error", "errorCode": "source-changed"}
     result = response.get("result")
     if response.get("status") == "ok" and isinstance(result, dict):
+        assessment_id = None
+        try:
+            with db.begin_nested():
+                assessment_id = create_public_license_assessment(
+                    db, row, result, now=now
+                )
+        except Exception:
+            logger.warning("Public license assessment unavailable")
+            result = {**result, "assessmentError": "assessment-unavailable"}
+        if not db.execute(
+            select(public_license_scans.c.id).where(
+                public_license_scans.c.id == row["id"],
+                public_license_scans.c.status == "running",
+                public_license_scans.c.lease_token == lease["lease_token"],
+                public_license_scans.c.lease_until > clock(),
+            )
+        ).first():
+            raise RuntimeError("Scan lease expired before assessment completion")
         values = {
             "status": "completed",
             "result": result,
             "error_code": None,
             "finished_at": now,
+            "assessment_id": assessment_id,
         }
     else:
         code = response.get("errorCode")
@@ -192,7 +214,7 @@ def poll_once(engine, *, execute=_run, clock=_clock, processing=None):
     try:
         response = execute(lease["repository"], lease["ref"])
         with engine.begin() as db:
-            return finish(db, lease, response, now=clock())
+            return finish(db, lease, response, now=clock(), clock=clock)
     finally:
         if processing is not None:
             processing.clear()

@@ -95,7 +95,7 @@ Zum Beenden (die Volumes bleiben erhalten):
 docker compose -p specbound-local -f compose.yaml -f compose.local-auth.yaml down
 ```
 
-### Öffentlicher Python-Lizenzscan als lokale Vorschau
+### Öffentlicher Python-Lizenzscan
 
 Der lokale Entwicklungslogin kann um einen ausdrücklich aktivierten Worker für
 öffentliche GitHub-Repositories ergänzt werden:
@@ -120,10 +120,13 @@ Limits bleiben unbekannt beziehungsweise werden als unvollständige Abdeckung
 angezeigt. Lockfiles können Pakete für andere Umgebungen enthalten; ein Scan ist
 kein Inventar der tatsächlich installierten Pakete.
 
-Die fest hinterlegte Beispielrichtlinie erlaubt MIT, Apache-2.0, BSD-2-Clause,
-BSD-3-Clause und ISC; andere bekannte Lizenzen ergeben `FAIL`, unklare
-Informationen `UNKNOWN`. Das Ergebnis ist eine **Vorschau**, kein reguläres
-Assessment, Finding oder freigegebenes Governance-Pack. Für den Scan spricht
+Das versionierte Beispiel-Governance-Pack erlaubt MIT, Apache-2.0, BSD-2-Clause,
+BSD-3-Clause und ISC; andere bekannte Lizenzen, darunter GPL, ergeben `FAIL`,
+unklare Informationen `UNKNOWN`. Für belegte Paketmetadaten entstehen Evidence,
+ein Repository-Assessment und bei `FAIL` Findings; diese sind im Scanbericht und
+unter **Findings → Repository-Scans** sichtbar. Das Beispiel-Pack ist keine
+unternehmensspezifische Rechtsfreigabe. Ältere Scans ohne Assessment können
+erneut gestartet werden. Für den Scan spricht
 der Worker nur die im Code festgelegten externen Dienste an; das Compose-Overlay
 erzwingt selbst keine Netzwerk-Firewall und ist für lokale Entwicklung gedacht.
 Allgemeine Image-, Secret- und Egress-Freigaben bleiben separat.

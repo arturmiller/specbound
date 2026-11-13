@@ -131,6 +131,7 @@ public_license_scans = Table(
     Column("finished_at", DateTime(timezone=True)), Column("attempts", Integer),
     Column("lease_token", String), Column("lease_until", DateTime(timezone=True)),
     Column("error_code", String), Column("result", JSON),
+    Column("assessment_id", String),
 )
 pack_approvals = Table(
     "pack_approvals", metadata,
@@ -143,6 +144,7 @@ evidence_records = Table(
     Column("subject_id", String), Column("capability", String), Column("environment", String),
     Column("target_revision", String), Column("collector_revision", String),
     Column("collector_image", String), Column("provenance", JSON), Column("value", JSON),
+    Column("producer_kind", String), Column("producer_scan_id", String),
     Column("observed_at", DateTime(timezone=True)), Column("expires_at", DateTime(timezone=True)),
     Column("ttl_seconds", Integer),
 )

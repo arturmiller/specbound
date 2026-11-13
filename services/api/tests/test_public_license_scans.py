@@ -97,6 +97,128 @@ class PublicLicenseScansTest(unittest.TestCase):
                     0,
                 )
 
+    def test_license_evidence_assessment_and_finding_lifecycle(self):
+        def run_scan(expression):
+            job = self.client.post(self.url, json={"ref": "main"}).json()
+            artifact = {
+                "sourceUrl": "https://files.pythonhosted.org/packages/ab/sample.whl.metadata",
+                "sourceKind": "distribution-metadata",
+                "artifactSha256": "a" * 64,
+                "metadataSha256": "b" * 64,
+                "licenseExpression": expression,
+            }
+            package = {
+                "path": "uv.lock",
+                "name": "sample",
+                "version": "1.0",
+                "source": "pypi",
+                "markers": [],
+                "licenseExpression": expression,
+                "metadata": {"status": "OBSERVED", "artifacts": [artifact]},
+            }
+            result = {
+                "sourceRevision": "a" * 40,
+                "sourceCoverage": "covered",
+                "coverage": "covered",
+                "files": ["uv.lock"],
+                "unsupportedFiles": [],
+                "packages": [package],
+            }
+            self.assertTrue(
+                poll_once(
+                    get_engine(), execute=lambda *_: {"status": "ok", "result": result}
+                )
+            )
+            stored = next(
+                item
+                for item in self.client.get(self.url).json()
+                if item["id"] == job["id"]
+            )
+            self.assertIsNotNone(stored["assessmentId"], stored)
+            return job, stored
+
+        job, failed = run_scan("GPL-3.0-only")
+        with get_engine().connect() as db:
+            snapshot = (
+                db.execute(
+                    select(assessment_snapshots).where(
+                        assessment_snapshots.c.id == failed["assessmentId"]
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            evidence = (
+                db.execute(
+                    select(evidence_records).where(
+                        evidence_records.c.producer_scan_id == job["id"]
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            finding = (
+                db.execute(
+                    select(findings).where(findings.c.organization_id == self.org)
+                )
+                .mappings()
+                .one()
+            )
+            self.assertEqual(
+                (snapshot["context"], snapshot["pull_request_number"]),
+                ("repository", None),
+            )
+            self.assertEqual(
+                snapshot["pack_sha"], "22c819b631d60fc0f561f376379e9de85edfe96c"
+            )
+            self.assertEqual(
+                (
+                    evidence["producer_kind"],
+                    evidence["collector_revision"],
+                    evidence["collector_image"],
+                ),
+                ("public-license-scan", None, None),
+            )
+            self.assertEqual(finding["status"], "open")
+        app.dependency_overrides[get_current_principal] = lambda: self.other
+        self.assertEqual(
+            self.client.get(f"/assessments/{failed['assessmentId']}").status_code, 403
+        )
+        app.dependency_overrides[get_current_principal] = lambda: self.owner
+        self.assertEqual(
+            self.client.get(f"/assessments/{failed['assessmentId']}").status_code, 200
+        )
+        unknown_job, unknown = run_scan(None)
+        with get_engine().connect() as db:
+            self.assertEqual(
+                db.execute(
+                    select(findings.c.status).where(findings.c.id == finding["id"])
+                ).scalar_one(),
+                "open",
+            )
+            self.assertEqual(
+                db.execute(
+                    select(func.count())
+                    .select_from(evidence_records)
+                    .where(evidence_records.c.producer_scan_id == unknown_job["id"])
+                ).scalar_one(),
+                0,
+            )
+        self.assertEqual(
+            self.client.get(f"/assessments/{unknown['assessmentId']}").json()[
+                "assessment"
+            ]["counts"]["UNKNOWN"],
+            1,
+        )
+        run_scan("MIT")
+        with get_engine().connect() as db:
+            self.assertEqual(
+                db.execute(
+                    select(findings.c.status).where(findings.c.id == finding["id"])
+                ).scalar_one(),
+                "resolved",
+            )
+
     def test_viewer_can_read_but_cannot_start_or_access_other_organization(self):
         self.assertEqual(
             self.client.post(

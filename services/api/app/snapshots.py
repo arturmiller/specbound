@@ -7,7 +7,7 @@ from uuid import uuid4
 from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection
 
-from app.coverage import scan_covers
+from app.coverage import OPENAPI_SCANNER, PYTHON_LICENSE_SCANNER, scan_covers
 from app.tables import (
     assessment_snapshots,
     evidence_records,
@@ -97,7 +97,7 @@ def create_snapshot(
             and type(pull_request_number) is int
             and pull_request_number > 0
         )
-        or (context == "baseline" and pull_request_number is None)
+        or (context in ("baseline", "repository") and pull_request_number is None)
     ):
         raise ValueError("Invalid assessment context")
     if (
@@ -173,8 +173,12 @@ def create_snapshot(
             )
             if scan is None:
                 raise ValueError("Evaluation belongs to a different repository binding")
+        subject_scanners = {"api.path": OPENAPI_SCANNER, "api.schema": OPENAPI_SCANNER, "python.package": PYTHON_LICENSE_SCANNER}
+        expected_scanner = subject_scanners.get(row["subject"].get("type"))
         if row["status"] != "UNKNOWN" and (
             scan is None
+            or expected_scanner is None
+            or scan["scanner"] != expected_scanner
             or not scan_covers(
                 db,
                 scan_id=row["scan_id"],
@@ -183,6 +187,7 @@ def create_snapshot(
                 ref=scan["ref"],
                 expected_commit=git_sha,
                 not_after=now,
+                scanner=expected_scanner,
             )
         ):
             raise ValueError("Evaluation no longer has current scanner coverage")

@@ -1,7 +1,4 @@
-"""Scan versioned uv lockfile data without installing or executing packages.
-
-This standalone analysis is not yet an Assessment or an Evidence producer.
-"""
+"""Scan versioned uv lockfile data without installing or executing packages."""
 
 import re
 
@@ -39,6 +36,7 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
     except ValueError:
         return {
             "coverage": "UNKNOWN",
+            "sourceCoverage": "UNKNOWN",
             "reason": "invalid or unsupported uv.lock",
             "files": [],
             "unsupportedFiles": unsupported,
@@ -47,6 +45,7 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
     if not locks:
         return {
             "coverage": "UNKNOWN",
+            "sourceCoverage": "UNKNOWN",
             "reason": "no supported lockfile",
             "files": [],
             "unsupportedFiles": unsupported,
@@ -56,6 +55,7 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
     if total > MAX_TOTAL_PACKAGES:
         return {
             "coverage": "UNKNOWN",
+            "sourceCoverage": "UNKNOWN",
             "reason": "package limit exceeded",
             "files": sorted(locks),
             "unsupportedFiles": unsupported,
@@ -64,6 +64,7 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
     if total == 0:
         return {
             "coverage": "UNKNOWN",
+            "sourceCoverage": "UNKNOWN",
             "reason": "no locked packages",
             "files": sorted(locks),
             "unsupportedFiles": unsupported,
@@ -92,6 +93,7 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
         "coverage": "partial"
         if unsupported or any(item["status"] == "UNKNOWN" for item in packages)
         else "covered",
+        "sourceCoverage": "partial" if unsupported or any(not entries for entries in locks.values()) else "covered",
         "reason": "Lockfile entries may include dependencies for other environments; this is not an installed inventory.",
         "files": sorted(locks),
         "unsupportedFiles": unsupported,

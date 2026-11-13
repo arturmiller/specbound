@@ -231,6 +231,7 @@ source = { git = "https://example.invalid/repository" }
 
         result = scan_python_licenses({"a/uv.lock": lock}, resolve=resolve)
         self.assertEqual(result["coverage"], "partial")
+        self.assertEqual(result["sourceCoverage"], "covered")
         self.assertEqual(result["files"], ["a/uv.lock"])
         self.assertEqual(
             [p["status"] for p in result["packages"]], ["PASS", "FAIL", "UNKNOWN"]
@@ -255,6 +256,7 @@ source = { registry = "https://pypi.org/simple" }
             resolve=lambda _: {"status": "OBSERVED", "expression": "MIT"},
         )
         self.assertEqual(result["coverage"], "partial")
+        self.assertEqual(result["sourceCoverage"], "partial")
         self.assertEqual(result["unsupportedFiles"], ["other/poetry.lock"])
 
 
