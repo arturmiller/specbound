@@ -108,7 +108,8 @@ Nach der Anmeldung ein Team und ein Produkt anlegen oder auswählen, unter
 **Produkte → Quellen ansehen** ein öffentliches GitHub-Repository als
 `owner/repository` verbinden und im Abschnitt **Öffentlicher Python-Lizenzscan**
 den Git-Ref angeben und den Scan starten. Für einen ersten Versuch eignet sich
-`fedragon/uv-workspace-example` mit Ref `main`. Der Zugriff benötigt kein
+`djfun/audio-visualizer-python` mit Ref `master` (enthält ein GPL-Beispiel).
+Der Zugriff benötigt kein
 GitHub-Token; GitHub kann anonyme Aufrufe pro IP begrenzen.
 
 Der Worker verarbeitet ausschließlich ausdrücklich gestartete öffentliche
@@ -125,7 +126,8 @@ BSD-3-Clause und ISC; andere bekannte Lizenzen, darunter GPL, ergeben `FAIL`,
 unklare Informationen `UNKNOWN`. Für belegte Paketmetadaten entstehen Evidence,
 ein Repository-Assessment und bei `FAIL` Findings; diese sind im Scanbericht und
 unter **Findings → Repository-Scans** sichtbar. Das Beispiel-Pack ist keine
-unternehmensspezifische Rechtsfreigabe. Ältere Scans ohne Assessment können
+unternehmensspezifische Rechtsfreigabe. Auch Open-Source-Lizenzen außerhalb
+dieser kurzen Allowlist werden als nicht freigegeben angezeigt. Ältere Scans ohne Assessment können
 erneut gestartet werden. Für den Scan spricht
 der Worker nur die im Code festgelegten externen Dienste an; das Compose-Overlay
 erzwingt selbst keine Netzwerk-Firewall und ist für lokale Entwicklung gedacht.

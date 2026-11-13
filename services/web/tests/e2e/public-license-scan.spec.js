@@ -32,10 +32,14 @@ test('starts a public license scan and reopens its stored result', async ({ page
   await assessment.click();
   await expect(page.getByRole('heading', { name: 'Assessment-Bericht' })).toBeVisible();
   await expect(page.getByText('GPL-3.0-only').first()).toBeVisible();
+  await expect(page.getByText('Subject: sample-gpl · 1.0')).toBeVisible();
   await expect(page.getByText(/FAIL: open/)).toBeVisible();
   await expect(page.getByText('repository · repository')).toBeVisible();
   await page.goto(`/findings?organization=${org}&view=repository`);
   await expect(page.getByRole('heading', { name: 'Findings aus Repository-Scans' })).toBeVisible();
   const findingRow = page.getByRole('row').filter({ hasText: productName });
-  await expect(findingRow.getByRole('link', { name: /PY-LIC-001/ })).toBeVisible();
+  await findingRow.getByRole('link', { name: /PY-LIC-001/ }).click();
+  await expect(page.getByText('sample-gpl', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: /Lösungsweg ansehen/ }).click();
+  await expect(page.getByText('FAIL · Finding open')).toBeVisible();
 });
