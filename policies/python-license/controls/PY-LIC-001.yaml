@@ -1,0 +1,14 @@
+id: PY-LIC-001
+target:
+  kind: python.package
+requiredEvidence:
+  capability: python.package-license/v1
+assertions:
+  - operator: spdx-allowlist
+    path: licenseExpression
+    allowed:
+      - MIT
+      - Apache-2.0
+      - BSD-2-Clause
+      - BSD-3-Clause
+      - ISC

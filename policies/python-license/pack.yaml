@@ -1,0 +1,11 @@
+apiVersion: specbound.example/v1alpha1
+kind: GovernancePack
+metadata:
+  id: org.specbound.example-python-licenses
+  version: 1.0.0
+  name: Example Python license policy
+  description: Example allowlist for local public-repository scans.
+controls:
+  - controls/PY-LIC-001.yaml
+requiresCapabilities:
+  - python.package-license/v1
