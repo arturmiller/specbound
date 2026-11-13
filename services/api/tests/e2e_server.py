@@ -16,6 +16,28 @@ from sqlalchemy import text
 FIXTURE_ORGANIZATION = "123e4567-e89b-12d3-a456-426614174000"
 
 
+@app.post("/__e2e/process-public-license-scan")
+def process_public_license_scan_fixture():
+    """Run the real queue processor with a deterministic source in test only."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "worker"))
+    from public_license_worker import poll_once
+
+    def fixture(repository, ref):
+        return {"status": "ok", "result": {
+            "requestedRef": ref, "sourceRevision": "a" * 40, "coverage": "covered",
+            "reason": "Fixture lockfile; no installation is implied.", "files": ["uv.lock"],
+            "unsupportedFiles": [], "packages": [
+                {"path": "uv.lock", "name": "sample-gpl", "version": "1.0", "source": "pypi",
+                 "markers": [], "licenseExpression": "GPL-3.0-only", "status": "FAIL",
+                 "metadata": {"status": "OBSERVED", "artifacts": [{"sourceUrl": "https://pypi.org/example"}]}},
+            ],
+        }}
+
+    return {"processed": poll_once(get_engine(), execute=fixture)}
+
+
 @app.post("/__e2e/assessment")
 def create_assessment_fixture(failing: bool = False, missing_provider: bool = False):
     """Seed a complete report only in this test-only server."""

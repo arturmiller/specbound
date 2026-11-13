@@ -1,0 +1,30 @@
+import { expect, test } from '@playwright/test';
+
+test('starts a public license scan and reopens its stored result', async ({ page, request }) => {
+  const org = '123e4567-e89b-12d3-a456-426614174000';
+  const api = 'http://127.0.0.1:18762';
+  const teamResponse = await request.post(`${api}/organizations/${org}/teams`, { data: { name: 'Lizenzteam' } });
+  expect(teamResponse.status()).toBe(201);
+  const { id: ownerTeamId } = await teamResponse.json();
+  const productResponse = await request.post(`${api}/organizations/${org}/products`, { data: { name: 'Lizenzprodukt', ownerTeamId } });
+  expect(productResponse.status()).toBe(201);
+  const { id: product } = await productResponse.json();
+  const bindingResponse = await request.post(`${api}/products/${product}/repositories`, { data: { provider: 'github', repository: 'fixture/license' } });
+  expect(bindingResponse.status()).toBe(201);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/products?organization=${org}&product=${product}&view=repository`);
+  const scan = page.getByRole('region', { name: 'Lizenzscan für fixture/license' });
+  await expect(scan.getByText('Noch kein Lizenzscan gestartet.')).toBeVisible();
+  await scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' }).click();
+  await expect(scan.getByText('Wartet auf den lokalen Worker')).toBeVisible();
+  const processed = await request.post(`${api}/__e2e/process-public-license-scan`);
+  expect((await processed.json()).processed).toBe(true);
+  await expect(scan.getByText('Abgeschlossen')).toBeVisible({ timeout: 8000 });
+  await expect(scan.getByText('sample-gpl · 1.0')).toBeVisible();
+  await expect(scan.getByText('GPL-3.0-only')).toBeVisible();
+  await expect(scan.getByText('FAIL', { exact: true })).toBeVisible();
+  await expect(scan.getByText(/noch kein gespeichertes Assessment/)).toBeVisible();
+  await page.reload();
+  await expect(scan.getByText('sample-gpl · 1.0')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

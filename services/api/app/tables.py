@@ -122,6 +122,16 @@ provider_test_runs = Table(
     Column("pack_revision_id", String), Column("pack_commit", String),
     Column("status", String), Column("created_at", DateTime(timezone=True)),
 )
+
+public_license_scans = Table(
+    "public_license_scans", metadata,
+    Column("id", String), Column("organization_id", String), Column("product_id", String),
+    Column("binding_id", String), Column("repository", String), Column("ref", String),
+    Column("status", String), Column("created_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)), Column("attempts", Integer),
+    Column("lease_token", String), Column("lease_until", DateTime(timezone=True)),
+    Column("error_code", String), Column("result", JSON),
+)
 pack_approvals = Table(
     "pack_approvals", metadata,
     Column("revision_id", String), Column("organization_id", String), Column("repository", String),

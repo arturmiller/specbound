@@ -6,5 +6,6 @@ COPY services/api/app ./app
 COPY services/worker/worker.py ./worker.py
 COPY services/worker/collector_runner.py ./collector_runner.py
 COPY services/worker/queue_worker.py ./queue_worker.py
+COPY services/worker/public_license_worker.py ./public_license_worker.py
 COPY contracts ./contracts
 CMD ["python", "-u", "worker.py"]
