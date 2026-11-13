@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { evidenceFreshness } from './evidence-freshness.js';
 
-/** @typedef {{id: string, productId: string, subjectId: string, capability: string, environment: string, targetRevision: string, collectorRevision: string, collectorImage: string, provenance: {sourceRef?: string}, value: unknown, observedAt: string, expiresAt: string, ttlSeconds: number}} Evidence */
+/** @typedef {{id: string, productId: string, subjectId: string, capability: string, environment: string, targetRevision: string, collectorRevision: string | null, collectorImage: string | null, provenance: {sourceRef?: string}, value: unknown, observedAt: string, expiresAt: string, ttlSeconds: number}} Evidence */
 /** @typedef {{assessment: {id: string, organizationId: string, productId: string, gitSha: string, packSha: string}, evaluations: {id: string, status: string, reason: string, evidenceIds: string[], control: {id: string}}[], evidence: {id: string}[], findings: {id: string, evaluationId: string}[]}} Report */
 /** @typedef {{report: Report, evaluation: Report['evaluations'][number]}} Context */
 

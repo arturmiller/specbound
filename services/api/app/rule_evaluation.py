@@ -15,11 +15,13 @@ from app.assessment import (
     AssessmentStatus,
     RuleOutcome,
 )
-from app.coverage import scan_covers
+from app.coverage import OPENAPI_SCANNER, PYTHON_LICENSE_SCANNER, scan_covers
 from app.evidence_records import assess_with_evidence, current_evidence
 from app.manifest_io import validate
 from app.rule_engine import RuleTruth, evaluate_assertions
 from app.tables import products, rule_evaluations, teams
+
+_AUTO_EVIDENCE = object()
 
 
 def _serialize(row):
@@ -68,6 +70,7 @@ def evaluate_and_store(
     scan_id,
     binding_id,
     ref,
+    selected_evidence_id=_AUTO_EVIDENCE,
 ):
     """Only trusted scanner output and a pinned, validated control are accepted."""
     if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
@@ -78,6 +81,10 @@ def evaluate_and_store(
     ):
         raise ValueError("A pinned governance commit is required")
     validate(control, "governance-control.schema.json", "control")
+    if selected_evidence_id is not _AUTO_EVIDENCE and selected_evidence_id is not None and (
+        not isinstance(selected_evidence_id, str) or not selected_evidence_id or len(selected_evidence_id) > 36
+    ):
+        raise ValueError("Invalid explicitly selected evidence")
     if (
         not isinstance(subject, dict)
         or not isinstance(subject.get("id"), str)
@@ -109,8 +116,10 @@ def evaluate_and_store(
     source_prefix = (
         f"repo:{quote(binding_id, safe='')}/" if isinstance(binding_id, str) else None
     )
+    subject_scanners = {"api.path": OPENAPI_SCANNER, "api.schema": OPENAPI_SCANNER, "python.package": PYTHON_LICENSE_SCANNER}
+    scanner = subject_scanners.get(subject.get("type"))
     valid_source = (
-        subject.get("type") in ("api.path", "api.schema")
+        scanner is not None
         and isinstance(subject_scope, dict)
         and subject_scope.get("productId") == scope["productId"]
         and subject_scope.get("targetRevision") == scope["targetRevision"]
@@ -127,6 +136,7 @@ def evaluate_and_store(
             ref=ref,
             expected_commit=scope["targetRevision"],
             not_after=now,
+            scanner=scanner,
         )
     )
     if not valid_source:
@@ -146,6 +156,8 @@ def evaluate_and_store(
             evidence = current_evidence(
                 db, organization_id, scope, subject["id"], capability, now=now
             )
+            if selected_evidence_id is not _AUTO_EVIDENCE:
+                evidence = [item for item in evidence if item["id"] == selected_evidence_id]
             if len(evidence) != 1:
                 result = AssessmentResult(
                     AssessmentStatus.UNKNOWN,

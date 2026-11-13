@@ -95,6 +95,48 @@ Zum Beenden (die Volumes bleiben erhalten):
 docker compose -p specbound-local -f compose.yaml -f compose.local-auth.yaml down
 ```
 
+### Öffentlicher Python-Lizenzscan
+
+Der lokale Entwicklungslogin kann um einen ausdrücklich aktivierten Worker für
+öffentliche GitHub-Repositories ergänzt werden:
+
+```sh
+docker compose -p specbound-local -f compose.yaml -f compose.local-auth.yaml -f compose.license-scan.yaml up -d --build
+```
+
+Nach der Anmeldung ein Team und ein Produkt anlegen oder auswählen, unter
+**Produkte → Quellen ansehen** ein öffentliches GitHub-Repository als
+`owner/repository` verbinden und im Abschnitt **Öffentlicher Python-Lizenzscan**
+den Git-Ref angeben und den Scan starten. Für einen ersten Versuch eignet sich
+`djfun/audio-visualizer-python` mit Ref `master` (enthält ein GPL-Beispiel).
+Der Zugriff benötigt kein
+GitHub-Token; GitHub kann anonyme Aufrufe pro IP begrenzen.
+
+Der Worker verarbeitet ausschließlich ausdrücklich gestartete öffentliche
+Scans. Er liest erkannte Lockfiles der aufgelösten Git-Revision und Paketmetadaten
+von öffentlichem PyPI, ohne Pakete zu installieren oder Repository-Code
+auszuführen. Nur `uv.lock` wird derzeit ausgewertet. Andere Python-Lockfiles,
+private Paketquellen, fehlende oder widersprüchliche Angaben und überschrittene
+Limits bleiben unbekannt beziehungsweise werden als unvollständige Abdeckung
+angezeigt. Lockfiles können Pakete für andere Umgebungen enthalten; ein Scan ist
+kein Inventar der tatsächlich installierten Pakete.
+
+Das versionierte Beispiel-Governance-Pack erlaubt MIT, Apache-2.0, BSD-2-Clause,
+BSD-3-Clause und ISC; andere bekannte Lizenzen, darunter GPL, ergeben `FAIL`,
+unklare Informationen `UNKNOWN`. Für belegte Paketmetadaten entstehen Evidence,
+ein Repository-Assessment und bei `FAIL` Findings; diese sind im Scanbericht und
+unter **Findings → Repository-Scans** sichtbar. Das Beispiel-Pack ist keine
+unternehmensspezifische Rechtsfreigabe. Auch Open-Source-Lizenzen außerhalb
+dieser kurzen Allowlist werden als nicht freigegeben angezeigt. Ältere Scans ohne Assessment können
+erneut gestartet werden. Für den Scan spricht
+der Worker nur die im Code festgelegten externen Dienste an; das Compose-Overlay
+erzwingt selbst keine Netzwerk-Firewall und ist für lokale Entwicklung gedacht.
+Allgemeine Image-, Secret- und Egress-Freigaben bleiben separat.
+
+Die Scanansicht speichert Aufträge und Ergebnisse in den bestehenden lokalen
+Compose-Volumes. Wird das Overlay nicht verwendet, bleiben neue Aufträge wartend,
+bis ein entsprechender Worker aktiviert wird.
+
 Für den regulären Anbieter wieder die `OIDC_*`-Variablen wie oben beschrieben
 setzen und `docker compose up --build` ohne das lokale Overlay starten. Ohne
 einen passenden Anbieter bleiben geschützte APIs weiterhin gesperrt. Die

@@ -31,7 +31,21 @@ export function FindingInbox({ organizationId, teams, teamsLoading, teamsError, 
     const term = search.trim().toLocaleLowerCase();
     return (!team || product?.teamId === team) && (status === 'all' || finding.status === status) && [finding.controlId, finding.subjectId, finding.environment, product?.name || '', String(finding.pullRequestNumber ?? '')].some((value) => value.toLocaleLowerCase().includes(term));
   });
-  const navigation = <nav className="pr-tabs" aria-label="Finding-Ansichten"><a href={link('')} aria-current={view === 'inbox' ? 'page' : undefined}>Inbox</a><a href={link('triage')} aria-current={view === 'triage' ? 'page' : undefined}>Baseline-Triage</a><a href={link('closure')} aria-current={view === 'closure' ? 'page' : undefined}>Baseline-Abschluss</a></nav>;
+  const navigation = <nav className="pr-tabs" aria-label="Finding-Ansichten"><a href={link('')} aria-current={view === 'inbox' ? 'page' : undefined}>Inbox</a><a href={link('repository')} aria-current={view === 'repository' ? 'page' : undefined}>Repository-Scans</a><a href={link('triage')} aria-current={view === 'triage' ? 'page' : undefined}>Baseline-Triage</a><a href={link('closure')} aria-current={view === 'closure' ? 'page' : undefined}>Baseline-Abschluss</a></nav>;
+  if (view === 'repository') {
+    const repositoryFindings = data?.findings.filter((finding) => finding.context === 'repository') || [];
+    return <section className="finding-screen" aria-labelledby="repository-findings-heading">
+      <div className="page-heading"><div><h1 id="repository-findings-heading">Findings aus Repository-Scans</h1><p>Gespeicherte Findings aus Bewertungen einzelner Repository-Revisionen.</p></div></div>
+      {navigation}
+      {error ? <p role="alert" className="alert">{error}</p> : !data ? <p role="status">Findings werden geladen …</p> : <div className="panel team-table-panel">
+        {repositoryFindings.length === 0 ? <p>Keine sichtbaren Repository-Findings gespeichert.</p> : <div className="team-table-scroll" tabIndex={0} aria-label="Repository-Findings, horizontal scrollbar"><table className="team-table"><thead><tr><th>FINDING</th><th>PRODUKT / REVISION</th><th>STATUS</th></tr></thead><tbody>{repositoryFindings.map((finding) => {
+          const product = data.products.find((item) => item.id === finding.productId);
+          const snapshot = data.assessments.find((item) => item.id === finding.snapshotId && item.productId === finding.productId && item.context === 'repository');
+          return <tr key={finding.id}><td><a href={`/findings?${new URLSearchParams({ organization: organizationId, finding: finding.id })}`}>{finding.controlId} · {finding.subjectId}</a></td><td>{product?.name || finding.productId}<small className="break-value">{snapshot?.gitSha || 'Revision nicht verfügbar'}</small></td><td>{finding.status}</td></tr>;
+        })}</tbody></table></div>}
+      </div>}
+    </section>;
+  }
   const planned = <div className="team-info">Baseline-Reassessment und Governance-Auswirkungen sind noch nicht verfügbar. Geplant in <a href="https://github.com/arturmiller/specbound/issues/65">#65</a>, <a href="https://github.com/arturmiller/specbound/issues/66">#66</a>, <a href="https://github.com/arturmiller/specbound/issues/67">#67</a> und <a href="https://github.com/arturmiller/specbound/issues/68">#68</a>.</div>;
   return <section className="finding-screen" aria-labelledby="inbox-heading">
     <p className="eyebrow">FINDINGS / {view === 'triage' ? 'BASELINE-TRIAGE' : view === 'closure' ? 'BASELINE-ABSCHLUSS' : 'INBOX'}</p><div className="page-heading"><div><h1 id="inbox-heading">{view === 'triage' ? 'Baseline-Triage' : view === 'closure' ? 'Baseline-Abschluss' : 'Finding-Inbox'}</h1><p>{view === 'inbox' ? 'Gespeicherte Findings aus Pull-Request-Assessments.' : 'Geplante Ansicht; es wird keine Zuweisung oder Abschlussaktion ausgeführt.'}</p></div><a className="primary-link" href={`/pr-checks?${new URLSearchParams({ organization: organizationId })}`}>PR-Assessments →</a></div>

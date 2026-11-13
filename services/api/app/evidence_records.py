@@ -44,6 +44,8 @@ def _serialize(row):
         "targetRevision": row["target_revision"],
         "collectorRevision": row["collector_revision"],
         "collectorImage": row["collector_image"],
+        "producerKind": row["producer_kind"] or "collector",
+        "producerScanId": row["producer_scan_id"],
         "provenance": row["provenance"],
         "value": row["value"],
         "observedAt": row["observed_at"],

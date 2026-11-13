@@ -11,6 +11,7 @@ from app.openapi_scanner import scan_repository
 from app.tables import repo_bindings, scanner_coverage
 
 OPENAPI_SCANNER = "openapi-v1"
+PYTHON_LICENSE_SCANNER = "python-license-v1"
 
 
 def _serialize(row):
@@ -94,8 +95,11 @@ def scan_covers(
     ref: str,
     expected_commit: str,
     not_after: datetime | None = None,
+    scanner: str = OPENAPI_SCANNER,
 ):
     """Return whether the latest scan covers the exact binding and revision."""
+    if scanner not in (OPENAPI_SCANNER, PYTHON_LICENSE_SCANNER):
+        return False
     row = (
         db.execute(
             select(scanner_coverage)
@@ -107,7 +111,7 @@ def scan_covers(
             .where(
                 repo_bindings.c.id == binding_id,
                 repo_bindings.c.product_id == product_id,
-                scanner_coverage.c.scanner == OPENAPI_SCANNER,
+                scanner_coverage.c.scanner == scanner,
                 scanner_coverage.c.ref == ref,
             )
             .order_by(
