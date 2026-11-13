@@ -193,6 +193,18 @@ class LicenseScanTest(unittest.TestCase):
         self.assertEqual(result["sourceRevision"], "a" * 40)
         self.assertEqual(result["coverage"], "UNKNOWN")
 
+    def test_repository_scan_uses_lockfile_only_fetch_when_available(self):
+        class Source:
+            def fetch(self, ref):
+                raise AssertionError("full repository must not be fetched")
+
+            def fetch_python_lockfiles(self, ref):
+                return GitSnapshot("a" * 40, {"uv.lock": b"version = 1\n"})
+
+        result = scan_python_repository(Source(), "main")
+        self.assertEqual(result["sourceRevision"], "a" * 40)
+
+
     def test_realistic_mixed_results_remain_scoped_to_lockfile(self):
         lock = b"""version = 1
 [[package]]

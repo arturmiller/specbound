@@ -16,7 +16,8 @@ def scan_python_repository(
     source, ref, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_license
 ):
     """Resolve a Git reference once and scan only the resulting pinned snapshot."""
-    snapshot = source.fetch(ref)
+    fetch = getattr(source, "fetch_python_lockfiles", source.fetch)
+    snapshot = fetch(ref)
     return {
         "requestedRef": ref,
         "sourceRevision": snapshot.commit,
@@ -31,6 +32,7 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
         for path in files
         if path.rsplit("/", 1)[-1] in {"poetry.lock", "Pipfile.lock", "pdm.lock"}
         or re.fullmatch(r"pylock(?:\.[^.]+)?\.toml", path.rsplit("/", 1)[-1])
+        or path.endswith(".py.uv.lock")
     )
     try:
         locks = find_uv_locks(files)
