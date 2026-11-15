@@ -1,0 +1,27 @@
+{
+  "apiVersion": "specbound.example/v1alpha1",
+  "kind": "EvidenceProviderPack",
+  "metadata": {
+    "id": "org.specbound.example-auth",
+    "version": "1.0.0",
+    "title": "Example authentication evidence"
+  },
+  "runtime": {
+    "kind": "approved-container",
+    "image": "registry.example/auth-example@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "input": "contracts/request.json",
+    "output": "contracts/response.json"
+  },
+  "capabilities": [
+    {
+      "id": "api.authentication",
+      "version": "v1",
+      "outputSchema": "schemas/auth.json"
+    }
+  ],
+  "permissions": {
+    "github": [
+      "contents:read"
+    ]
+  }
+}

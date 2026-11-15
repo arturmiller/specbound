@@ -1,0 +1,20 @@
+{
+  "apiVersion": "specbound.example/v1alpha1",
+  "kind": "ResourceSource",
+  "metadata": {
+    "id": "example-evidence-source",
+    "version": "1.0.0",
+    "name": "Profile source"
+  },
+  "spec": {
+    "resourceType": "EvidenceProviderPack",
+    "repository": "example/governance",
+    "ref": "main",
+    "manifestPath": "evidence/example/provider.json",
+    "expected": {
+      "id": "org.specbound.example-auth",
+      "version": "1.0.0"
+    },
+    "provider": "github"
+  }
+}

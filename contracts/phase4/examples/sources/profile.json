@@ -1,0 +1,20 @@
+{
+  "apiVersion": "specbound.example/v1alpha1",
+  "kind": "ResourceSource",
+  "metadata": {
+    "id": "application-profile-source",
+    "version": "1.0.0",
+    "name": "Profile source"
+  },
+  "spec": {
+    "resourceType": "Profile",
+    "repository": "example/governance",
+    "ref": "main",
+    "manifestPath": "profiles/application-baseline.json",
+    "expected": {
+      "id": "application-baseline",
+      "version": "1.0.0"
+    },
+    "provider": "github"
+  }
+}

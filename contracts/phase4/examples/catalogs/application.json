@@ -1,0 +1,69 @@
+{
+  "catalog": {
+    "uuid": "b5a7f66d-7b34-44bc-8130-ecab73332c17",
+    "metadata": {
+      "title": "Application Controls",
+      "last-modified": "2026-11-15T12:00:00Z",
+      "version": "1.0.0",
+      "oscal-version": "1.2.3",
+      "props": [
+        {
+          "name": "resource-id",
+          "ns": "https://specbound.example/ns/resource",
+          "value": "application-controls"
+        }
+      ],
+      "links": [
+        {
+          "href": "../checks/application.json",
+          "rel": "specbound-control-bindings"
+        }
+      ]
+    },
+    "groups": [
+      {
+        "id": "application",
+        "title": "Application Governance",
+        "controls": [
+          {
+            "id": "SEC-API-001",
+            "title": "API requires authentication",
+            "params": [
+              {
+                "id": "auth-required",
+                "values": [
+                  "true"
+                ]
+              }
+            ],
+            "parts": [
+              {
+                "name": "statement",
+                "prose": "Public API requests require authentication."
+              }
+            ]
+          },
+          {
+            "id": "PY-LIC-001",
+            "title": "Approved package licenses",
+            "params": [
+              {
+                "id": "license-allowlist",
+                "values": [
+                  "MIT",
+                  "Apache-2.0"
+                ]
+              }
+            ],
+            "parts": [
+              {
+                "name": "statement",
+                "prose": "Package licenses must be included in the approved list."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

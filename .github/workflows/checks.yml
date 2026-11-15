@@ -18,7 +18,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -r services/api/requirements-dev.txt
       - name: Python lint
-        run: ruff check services/api services/worker tests/contracts
+        run: ruff check services/api services/worker tests/contracts contracts/phase4
       - name: API tests
         working-directory: services/api
         run: python -m unittest discover -s tests/unit -v

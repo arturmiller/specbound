@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specbound:contracts:v1:resource-source",
+  "title": "ResourceSource",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "const": "specbound.example/v1alpha1"
+    },
+    "kind": {
+      "const": "ResourceSource"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.-]+)?(?:\\+[A-Za-z0-9.-]+)?$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "spec": {
+      "type": "object",
+      "properties": {
+        "resourceType": {
+          "enum": [
+            "Product",
+            "Catalog",
+            "Profile",
+            "EvidenceProviderPack",
+            "ControlBindings"
+          ]
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "\\S"
+        },
+        "manifestPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(?!.*(?:^|/)\\.{1,2}(?:/|$))(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.(?:json|yaml|yml)$"
+        },
+        "expected": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.-]+)?(?:\\+[A-Za-z0-9.-]+)?$"
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "provider": {
+          "const": "github"
+        }
+      },
+      "required": [
+        "resourceType",
+        "provider",
+        "repository",
+        "ref",
+        "manifestPath",
+        "expected"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "additionalProperties": false
+}
