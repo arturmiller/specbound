@@ -84,3 +84,24 @@ Diese Punkte gehören in P4-01. Die Entwurfsbeispiele sind keine stillschweigend
 ## Reviewbare Quelle
 
 Dieser Plan und der zugehörige Entwurf werden auf dem separaten Branch `design/resource-portal-phase-4` festgehalten. Produktive UI-/API-Änderungen sind nicht Bestandteil dieses Planungsbranches. Die später ergänzte Issue-Zuordnung dokumentiert die Veröffentlichung, keine laufende Statussynchronisierung.
+
+## Veröffentlichte GitHub-Phase
+
+- Epic: [#180](https://github.com/arturmiller/specbound/issues/180)
+- Milestone: [Phase 4](https://github.com/arturmiller/specbound/milestone/1)
+- Label: `phase:4`
+
+| Issue | Aufgabe | Modus | Blockiert durch |
+|---|---|---|---|
+| [#181](https://github.com/arturmiller/specbound/issues/181) | [P4-01] Ressourcenverträge, Profilsemantik und Migrationsgrenzen entscheiden | HITL | — |
+| [#182](https://github.com/arturmiller/specbound/issues/182) | [P4-02] Manifestdateien per Repository, Ref und Pfad registrieren | AFK | #181 |
+| [#183](https://github.com/arturmiller/specbound/issues/183) | [P4-03] Kataloge mit gruppierten Controls aus einer Git-Quelle ansehen | AFK | #182 |
+| [#184](https://github.com/arturmiller/specbound/issues/184) | [P4-04] Profile als ausdrückliche Control-Auswahl registrieren und auflösen | AFK | #183 |
+| [#185](https://github.com/arturmiller/specbound/issues/185) | [P4-05] Produktmanifest mit Produktquellen und verbindlichem Profil verbinden | AFK | #184 |
+| [#186](https://github.com/arturmiller/specbound/issues/186) | [P4-06] Evidence Packs mit Datenverträgen und Verwendung nachvollziehen | AFK | #182, #183 |
+| [#187](https://github.com/arturmiller/specbound/issues/187) | [P4-07] Prüfungen an das geltende Profil und einen unveränderlichen Bewertungsstand binden | AFK | #185, #178 |
+| [#188](https://github.com/arturmiller/specbound/issues/188) | [P4-08] Produkt-Controls mit vollständigen Bewertungen und Evidence integrieren | AFK | #187 |
+| [#189](https://github.com/arturmiller/specbound/issues/189) | [P4-09] Ressourcenportal und übergreifende Produktauswahl als Einstieg umsetzen | AFK | #185, #186 |
+| [#190](https://github.com/arturmiller/specbound/issues/190) | [P4-10] As-Code-Änderungen als neue Ressourcenrevision prüfen und übernehmen | AFK | #185, #186, #187 |
+
+Alle zehn Tasks sind als native Unteraufgaben des Epics verknüpft; Blocker sind zusätzlich als native GitHub-Abhängigkeiten hinterlegt. Bestehende Issues wurden nicht verändert oder geschlossen.

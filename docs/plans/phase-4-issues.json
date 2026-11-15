@@ -1,0 +1,282 @@
+{
+  "phase": 4,
+  "title": "Phase 4: Ressourcenportal und Governance als Code",
+  "sourceCommit": "282bc4c",
+  "epic": {
+    "number": 180,
+    "id": 6408715088,
+    "url": "https://github.com/arturmiller/specbound/issues/180"
+  },
+  "milestone": {
+    "number": 1,
+    "url": "https://github.com/arturmiller/specbound/milestone/1"
+  },
+  "tasks": [
+    {
+      "key": "contracts",
+      "title": "[P4-01] Ressourcenverträge, Profilsemantik und Migrationsgrenzen entscheiden",
+      "type": "HITL",
+      "deps": [],
+      "existing": [],
+      "what": "Die vier Ressourcen Produkt, Katalog, Profil und Evidence Pack erhalten einen abgestimmten, versionierten Vertrag als Grundlage der neuen Portalphase. Der Entwurf ist Referenz für den Ablauf; seine specbound.design/v1-Beispiele sind keine produktiven Schemas.",
+      "criteria": [
+        "ADR und konkrete validierte Beispielfälle legen fest, ob Katalog/Profil OSCAL nativ verwenden oder über einen expliziten Adapter abgebildet werden; Controls, ausführbare Assertions und Parameter bleiben fachlich eindeutig.",
+        "Logische ID/Version, Repository, relativer Manifestpfad, gewünschter Ref und aufgelöster Commit werden unterschieden. Referenzauflösung, Konflikte, fehlende Controls und zulässige Profiländerungen sind entschieden.",
+        "Bestehende GovernancePack-/EvidenceProviderPack-Verträge, Laufzeitfreigaben und historische Assessments haben einen dokumentierten Kompatibilitäts-/Migrationsweg; kein pauschaler Ersatz durch schwächere Entwurfsschemas.",
+        "Ein UI ohne Organisation-/Teamverwaltung erhält einen verbindlichen internen Zugriffskontext. Mehrdeutiger oder fehlender Kontext wird definiert und fail-closed behandelt; bestehende Rechteprüfungen bleiben wirksam.",
+        "Die Entscheidung ist menschlich abgenommen. Alle nachfolgenden AFK-Slices haben ausreichend konkrete Verträge und Fehlerfälle."
+      ],
+      "issue": {
+        "number": 181,
+        "id": 6408715314,
+        "url": "https://github.com/arturmiller/specbound/issues/181"
+      },
+      "linkedParent": true,
+      "linkedBlockers": []
+    },
+    {
+      "key": "sources",
+      "title": "[P4-02] Manifestdateien per Repository, Ref und Pfad registrieren",
+      "type": "AFK",
+      "deps": [
+        "contracts"
+      ],
+      "existing": [],
+      "what": "Ein berechtigter Benutzer registriert ein vorhandenes Governance- oder Evidence-Pack an einem frei gewählten Manifestpfad, sieht das zuständige Schema und den tatsächlich aufgelösten Quellstand im Portal. Zwei Packs im selben Repository werden unabhängig gespeichert.",
+      "criteria": [
+        "Portal, API, Speicherung und Git-Adapter unterstützen Repository, relativen Manifestpfad und gewünschten Ref sowie den einmalig aufgelösten vollständigen Commit. Derselbe Repo/Ref mit zwei Pfaden erzeugt zwei unterscheidbare Ressourcen.",
+        "apiVersion/kind bestimmen einen unterstützten Schema-Vertrag. Ungültige Struktur, fremde/mehrdeutige Quelle, unsichere relative Pfade, fehlende Dateien, Limits und Netzwerkfehler führen zu verständlichen Fehlern und keiner Teilregistrierung.",
+        "Relative Packdateien werden innerhalb des erlaubten Manifestbereichs aus demselben Snapshot gelesen. Ein Manifest kann keine beliebigen externen Schemas oder Quellen nachladen lassen.",
+        "Bestehende Root-pack.yaml-Imports und Tag-Pins bleiben migrierbar und getestet; die Quellenidentität und bisherigen Uniqueness-Regeln werden sicher erweitert.",
+        "Eine echte Portal-/API-Integration demonstriert zwei Packs in einem Repository, Reload, Schemafehler und Zugriffstrennung."
+      ],
+      "issue": {
+        "number": 182,
+        "id": 6408715717,
+        "url": "https://github.com/arturmiller/specbound/issues/182"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408715314
+      ]
+    },
+    {
+      "key": "catalogs",
+      "title": "[P4-03] Kataloge mit gruppierten Controls aus einer Git-Quelle ansehen",
+      "type": "AFK",
+      "deps": [
+        "sources"
+      ],
+      "existing": [],
+      "what": "Ein Benutzer importiert einen Katalog nach dem abgestimmten Vertrag und kann dessen gruppierte Controls einschließlich Anforderungen und Quellenversion im Portal öffnen.",
+      "criteria": [
+        "Katalogliste, Registrierung und Detailansicht verwenden gespeicherte Daten. Gruppen, Control-IDs, Anforderung, benötigte Nachweisarten und ausführbare Regeln sind entsprechend dem beschlossenen Vertrag zugänglich.",
+        "Doppelte IDs, ungültige Referenzen und nicht unterstützte Formate werden vor der Übernahme abgewiesen; bestehende Governance-Packs sind über den beschlossenen Weg erreichbar.",
+        "Manifest, Schema, Datei- und Commitlinks beziehen sich auf die tatsächlich verwendete Quelle; Vorschau, strukturvalidiert und verwendbar sind unterscheidbar.",
+        "API-/Datenbank- und Browserprüfungen decken einen realen Katalog, gruppierte Controls, Reload, fehlerhafte Daten und Berechtigungen ab."
+      ],
+      "issue": {
+        "number": 183,
+        "id": 6408716261,
+        "url": "https://github.com/arturmiller/specbound/issues/183"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408715717
+      ]
+    },
+    {
+      "key": "profiles",
+      "title": "[P4-04] Profile als ausdrückliche Control-Auswahl registrieren und auflösen",
+      "type": "AFK",
+      "deps": [
+        "catalogs"
+      ],
+      "existing": [],
+      "what": "Ein Benutzer registriert ein Profil, das Controls und Parameter aus versionierten Katalogquellen auswählt, und kann jede Auswahl bis zur Control-Definition nachvollziehen.",
+      "criteria": [
+        "Profilmanifest, persistierte Auflösung, API und UI zeigen Profil-ID/Version, Katalogreferenzen, ausgewählte Control-IDs und zulässige Parameter gemäß P4-01.",
+        "Nicht existierende/mehrdeutige Katalogversionen, unbekannte Control-IDs, ungültige Parameter und gegebenenfalls Zyklen führen zu klaren Fehlern. Keine stillschweigende Auswahl aller Controls.",
+        "Profil und Katalog sind gegenseitig navigierbar; Quellrevisionen und As-Code-Änderungsweg sind sichtbar. Ein Profilwechsel wird nicht durch Subject-Typ-Matching ersetzt.",
+        "Ein vertikaler Test belegt Referenzauflösung, gespeicherte Auswahl, Reload und Fehlerfälle sowie Organisation-/Teamgrenzen."
+      ],
+      "issue": {
+        "number": 184,
+        "id": 6408716876,
+        "url": "https://github.com/arturmiller/specbound/issues/184"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408716261
+      ]
+    },
+    {
+      "key": "products",
+      "title": "[P4-05] Produktmanifest mit Produktquellen und verbindlichem Profil verbinden",
+      "type": "AFK",
+      "deps": [
+        "profiles"
+      ],
+      "existing": [],
+      "what": "Ein Benutzer registriert einen tatsächlichen Prüfgegenstand aus einem Produktmanifest, verknüpft seine Produktquellen und legt das geltende Profil ausdrücklich fest. Im Produkt kann die Kette Produkt → Profil → Katalog geöffnet werden.",
+      "criteria": [
+        "Produktmanifest, API und Datenmodell speichern fachliche Identität, Produktquellen und konkrete Profilzuordnung nach P4-01; Governance-/Evidence-Quellen werden dadurch nicht zu Produktquellen.",
+        "Geltungsbereich und Produktdetail zeigen Profilname, Version, aufgelöste Herkunft und zugeordnete Controls. Produktwechsel mischt keine fremden Prüfungen oder Evidence.",
+        "Der Änderungspfad unterscheidet Profilwahl im Produktmanifest von einer Änderung der gemeinsamen Profildefinition; direkte UI-Änderungen erzeugen keinen konkurrierenden Konfigurationsstand.",
+        "Bestehende Produkte/Repo-Bindungen erhalten einen expliziten Migrationszustand ohne erfundene rückwirkende Profilzuordnung; unzugeordnete Produkte sind erkennbar.",
+        "Portal-/API-/Datenbanktests demonstrieren ein reales Produkt mit Profil, einen fehlenden Profilverweis und autorisierte/unerlaubte Zugriffe."
+      ],
+      "issue": {
+        "number": 185,
+        "id": 6408717461,
+        "url": "https://github.com/arturmiller/specbound/issues/185"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408716876
+      ]
+    },
+    {
+      "key": "evidence-packs",
+      "title": "[P4-06] Evidence Packs mit Datenverträgen und Verwendung nachvollziehen",
+      "type": "AFK",
+      "deps": [
+        "sources",
+        "catalogs"
+      ],
+      "existing": [],
+      "what": "Ein Benutzer sieht getrennte Evidence Packs aus mehreren Manifestpfaden desselben Repositories und kann angebotene Capabilities, Daten-Schemas, Laufzeit und Verwendung durch Controls nachvollziehen.",
+      "criteria": [
+        "Liste, Import und Detailansicht verwenden echte persistierte Packdaten einschließlich manifestbezogener Quellrevision, Capability-Versionen, Input-/Output-Verträgen, Image-Digest und deklarierten Berechtigungen.",
+        "Benötigte Control-Capabilities und angebotene Pack-Capabilities werden versionsbezogen verbunden; fehlende oder inkompatible Anbieter werden als solche gezeigt.",
+        "Registriert, strukturvalidiert und zur Ausführung freigegeben sind getrennte Zustände. Aus einem Import folgt keine automatische Laufzeit-/Secret-/Egress-Freigabe.",
+        "Öffentliche Lizenzscanner und synthetische Provider-Tests bleiben mit ihren tatsächlichen Erzeugern gekennzeichnet. Der öffentliche Scanner wird keinem fiktiven Pack zugeschrieben.",
+        "Ein echter Import zweier Packs mit verschiedenen Pfaden, ungültige Verträge, Reload und Rechte werden Ende-zu-Ende geprüft. Allgemeine Ausführungsfreigaben bleiben bei #51."
+      ],
+      "issue": {
+        "number": 186,
+        "id": 6408718195,
+        "url": "https://github.com/arturmiller/specbound/issues/186"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408715717,
+        6408716261
+      ]
+    },
+    {
+      "key": "assessment-state",
+      "title": "[P4-07] Prüfungen an das geltende Profil und einen unveränderlichen Bewertungsstand binden",
+      "type": "AFK",
+      "deps": [
+        "products"
+      ],
+      "existing": [
+        178
+      ],
+      "what": "Eine autorisierte Prüfung bewertet die ausdrücklich geltenden Controls eines Produkts und hält Produkt-, Profil-, Katalog- und Regelquellen sowie ihre Nachweise als nachvollziehbaren historischen Stand fest.",
+      "criteria": [
+        "Prüfungsstart/Worker, Referenzauflösung, Speicherung und Report fixieren alle verwendeten Quellrevisionen und Control-Auswahlen vor der Bewertung. Branch-/Tag-Änderungen während eines Laufs verändern den Stand nicht.",
+        "Ausgewählte Controls und Parameter stammen aus der aufgelösten Profilrevision. Das feste Lizenz-Beispielpack darf eine ausdrückliche Produktkonfiguration nicht unbemerkt ersetzen; nicht verfügbare Prüfmethoden bleiben als Lücke sichtbar.",
+        "Nicht unterstützt, nicht bewertet, UNKNOWN und NOT_APPLICABLE werden nachprüfbar unterschieden; nicht prüfbare Controls werden nicht als PASS ausgegeben oder aus der Ansicht entfernt.",
+        "Evidence verweist auf den tatsächlichen Erzeuger und vorhandene Versionen. Nicht vorhandene Altdaten bleiben explizit unbekannt; Profil-/Kataloginformationen werden historischen Scans nicht nachträglich erfunden.",
+        "Lease-/Retry-/Transaktions- und Finding-Verhalten bleiben konsistent: fehlende Beobachtungen oder unvollständige Scans schließen keine Findings und Wiederholungen erzeugen keine Duplikate.",
+        "Datenbank-/API-/Workerintegration und ein echter Portalstart zeigen das gebundene Profil sowie historische und neue Ergebnisse; die Grundlage #177/#178 beziehungsweise PR #179 wird übernommen statt dupliziert."
+      ],
+      "issue": {
+        "number": 187,
+        "id": 6408719428,
+        "url": "https://github.com/arturmiller/specbound/issues/187"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408717461,
+        6377340401
+      ]
+    },
+    {
+      "key": "control-workspace",
+      "title": "[P4-08] Produkt-Controls mit vollständigen Bewertungen und Evidence integrieren",
+      "type": "AFK",
+      "deps": [
+        "assessment-state"
+      ],
+      "existing": [],
+      "what": "Im Produkt ist Anforderungen der zentrale Ort für Controls, Prüfungswahl, vollständige Einzelbewertungen und verknüpfte Nachweise. Prüfungen verlinken dieselbe Ansicht mit dem richtigen gespeicherten Stand vorausgewählt.",
+      "criteria": [
+        "API und UI liefern für das Produkt alle geltenden Controls und autorisierten Prüfungen. Alle Einzelbewertungen sind erreichbar; Control-Zählungen und etwaige Paket-/Subject-Zählungen bleiben getrennt.",
+        "Ein aufgeklapptes Control zeigt Bewertung, Begründung und konkrete gespeicherte Evidence mit Wert, Erhebungs-/Ablaufzeit, Quellen, vorhandenen Integritätsmerkmalen und tatsächlichem Erzeuger. Links auf Dateien/Commits sind revisionsgenau.",
+        "Prüfungs-/Produktwechsel vermischt keine Daten; fehlende/abgelaufene/mehrdeutige Evidence sowie historische Provenienzlücken sind klar erkennbar. Kein zusätzlicher Ergebnisse-/Evidence-Tab ist für den Ablauf nötig.",
+        "Prüfungs- und Statuswahl erhalten Tastaturfokus und passende offene Control-Details. Leere Filter haben Erklärung und Rücksetzung; Direktlinks und Reload bewahren Produkt/Prüfungsbezug.",
+        "Tests gegen echte API-/Datenbankdaten prüfen vollständige 14-Paket-Bewertungen des Beispielscans, Evidence-Zuordnung, Zugriffstrennung, Tastaturbedienung und mobile Breiten von 320/390 Pixel."
+      ],
+      "issue": {
+        "number": 188,
+        "id": 6408720383,
+        "url": "https://github.com/arturmiller/specbound/issues/188"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408719428
+      ]
+    },
+    {
+      "key": "portal",
+      "title": "[P4-09] Ressourcenportal und übergreifende Produktauswahl als Einstieg umsetzen",
+      "type": "AFK",
+      "deps": [
+        "products",
+        "evidence-packs"
+      ],
+      "existing": [],
+      "what": "Das echte Portal startet mit den vier Ressourcenlisten Produkte, Kataloge, Profile und Evidence Packs. Eine übergreifende Produktauswahl führt zu Anforderungen, Geltungsbereich und Prüfungen; Organisation, Teams, Übersicht und Einstellungen stehen im vereinfachten Nutzerablauf nicht im Vordergrund.",
+      "criteria": [
+        "Die Navigation und Ressourcenlisten verwenden gespeicherte, berechtigungsgefilterte Daten. Quellen/Manifest/Schema/Revision werden pro Ressource konfiguriert und angezeigt; der Einstieg ist Produkte.",
+        "Die Produktauswahl liegt außerhalb einzelner Tabs und bleibt über Produktansichten konsistent. Globale Ressourcenansichten sind nicht versehentlich an ein zuvor ausgewähltes Produkt gebunden.",
+        "Der nach P4-01 beschlossene interne Zugriffskontext wird tatsächlich aufgelöst; OIDC, Organisations-/Teamgrenzen und Agentenrechte werden weiterhin durchgesetzt. Fehlende oder mehrdeutige Kontexte öffnen keine fremden Daten.",
+        "Bestehende Assessment-, PR-, Finding- und Dokumentationslinks haben definierte, getestete Weiterleitungen/Zugänge. Neue Menüs erfordern kein Löschen vorhandener API-/Datenfunktionen.",
+        "Browserprüfungen mit tatsächlicher Anmeldung belegen Start, vier Ressourcenlisten, Produktwechsel, Reload, vollständige mobile Navigation und zugängliche Formulare ohne horizontales Dokumentüberlaufen. Dokumentation und Glossar beschreiben den neuen Nutzerablauf."
+      ],
+      "issue": {
+        "number": 189,
+        "id": 6408721116,
+        "url": "https://github.com/arturmiller/specbound/issues/189"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408717461,
+        6408718195
+      ]
+    },
+    {
+      "key": "revisions",
+      "title": "[P4-10] As-Code-Änderungen als neue Ressourcenrevision prüfen und übernehmen",
+      "type": "AFK",
+      "deps": [
+        "products",
+        "evidence-packs",
+        "assessment-state"
+      ],
+      "existing": [],
+      "what": "Nach einem Commit im Konfigurationsrepository kann ein Benutzer eine neue Ressourcenrevision prüfen, ihre Änderungen und Auswirkungen auf Referenzen sehen und sie ausdrücklich übernehmen.",
+      "criteria": [
+        "Die Anwendung liest erneut Repository/Manifestpfad/gewünschten Ref, pinnt einen neuen Commit und zeigt alte/neue Quelle, Struktur- und Referenzprüfung sowie geänderte Control-Auswahl beziehungsweise Packverträge im Portal.",
+        "Fehlerhafte neue Manifeste oder inkompatible Referenzen lassen den bisher verwendeten Stand unverändert; keine Teilaktivierung oder automatische Ausführungsfreigabe.",
+        "Die Übernahme ist autorisiert und protokolliert. Produkt-/Profilreferenzen und historische Bewertungsstände bleiben unverwechselbar; bestehende Assessments werden nicht umgeschrieben.",
+        "Bewertungsfolgen werden nur bei tatsächlich vorhandener Berechnung behauptet. Regeländerungssimulation, Deployment-Baseline und automatisches Reassessment bleiben bei #65–#68 und werden verlinkt statt erneut umgesetzt.",
+        "Ein Ende-zu-Ende-Test demonstriert einen gültigen Updatepfad, eine abgelehnte Revision und die unveränderte Lesbarkeit eines vorherigen Assessments."
+      ],
+      "issue": {
+        "number": 190,
+        "id": 6408722143,
+        "url": "https://github.com/arturmiller/specbound/issues/190"
+      },
+      "linkedParent": true,
+      "linkedBlockers": [
+        6408717461,
+        6408718195,
+        6408719428
+      ]
+    }
+  ]
+}
