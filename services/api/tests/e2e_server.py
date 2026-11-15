@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import uvicorn
+import yaml
 from app.database import get_engine
 from app.git_source import GitSnapshot
 from app.github_repositories import github_metadata_source_factory
@@ -76,17 +77,22 @@ class FixtureSource:
         self.repository = repository
 
     def resolve_tag(self, tag):
-        if tag != "v1.2.0":
+        if tag != "v1.2.0" and not (self.repository == "arturmiller/specbound-example-provider" and tag == "v1.1.0"):
             raise ValueError("Unknown fixture tag")
         return "a" * 40
 
     def fetch(self, ref):
         if ref != "a" * 40:
             raise ValueError("Unexpected fixture commit")
-        if self.repository.startswith("fixture/provider"):
+        if self.repository.startswith("fixture/provider") or self.repository == "arturmiller/specbound-example-provider":
             fixtures = Path(__file__).parent / "fixtures" / "provider"
             schema = (fixtures / "schema.json").read_bytes()
             manifest = (fixtures / "provider.yaml").read_bytes()
+            if self.repository == "arturmiller/specbound-example-provider":
+                example = yaml.safe_load(manifest)
+                example["metadata"]["id"] = "org.specbound.example-provider"
+                example["capabilities"][0]["id"] = "demo.fixture"
+                manifest = yaml.safe_dump(example).encode()
             if self.repository.endswith("-invalid"):
                 manifest = b"kind: InvalidProvider\n"
             return GitSnapshot(

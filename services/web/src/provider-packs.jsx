@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ProviderTestRuns } from './provider-test-runs.jsx';
 
 /** @typedef {{id: string, version: string, outputSchema: string}} Capability */
 /** @typedef {{id: string, repository: string, tag: string, commit: string, kind: string, manifest: {metadata: {id: string, version: string, title?: string}, runtime: {kind: string, image: string, input: string, output: string}, capabilities: Capability[], tests?: string[]}}} ProviderPack */
@@ -97,6 +98,7 @@ export function ProviderPacks({ organizationId, organization, accessToken = '', 
       <div className="pack-metrics"><div className="panel"><span>Pack</span><strong>{pack.manifest.metadata.id}</strong></div><div className="panel"><span>Repository</span><strong>{pack.repository}</strong></div><div className="panel"><span>Release</span><strong>{pack.tag}</strong></div><div className="panel"><span>Commit</span><strong>{pack.commit}</strong></div></div>
       <div className="discovery-columns"><div className="panel"><h2>provider.yaml · eingelesenes Manifest</h2><pre className="provider-code">{JSON.stringify(pack.manifest, null, 2)}</pre></div><div className="discovery-side"><div className="panel"><h2>Capability-Referenzen</h2>{pack.manifest.capabilities.length ? <ul>{pack.manifest.capabilities.map((item) => <li key={`${item.id}/${item.version}`}><a href={providerUrl(organizationId, pack.id, 'contract', `${item.id}/${item.version}`)}>{item.id}/{item.version}</a><p className="break-value">{item.outputSchema}</p></li>)}</ul> : <p>Keine Capability deklariert.</p>}</div><div className="panel"><h2>Runtime-Deklaration</h2><p>Typ: {pack.manifest.runtime.kind}</p><p className="break-value">Image: {pack.manifest.runtime.image}</p><p className="break-value">Input: {pack.manifest.runtime.input}</p><p className="break-value">Output: {pack.manifest.runtime.output}</p><p>Eine Deklaration bestätigt weder Freigabe noch Verfügbarkeit.</p></div></div></div><a className="team-back" href={catalogUrl}>← Zurück zum Provider-Katalog</a>
     </>}
+    {pack && view === 'manifest' && pack.repository === 'arturmiller/specbound-example-provider' && pack.manifest.capabilities.some((item) => item.id === 'demo.fixture' && item.version === 'v1') && (principal ? <ProviderTestRuns key={pack.id} organizationId={organizationId} revisionId={pack.id} accessToken={accessToken} isOwner={isOwner} /> : !permissionError && <p role="status">Berechtigungen werden geladen …</p>)}
   </section>;
 }
 

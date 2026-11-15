@@ -10,7 +10,7 @@ test('opens the exact persisted PR snapshot and keeps GitHub status separate', a
   await expect(page.getByRole('heading', { name: 'PR-Assessments', exact: true })).toBeVisible();
   await expect(page.getByText('PR #17')).toBeVisible();
   await page.getByRole('link', { name: 'Bericht öffnen' }).click();
-  await expect(page).toHaveURL(new RegExp(`/assessments/${id}$`));
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/assessments/${id}`);
   await expect(page.getByRole('heading', { name: 'Assessment-Bericht' })).toBeVisible();
   await expect(page.getByText(sha, { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/Quellverweis: repo:/)).toBeVisible();
