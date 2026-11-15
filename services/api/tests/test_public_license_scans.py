@@ -98,7 +98,7 @@ class PublicLicenseScansTest(unittest.TestCase):
                 )
 
     def test_license_evidence_assessment_and_finding_lifecycle(self):
-        def run_scan(expression):
+        def run_scan(expression, partial=False):
             job = self.client.post(self.url, json={"ref": "main"}).json()
             artifact = {
                 "sourceUrl": "https://files.pythonhosted.org/packages/ab/sample.whl.metadata",
@@ -118,10 +118,10 @@ class PublicLicenseScansTest(unittest.TestCase):
             }
             result = {
                 "sourceRevision": "a" * 40,
-                "sourceCoverage": "covered",
-                "coverage": "covered",
+                "sourceCoverage": "partial" if partial else "covered",
+                "coverage": "partial" if partial else "covered",
                 "files": ["uv.lock"],
-                "unsupportedFiles": [],
+                "unsupportedFiles": ["other/poetry.lock"] if partial else [],
                 "packages": [package],
             }
             self.assertTrue(
@@ -137,7 +137,7 @@ class PublicLicenseScansTest(unittest.TestCase):
             self.assertIsNotNone(stored["assessmentId"], stored)
             return job, stored
 
-        job, failed = run_scan("GPL-3.0-only")
+        job, failed = run_scan("GPL-3.0-only", partial=True)
         with get_engine().connect() as db:
             snapshot = (
                 db.execute(
@@ -180,6 +180,21 @@ class PublicLicenseScansTest(unittest.TestCase):
                 ("public-license-scan", None, None),
             )
             self.assertEqual(finding["status"], "open")
+            self.assertEqual(snapshot["counts"]["FAIL"], 1)
+        _, partial_pass = run_scan("MIT", partial=True)
+        with get_engine().connect() as db:
+            self.assertEqual(
+                db.execute(
+                    select(findings.c.status).where(findings.c.id == finding["id"])
+                ).scalar_one(),
+                "open",
+            )
+            counts = db.execute(
+                select(assessment_snapshots.c.counts).where(
+                    assessment_snapshots.c.id == partial_pass["assessmentId"]
+                )
+            ).scalar_one()
+            self.assertEqual(counts["PASS"], 1)
         app.dependency_overrides[get_current_principal] = lambda: self.other
         self.assertEqual(
             self.client.get(f"/assessments/{failed['assessmentId']}").status_code, 403

@@ -81,8 +81,14 @@ def evaluate_and_store(
     ):
         raise ValueError("A pinned governance commit is required")
     validate(control, "governance-control.schema.json", "control")
-    if selected_evidence_id is not _AUTO_EVIDENCE and selected_evidence_id is not None and (
-        not isinstance(selected_evidence_id, str) or not selected_evidence_id or len(selected_evidence_id) > 36
+    if (
+        selected_evidence_id is not _AUTO_EVIDENCE
+        and selected_evidence_id is not None
+        and (
+            not isinstance(selected_evidence_id, str)
+            or not selected_evidence_id
+            or len(selected_evidence_id) > 36
+        )
     ):
         raise ValueError("Invalid explicitly selected evidence")
     if (
@@ -116,7 +122,11 @@ def evaluate_and_store(
     source_prefix = (
         f"repo:{quote(binding_id, safe='')}/" if isinstance(binding_id, str) else None
     )
-    subject_scanners = {"api.path": OPENAPI_SCANNER, "api.schema": OPENAPI_SCANNER, "python.package": PYTHON_LICENSE_SCANNER}
+    subject_scanners = {
+        "api.path": OPENAPI_SCANNER,
+        "api.schema": OPENAPI_SCANNER,
+        "python.package": PYTHON_LICENSE_SCANNER,
+    }
     scanner = subject_scanners.get(subject.get("type"))
     valid_source = (
         scanner is not None
@@ -137,6 +147,7 @@ def evaluate_and_store(
             expected_commit=scope["targetRevision"],
             not_after=now,
             scanner=scanner,
+            subject=subject,
         )
     )
     if not valid_source:
@@ -157,7 +168,9 @@ def evaluate_and_store(
                 db, organization_id, scope, subject["id"], capability, now=now
             )
             if selected_evidence_id is not _AUTO_EVIDENCE:
-                evidence = [item for item in evidence if item["id"] == selected_evidence_id]
+                evidence = [
+                    item for item in evidence if item["id"] == selected_evidence_id
+                ]
             if len(evidence) != 1:
                 result = AssessmentResult(
                     AssessmentStatus.UNKNOWN,

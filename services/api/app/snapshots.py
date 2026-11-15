@@ -173,7 +173,11 @@ def create_snapshot(
             )
             if scan is None:
                 raise ValueError("Evaluation belongs to a different repository binding")
-        subject_scanners = {"api.path": OPENAPI_SCANNER, "api.schema": OPENAPI_SCANNER, "python.package": PYTHON_LICENSE_SCANNER}
+        subject_scanners = {
+            "api.path": OPENAPI_SCANNER,
+            "api.schema": OPENAPI_SCANNER,
+            "python.package": PYTHON_LICENSE_SCANNER,
+        }
         expected_scanner = subject_scanners.get(row["subject"].get("type"))
         if row["status"] != "UNKNOWN" and (
             scan is None
@@ -188,6 +192,7 @@ def create_snapshot(
                 expected_commit=git_sha,
                 not_after=now,
                 scanner=expected_scanner,
+                subject=row["subject"],
             )
         ):
             raise ValueError("Evaluation no longer has current scanner coverage")
@@ -221,6 +226,7 @@ def create_snapshot(
                 "status": row["status"],
                 "reason": row["reason"],
                 "evidenceIds": ids,
+                "sourceCoverage": scan["status"] if scan is not None else "unknown",
             }
         )
     row = (
