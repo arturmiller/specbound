@@ -1,0 +1,49 @@
+{
+  "apiVersion": "specbound.example/v1alpha1",
+  "kind": "ControlBindings",
+  "metadata": {
+    "id": "application-checks",
+    "version": "1.0.0",
+    "name": "Application checks"
+  },
+  "spec": {
+    "catalog": {
+      "id": "application-controls",
+      "version": "1.0.0"
+    },
+    "controls": [
+      {
+        "id": "SEC-API-001",
+        "target": {
+          "kind": "api.endpoint"
+        },
+        "requiredEvidence": {
+          "capability": "api.authentication/v1"
+        },
+        "assertions": [
+          {
+            "operator": "equals",
+            "path": "auth_required",
+            "expectedParameter": "auth-required"
+          }
+        ]
+      },
+      {
+        "id": "PY-LIC-001",
+        "target": {
+          "kind": "python.package"
+        },
+        "requiredEvidence": {
+          "capability": "python.package-license/v1"
+        },
+        "assertions": [
+          {
+            "operator": "spdx-allowlist",
+            "path": "licenseExpression",
+            "allowedParameter": "license-allowlist"
+          }
+        ]
+      }
+    ]
+  }
+}

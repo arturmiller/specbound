@@ -1,0 +1,21 @@
+{
+  "apiVersion": "specbound.example/v1alpha1",
+  "kind": "Product",
+  "metadata": {
+    "id": "audio-visualizer",
+    "version": "1.0.0",
+    "name": "Audio Visualizer"
+  },
+  "spec": {
+    "repositories": [
+      {
+        "provider": "github",
+        "repository": "djfun/audio-visualizer-python"
+      }
+    ],
+    "profile": {
+      "id": "application-baseline",
+      "version": "1.0.0"
+    }
+  }
+}

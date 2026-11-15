@@ -1,5 +1,10 @@
 # Gemeinsame Verträge
 
+Die nativen OSCAL-1.2.3-Schemas und die zusätzlichen Phase-4-Ressourcenverträge
+sind unter [Phase 4](phase4/README.md) dokumentiert. Die dortigen Offline-Beispiele
+belegen den beschlossenen ersten Umfang; Ressourcenimport und Migration folgen
+in den vertikalen Umsetzungstasks.
+
 `v1/` enthält JSON Schemas (Draft 2020-12) für Subject, Fact und Evidence.
 Dies sind erste Datenverträge; sie implementieren weder Discovery, eine
 Evidence-Laufzeit noch Bewertungen oder Persistenz.

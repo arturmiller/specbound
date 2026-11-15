@@ -1,0 +1,46 @@
+{
+  "profile": {
+    "uuid": "006aab5f-2607-41fa-a6aa-06d24ce77dc0",
+    "metadata": {
+      "title": "Application Baseline",
+      "last-modified": "2026-11-15T12:00:00Z",
+      "version": "1.0.0",
+      "oscal-version": "1.2.3",
+      "props": [
+        {
+          "name": "resource-id",
+          "ns": "https://specbound.example/ns/resource",
+          "value": "application-baseline"
+        }
+      ]
+    },
+    "imports": [
+      {
+        "href": "../catalogs/application.json",
+        "include-controls": [
+          {
+            "with-ids": [
+              "SEC-API-001",
+              "PY-LIC-001"
+            ]
+          }
+        ]
+      }
+    ],
+    "merge": {
+      "as-is": true
+    },
+    "modify": {
+      "set-parameters": [
+        {
+          "param-id": "license-allowlist",
+          "values": [
+            "MIT",
+            "Apache-2.0",
+            "ISC"
+          ]
+        }
+      ]
+    }
+  }
+}

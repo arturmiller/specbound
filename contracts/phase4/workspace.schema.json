@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specbound:contracts:v1:workspace",
+  "type": "object",
+  "properties": {
+    "organizationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "defaultOwnerTeamId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "organizationId",
+    "defaultOwnerTeamId"
+  ],
+  "additionalProperties": false
+}

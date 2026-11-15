@@ -1,0 +1,3 @@
+# Preserve upstream OSCAL release bytes, including whitespace, on every platform.
+contracts/oscal/1.2.3/oscal_*_schema.json -text -whitespace
+contracts/oscal/1.2.3/LICENSE.md -text -whitespace
