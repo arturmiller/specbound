@@ -6,3 +6,4 @@ SQLAlchemy==2.0.56
 psycopg[binary]==3.3.3
 httpx==0.28.1
 PyJWT[crypto]==2.15.1
+license-expression==30.4.4

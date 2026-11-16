@@ -7,10 +7,18 @@ der Identität, damit ein wiederholt beobachteter Befund denselben Finding-Daten
 behält. PRs, Baselines und Environments bleiben getrennt.
 
 Ein `FAIL` erzeugt ein offenes Finding beziehungsweise öffnet es erneut. `PASS`
-schließt ein vorhandenes Finding; `UNKNOWN` und `NOT_APPLICABLE` schließen es
+schließt ein vorhandenes Finding nur bei vollständiger Quellabdeckung;
+`UNKNOWN` und `NOT_APPLICABLE` schließen es
 nicht. Solange noch nie ein `FAIL` vorlag, wird kein Finding erzeugt. Pro Finding
 und angewendetem Snapshot wird höchstens ein Verlaufseintrag mit Ergebnis, Grund,
 Bewertungs-ID und Zustand gespeichert. Wiederholte Verarbeitung ist idempotent.
+
+Ein verifiziertes Paket aus einer erfolgreich gelesenen Python-Lockdatei darf
+bei partieller Repository-Abdeckung weiterhin PASS oder FAIL erhalten. Das
+Assessment hält den tatsächlichen Abdeckungsstatus fest. Ein solcher FAIL
+eröffnet ein Finding; ein partieller PASS lässt ein vorhandenes Finding mit
+einem erklärenden Verlaufseintrag bestehen. Historische Snapshots ohne dieses
+Feld wurden bereits ausschließlich bei vollständiger Abdeckung freigegeben.
 
 Nur der neueste Snapshot desselben Produkt-, Repository-, Kontext- und Environment-
 Scopes darf den Zustand verändern; ältere Zustellungen werden ignoriert. Bei

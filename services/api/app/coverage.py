@@ -1,6 +1,7 @@
 """Persist observed scanner scope and guard evaluations that depend on it."""
 
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection
@@ -11,6 +12,7 @@ from app.openapi_scanner import scan_repository
 from app.tables import repo_bindings, scanner_coverage
 
 OPENAPI_SCANNER = "openapi-v1"
+PYTHON_LICENSE_SCANNER = "python-license-v1"
 
 
 def _serialize(row):
@@ -94,8 +96,12 @@ def scan_covers(
     ref: str,
     expected_commit: str,
     not_after: datetime | None = None,
+    scanner: str = OPENAPI_SCANNER,
+    subject: dict | None = None,
 ):
     """Return whether the latest scan covers the exact binding and revision."""
+    if scanner not in (OPENAPI_SCANNER, PYTHON_LICENSE_SCANNER):
+        return False
     row = (
         db.execute(
             select(scanner_coverage)
@@ -107,7 +113,7 @@ def scan_covers(
             .where(
                 repo_bindings.c.id == binding_id,
                 repo_bindings.c.product_id == product_id,
-                scanner_coverage.c.scanner == OPENAPI_SCANNER,
+                scanner_coverage.c.scanner == scanner,
                 scanner_coverage.c.ref == ref,
             )
             .order_by(
@@ -127,11 +133,29 @@ def scan_covers(
                 observed = observed.replace(tzinfo=timezone.utc)
             if observed > not_after:
                 return False
+    covered = row is not None and row["status"] == "covered"
+    if (
+        row is not None
+        and row["status"] == "partial"
+        and scanner == PYTHON_LICENSE_SCANNER
+        and isinstance(subject, dict)
+    ):
+        path = subject.get("labels", {}).get("lockfile")
+        covered = (
+            isinstance(path, str)
+            and path in row["files"]
+            and subject.get("provenance", {}).get("sourceRef")
+            == f"repo:{quote(binding_id, safe='')}/{quote(path, safe='/')}"
+            and not any(
+                not error.get("path") or error["path"] == path
+                for error in row["errors"]
+            )
+        )
     return not (
         row is None
         or scan_id is None
         or row["id"] != scan_id
-        or row["status"] != "covered"
+        or not covered
         or row["source_revision"] != expected_commit
         or not expected_commit
     )

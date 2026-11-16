@@ -104,6 +104,45 @@ class GitHubSourceTest(unittest.TestCase):
         self.assertEqual(snapshot.commit, COMMIT)
         self.assertEqual(snapshot.files["README.md"], b"hello")
 
+    def test_python_lockfile_fetch_limits_token_and_downloaded_blobs(self):
+        import json
+
+        lock_sha = "d" * 40
+        requests = []
+
+        def handle(request):
+            requests.append(request)
+            if request.url.path.endswith("/access_tokens"):
+                token_scope = json.loads(request.content)
+                self.assertEqual(token_scope["repositories"], ["repo"])
+                self.assertEqual(token_scope["permissions"], {"contents": "read"})
+            if "/git/trees/" in request.url.path:
+                return httpx.Response(200, json={"truncated": False, "tree": [
+                    {"type": "blob", "mode": "100644", "path": "private.txt", "sha": BLOB, "size": 5},
+                    {"type": "blob", "mode": "100644", "path": "src/uv.lock", "sha": lock_sha, "size": 5},
+                ]})
+            if request.url.path.endswith("/git/blobs/" + lock_sha):
+                return httpx.Response(200, json={"encoding": "base64", "content": base64.b64encode(b"hello").decode()})
+            return self.handler(request)
+
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            source = GitHubSource("example/repo", app_id="1234", installation_id=123, private_key=self.pem, client=client)
+            snapshot = source.fetch_python_lockfiles("main")
+        self.assertEqual(snapshot.commit, COMMIT)
+        self.assertEqual(dict(snapshot.files), {"src/uv.lock": b"hello"})
+        self.assertFalse(any(request.url.path.endswith("/git/blobs/" + BLOB) for request in requests))
+
+    def test_python_lockfile_fetch_rejects_incomplete_tree(self):
+        def handle(request):
+            if "/git/trees/" in request.url.path:
+                return httpx.Response(200, json={"truncated": True, "tree": []})
+            return self.handler(request)
+
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            source = GitHubSource("example/repo", app_id="1234", installation_id=123, private_key=self.pem, client=client)
+            with self.assertRaises(SourceUnavailable):
+                source.fetch_python_lockfiles("main")
+
     def test_missing_refs_and_wrong_installation_are_rejected(self):
         with self.assertRaises(SourceNotFound):
             self.source.resolve_tag("missing")

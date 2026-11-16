@@ -187,6 +187,13 @@ class GitHubSource:
         raise SourceUnavailable("Tag nesting exceeds the limit")
 
     def fetch(self, ref: str) -> GitSnapshot:
+        return self._fetch_snapshot(ref, lockfiles_only=False)
+
+    def fetch_python_lockfiles(self, ref: str) -> GitSnapshot:
+        """Read only lockfile blobs from a single immutable GitHub revision."""
+        return self._fetch_snapshot(ref, lockfiles_only=True)
+
+    def _fetch_snapshot(self, ref: str, *, lockfiles_only: bool) -> GitSnapshot:
         ref = self._ref(ref)
         token = self._token()
         details = self._request("GET", f"/repos/{self.repository}/commits/{ref}", token)
@@ -217,6 +224,17 @@ class GitHubSource:
                 "100755",
             ):
                 raise SourceUnavailable("Symlinks and submodules are unsupported")
+            path = item.get("path")
+            if not isinstance(path, str) or not path:
+                raise SourceUnavailable("Invalid GitHub tree path")
+            if lockfiles_only:
+                name = path.rsplit("/", 1)[-1]
+                if not (
+                    name in {"uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock"}
+                    or re.fullmatch(r"pylock(?:\.[^.]+)?\.toml", name)
+                    or name.endswith(".py.uv.lock")
+                ):
+                    continue
             size = item.get("size")
             if (
                 not isinstance(size, int)

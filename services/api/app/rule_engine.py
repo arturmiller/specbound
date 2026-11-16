@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from app.license_policy import evaluate_license
+
 
 class RuleTruth(str, Enum):
     PASS = "PASS"
@@ -84,7 +86,7 @@ def evaluate_assertions(assertions, value):
             return _combine(
                 operator, [evaluate(child, depth + 1) for child in children]
             )
-        if operator not in ("equals", "exists"):
+        if operator not in ("equals", "exists", "spdx-allowlist"):
             return RuleDecision(RuleTruth.UNKNOWN, "Operator wird nicht unterstützt")
         path = rule.get("path")
         if not isinstance(path, str) or len(path) > 500 or not PATH.fullmatch(path):
@@ -108,6 +110,18 @@ def evaluate_assertions(assertions, value):
             return RuleDecision(
                 RuleTruth.PASS, f"Erforderliches Feld {path} ist vorhanden"
             )
+        if operator == "spdx-allowlist":
+            allowed = rule.get("allowed")
+            if not isinstance(allowed, list) or not 0 < len(allowed) <= 100 or any(
+                not isinstance(item, str) or not item or len(item) > 200 for item in allowed
+            ):
+                return RuleDecision(RuleTruth.UNKNOWN, "Lizenzfreigabeliste ist ungültig")
+            outcome = evaluate_license(current, allowed)
+            return RuleDecision(RuleTruth(outcome), {
+                "PASS": "Lizenzausdruck ist durch die Richtlinie freigegeben",
+                "FAIL": "Lizenzausdruck ist durch die Richtlinie nicht freigegeben",
+                "UNKNOWN": "Lizenzausdruck oder Ausnahme ist nicht eindeutig bewertbar",
+            }[outcome])
         try:
             equal = _same_json(current, rule["expected"])
         except (RecursionError, ValueError):

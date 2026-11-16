@@ -121,6 +121,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_finding_lifecycle.py' -v
+      - name: Verify public license scan authorization and leases
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_public_license_scans.py' -v
       - name: Install collector runner dependencies
         run: pip install -r services/worker/requirements.txt
       - name: Pull pinned test collector

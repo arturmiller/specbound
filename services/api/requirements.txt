@@ -9,3 +9,4 @@ boto3==1.43.125
 httpx==0.28.1
 jsonschema==4.26.0
 rfc3339-validator==0.1.4
+license-expression==30.4.4

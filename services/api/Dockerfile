@@ -8,5 +8,6 @@ COPY services/api/logging.json ./logging.json
 COPY services/api/migrations ./migrations
 COPY services/api/tests ./tests
 COPY contracts ./contracts
+COPY policies/python-license ./policies/python-license
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-config", "logging.json", "--no-access-log"]

@@ -1,0 +1,5 @@
+# Explicit local preview. This does not configure private repository credentials.
+services:
+  worker:
+    environment:
+      PUBLIC_LICENSE_SCAN_ENABLED: 'true'

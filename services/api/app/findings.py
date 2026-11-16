@@ -182,6 +182,7 @@ def apply_snapshot(db: Connection, organization_id, snapshot_id):
                 if item["status"] == "FAIL"
                 else "resolved"
                 if item["status"] == "PASS"
+                and item.get("sourceCoverage", "covered") == "covered"
                 else existing["status"]
             )
             db.execute(
@@ -201,7 +202,13 @@ def apply_snapshot(db: Connection, organization_id, snapshot_id):
                 evaluation_id=item["id"],
                 outcome=item["status"],
                 state_after=state,
-                reason=item["reason"],
+                reason=item["reason"]
+                + (
+                    "; Quellabdeckung unvollständig, Finding bleibt bestehen"
+                    if item["status"] == "PASS"
+                    and item.get("sourceCoverage", "covered") != "covered"
+                    else ""
+                ),
                 observed_at=snapshot["created_at"],
             )
         )

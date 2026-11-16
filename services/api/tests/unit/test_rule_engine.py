@@ -9,6 +9,20 @@ class RuleEngineTest(unittest.TestCase):
     def evaluate(self, assertion, value):
         return evaluate_assertions([assertion], value).truth
 
+    def test_spdx_policy_evaluates_the_actual_expression_conservatively(self):
+        rule = {"operator": "spdx-allowlist", "path": "licenseExpression", "allowed": ["MIT", "Apache-2.0"]}
+        for expression, expected in (
+            ("MIT", RuleTruth.PASS),
+            ("GPL-3.0-only", RuleTruth.FAIL),
+            ("MIT OR GPL-3.0-only", RuleTruth.PASS),
+            ("MIT AND GPL-3.0-only", RuleTruth.FAIL),
+            ("LicenseRef-Unverified", RuleTruth.UNKNOWN),
+            (None, RuleTruth.UNKNOWN),
+        ):
+            with self.subTest(expression=expression):
+                self.assertEqual(self.evaluate(rule, {"licenseExpression": expression}), expected)
+        self.assertEqual(self.evaluate({**rule, "allowed": []}, {"licenseExpression": "MIT"}), RuleTruth.UNKNOWN)
+
     def test_equals_is_type_safe_and_missing_is_unknown(self):
         rule = {"operator": "equals", "path": "publicly_reachable", "expected": False}
         self.assertEqual(

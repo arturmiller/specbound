@@ -163,6 +163,20 @@ class RuleEvaluationTest(unittest.TestCase):
         with self.assertRaises(LookupError):
             self.evaluate(org=self.other)
 
+    def test_explicit_evidence_selection_is_scoped_and_never_reuses_missing_data(self):
+        first = self.save_evidence()
+        self.save_evidence()
+        def evaluate(selected):
+            with get_engine().begin() as db:
+                return evaluate_and_store(
+                    db, self.org, self.scope, self.subject, self.control, "a" * 40,
+                    now=NOW, scan_id=self.scan_id, binding_id=self.binding, ref="main",
+                    selected_evidence_id=selected,
+                )
+        self.assertEqual(evaluate(first["id"])["status"], "PASS")
+        self.assertEqual(evaluate(None)["status"], "UNKNOWN")
+        self.assertEqual(evaluate("not-owned")["status"], "UNKNOWN")
+
 
 if __name__ == "__main__":
     unittest.main()

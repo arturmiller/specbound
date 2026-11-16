@@ -47,13 +47,16 @@ class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/healthz":
             publishers = getattr(self.server, "publishers", ())
+            license_worker = getattr(self.server, "license_worker", None)
+            processing = getattr(self.server, "license_processing", None)
             mode = (
-                "github_publisher" if any(p.is_alive() for p in publishers) else "idle"
+                "public_license_preview" if license_worker and license_worker.is_alive()
+                else "github_publisher" if any(p.is_alive() for p in publishers) else "idle"
             )
             status, body = (
                 200,
                 json.dumps(
-                    {"status": "ok", "mode": mode, "processing": False},
+                    {"status": "ok", "mode": mode, "processing": bool(processing and processing.is_set())},
                     separators=(",", ":"),
                 ).encode(),
             )
@@ -97,13 +100,25 @@ def main() -> None:
             publishers.append(publisher)
             publisher.start()
     server.publishers = publishers
-    logger.info("Worker started; no job queue configured")
+    license_worker = None
+    license_processing = threading.Event()
+    if os.environ.get("PUBLIC_LICENSE_SCAN_ENABLED", "").lower() == "true":
+        from app.database import get_engine
+        from public_license_worker import run_queue
+
+        license_worker = threading.Thread(target=run_queue, args=(get_engine(), stop, license_processing), daemon=True)
+        license_worker.start()
+    server.license_worker = license_worker
+    server.license_processing = license_processing
+    logger.info("Worker started; public license preview enabled" if license_worker else "Worker started; no job queue configured")
     stop.wait()
     server.shutdown()
     server.server_close()
     thread.join()
     for publisher in publishers:
         publisher.join()
+    if license_worker:
+        license_worker.join(timeout=130)
     logger.info("Worker stopped")
 
 

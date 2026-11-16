@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from app.assessment import Applicability
 
-KNOWN_SUBJECT_TYPES = frozenset({"database", "api", "api.path", "api.schema"})
+KNOWN_SUBJECT_TYPES = frozenset({"database", "api", "api.path", "api.schema", "python.package"})
 
 
 @dataclass(frozen=True)
