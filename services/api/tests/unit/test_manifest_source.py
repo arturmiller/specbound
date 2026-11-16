@@ -5,12 +5,31 @@ from pathlib import Path
 
 from app.git_source import GitSnapshot
 from app.manifest_io import ManifestError
-from app.manifest_source import checked_manifest_path, load_pack_at
+from app.manifest_source import checked_manifest_path, load_pack_at, snapshot_for_ref
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 class ManifestSourceTest(unittest.TestCase):
+    def test_explicit_branch_name_cannot_select_a_tag_with_the_same_name(self):
+        class Source:
+            repository = "example/resources"
+
+            def fetch(self, ref):
+                return GitSnapshot("b" * 40 if ref == "heads/release" else "a" * 40, {})
+
+            def resolve_tag(self, tag):
+                return "a" * 40
+
+        self.assertEqual(
+            snapshot_for_ref(Source(), "example/resources", "release", "branch").commit,
+            "b" * 40,
+        )
+        self.assertEqual(
+            snapshot_for_ref(Source(), "example/resources", "release", "tag").commit,
+            "a" * 40,
+        )
+
     def test_custom_manifest_reuses_existing_pack_contract(self):
         files = {
             "nested/custom.json": (FIXTURES / "governance/pack.yaml").read_bytes(),

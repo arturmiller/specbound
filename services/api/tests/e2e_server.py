@@ -133,8 +133,12 @@ class FixtureSource:
         return "a" * 40
 
     def fetch(self, ref):
+        if self.repository == "fixture/oscal":
+            from tests.test_resource_registry import ResourceFixtureSource
+
+            return ResourceFixtureSource(self.repository).fetch(ref)
         if self.repository == "fixture/multi-providers":
-            if ref not in ("main", "a" * 40):
+            if ref not in ("main", "heads/main", "a" * 40):
                 raise ValueError("Unexpected fixture ref")
             root = next(
                 parent / "contracts/phase4/examples"

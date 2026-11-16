@@ -17,8 +17,9 @@ from app.git_source import GitSource, GitSourceError
 from app.github_source import configured_github_source
 from app.identity import get_current_principal
 from app.manifest_io import ManifestError, validator
-from app.manifest_source import checked_manifest_path, load_pack_at
+from app.manifest_source import checked_manifest_path, load_pack_at, snapshot_for_ref
 from app.pack_revisions import TagMoved, pin_release
+from app.resource_contracts import HERE, ROOT, read
 from app.tables import pack_approvals, pack_catalog, pack_revisions
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
@@ -50,6 +51,18 @@ class ConnectPack(BaseModel):
 
 def github_source_factory() -> Callable[[str], GitSource]:
     return configured_github_source
+
+
+def require_github_organization(organization_id):
+    configured_org = os.environ.get("GITHUB_ORGANIZATION_ID", "")
+    if not configured_org:
+        raise HTTPException(
+            status_code=503, detail="GitHub organization is not configured"
+        )
+    if configured_org != organization_id:
+        raise HTTPException(
+            status_code=403, detail="GitHub App is not available for this organization"
+        )
 
 
 def _serialize(row):
@@ -96,7 +109,15 @@ def _query(organization_id):
 
 
 @schemas_router.get("/contracts/{contract}")
-def get_contract(contract: Literal["governance-pack", "provider-pack"]):
+def get_contract(
+    contract: Literal[
+        "governance-pack", "provider-pack", "oscal-catalog", "resource-source"
+    ],
+):
+    if contract == "oscal-catalog":
+        return read(ROOT / "oscal/1.2.3/oscal_catalog_schema.json")
+    if contract == "resource-source":
+        return read(HERE / "resource-source.schema.json")
     filename = (
         "governance-pack.schema.json"
         if contract == "governance-pack"
@@ -253,25 +274,12 @@ def connect_pack(
     factory: Annotated[Callable[[str], GitSource], Depends(github_source_factory)],
 ):
     organization_access(db, organization_id, principal, write=True)
-    configured_org = os.environ.get("GITHUB_ORGANIZATION_ID", "")
-    if not configured_org:
-        raise HTTPException(
-            status_code=503, detail="GitHub organization is not configured"
-        )
-    if configured_org != organization_id:
-        raise HTTPException(
-            status_code=403, detail="GitHub App is not available for this organization"
-        )
+    require_github_organization(organization_id)
     try:
         source = factory(data.repository)
         try:
-            if getattr(source, "repository", data.repository) != data.repository:
-                raise ValueError("Source repository does not match request")
             ref = data.ref or data.tag
-            commit = source.resolve_tag(ref) if data.refType == "tag" else ref
-            snapshot = source.fetch(commit)
-            if data.refType != "branch" and snapshot.commit != commit:
-                raise ValueError("Snapshot did not match resolved commit")
+            snapshot = snapshot_for_ref(source, data.repository, ref, data.refType)
             loaded = load_pack_at(snapshot, data.manifestPath, data.kind)
             revision = pin_release(
                 db,

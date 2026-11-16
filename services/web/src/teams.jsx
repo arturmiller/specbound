@@ -7,6 +7,7 @@ import { AssessmentReport } from './assessment-report.jsx';
 import { currentSection, organizationHref, PortalShell } from './portal-shell.jsx';
 import { TeamsScreen } from './teams-screen.jsx';
 import { ProviderPacks } from './provider-packs.jsx';
+import { ResourceWorkspace } from './resources.jsx';
 import { EvidenceRegistry } from './evidence-registry.jsx';
 import { FindingDetail } from './finding-detail.jsx';
 import { PullRequestAssessments } from './pull-request-assessments.jsx';
@@ -163,6 +164,7 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
     {section === 'teams' && organizationsReady && organizationId && <TeamsScreen key={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} request={request} errorMessage={errorMessage} onBusyChange={setBusy} />}
     {section === 'products' && organizationsReady && organizationId && <ProductWorkspace key={`products-${organizationId}`} organizationId={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'packs' && organizationsReady && organizationId && <PackWorkspace key={`packs-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
+    {section === 'catalogs' && organizationsReady && organizationId && <ResourceWorkspace key={`resources-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'providers' && organizationsReady && organizationId && <ProviderPacks key={`providers-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'evidence' && organizationsReady && organizationId && <EvidenceRegistry key={`evidence-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
     {section === 'findings' && findingId && organizationsReady && organizationId && <FindingDetail key={`${organizationId}-${findingId}`} organizationId={organizationId} findingId={findingId} teams={teams} accessToken={accessToken} />}

@@ -141,6 +141,13 @@ pack_approvals = Table(
     Column("revision_id", String), Column("organization_id", String), Column("repository", String),
     Column("approved_by", String), Column("approved_at", DateTime(timezone=True)),
 )
+resource_documents = Table(
+    "resource_documents", metadata,
+    Column("revision_id", String), Column("organization_id", String), Column("kind", String),
+    Column("resource_id", String), Column("resource_version", String), Column("name", String),
+    Column("source_config", JSON), Column("document", JSON), Column("resolved", JSON),
+    Column("dependencies", JSON), Column("content_digest", String),
+)
 evidence_records = Table(
     "evidence_records", metadata,
     Column("id", String), Column("organization_id", String), Column("product_id", String),

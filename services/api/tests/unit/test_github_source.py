@@ -4,7 +4,7 @@ import base64
 import unittest
 
 import httpx
-from app.git_source import SourceNotFound, SourceUnavailable
+from app.git_source import InvalidGitReference, SourceNotFound, SourceUnavailable
 from app.github_source import GitHubSource
 from app.pr_check import publish_check
 from app.pr_comment import MARKER, upsert_comment
@@ -103,6 +103,20 @@ class GitHubSourceTest(unittest.TestCase):
         snapshot = self.source.fetch("main")
         self.assertEqual(snapshot.commit, COMMIT)
         self.assertEqual(snapshot.files["README.md"], b"hello")
+
+    def test_qualified_branch_preserves_the_raw_ref_length_limit(self):
+        branch = "x" * 200
+
+        def handle(request):
+            if request.url.path == "/repos/example/repo/commits/heads/" + branch:
+                return httpx.Response(200, json={"sha": COMMIT, "commit": {"tree": {"sha": COMMIT}}})
+            return self.handler(request)
+
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            source = GitHubSource("example/repo", app_id="1234", installation_id=123, private_key=self.pem, client=client)
+            self.assertEqual(source.fetch("heads/" + branch).commit, COMMIT)
+            with self.assertRaises(InvalidGitReference):
+                source.fetch("heads/" + branch + "x")
 
     def test_python_lockfile_fetch_limits_token_and_downloaded_blobs(self):
         import json

@@ -101,6 +101,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_manifest_source_migration.py' -v
+      - name: Verify native OSCAL resources and pinned preview registration
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_resource_registry.py' -v
       - name: Verify evidence freshness and tenant scope
         working-directory: services/api
         env:
