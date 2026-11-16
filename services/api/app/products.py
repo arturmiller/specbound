@@ -12,7 +12,17 @@ from sqlalchemy.exc import IntegrityError
 from app.authorization import organization_access, team_access, visible_teams
 from app.database import get_connection
 from app.identity import get_current_principal
-from app.tables import organizations, products, repo_bindings, scanner_coverage, teams
+from app.product_governance import require_unmanaged_product
+from app.resource_store import resources_query, serialize_resource
+from app.tables import (
+    organizations,
+    product_governance,
+    products,
+    repo_bindings,
+    resource_documents,
+    scanner_coverage,
+    teams,
+)
 
 NonBlank = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -72,8 +82,22 @@ def _product(
     return item, team
 
 
-def _serialize(item, org_id):
+def _serialize(item, org_id, db):
+    governance = (
+        db.execute(
+            select(product_governance).where(
+                product_governance.c.product_id == item["id"]
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     return {
+        "configurationStatus": "manifest_managed"
+        if governance
+        else "profile_unassigned",
+        "resourceId": governance["resource_id"] if governance else None,
+        "resourceRevisionId": governance["revision_id"] if governance else None,
         "id": item["id"],
         "name": item["name"],
         "ownerTeamId": item["owner_team_id"],
@@ -113,7 +137,7 @@ def create_product(
         .mappings()
         .one()
     )
-    return _serialize(item, organization_id)
+    return _serialize(item, organization_id, db)
 
 
 @router.get("/organizations/{organization_id}/products")
@@ -124,13 +148,47 @@ def list_products(organization_id: str, principal: Principal, db: Db):
         .where(products.c.owner_team_id.in_(team_ids))
         .order_by(products.c.id)
     ).mappings()
-    return [_serialize(item, organization_id) for item in rows]
+    return [_serialize(item, organization_id, db) for item in rows]
 
 
 @router.get("/products/{product_id}")
 def get_product(product_id: str, principal: Principal, db: Db):
     item, team = _product(db, product_id, principal, "read")
-    return _serialize(item, team["organization_id"])
+    return _serialize(item, team["organization_id"], db)
+
+
+@router.get("/products/{product_id}/governance")
+def get_product_governance(product_id: str, principal: Principal, db: Db):
+    _, team = _product(db, product_id, principal, "read")
+    current = (
+        db.execute(
+            select(product_governance).where(
+                product_governance.c.product_id == product_id
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if current is None:
+        return {"state": "profile_unassigned", "product": None, "profile": None}
+
+    def resource(revision_id):
+        row = (
+            db.execute(
+                resources_query(team["organization_id"]).where(
+                    resource_documents.c.revision_id == revision_id
+                )
+            )
+            .mappings()
+            .one()
+        )
+        return serialize_resource(row)
+
+    return {
+        "state": "manifest_managed",
+        "product": resource(current["revision_id"]),
+        "profile": resource(current["profile_revision_id"]),
+    }
 
 
 @router.get("/products/{product_id}/discovery")
@@ -168,6 +226,7 @@ def product_discovery(product_id: str, principal: Principal, db: Db):
 @router.patch("/products/{product_id}")
 def update_product(product_id: str, data: ProductUpdate, principal: Principal, db: Db):
     item, team = _product(db, product_id, principal, "edit")
+    require_unmanaged_product(db, product_id)
     _lock_org(db, team["organization_id"])
     item, team = _product(db, product_id, principal, "edit", lock=True)
     changes = {}
@@ -191,12 +250,13 @@ def update_product(product_id: str, data: ProductUpdate, principal: Principal, d
         .mappings()
         .one()
     )
-    return _serialize(updated, team["organization_id"])
+    return _serialize(updated, team["organization_id"], db)
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(product_id: str, principal: Principal, db: Db):
     _product(db, product_id, principal, "edit", lock=True)
+    require_unmanaged_product(db, product_id)
     db.execute(delete(repo_bindings).where(repo_bindings.c.product_id == product_id))
     db.execute(delete(products).where(products.c.id == product_id))
 
@@ -217,6 +277,7 @@ def list_repositories(product_id: str, principal: Principal, db: Db):
 @router.post("/products/{product_id}/repositories", status_code=status.HTTP_201_CREATED)
 def create_repository(product_id: str, data: RepoInput, principal: Principal, db: Db):
     _product(db, product_id, principal, "edit", lock=True)
+    require_unmanaged_product(db, product_id)
     try:
         row = (
             db.execute(
@@ -262,6 +323,7 @@ def update_repository(
     product_id: str, binding_id: str, data: RepoInput, principal: Principal, db: Db
 ):
     _product(db, product_id, principal, "edit", lock=True)
+    require_unmanaged_product(db, product_id)
     try:
         row = (
             db.execute(
@@ -291,6 +353,7 @@ def update_repository(
 )
 def delete_repository(product_id: str, binding_id: str, principal: Principal, db: Db):
     _product(db, product_id, principal, "edit", lock=True)
+    require_unmanaged_product(db, product_id)
     result = db.execute(
         delete(repo_bindings).where(
             repo_bindings.c.product_id == product_id, repo_bindings.c.id == binding_id

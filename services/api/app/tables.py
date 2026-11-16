@@ -71,6 +71,12 @@ products = Table(
     Column("owner_team_id", String),
     Column("name", String),
 )
+product_governance = Table(
+    "product_governance", metadata,
+    Column("product_id", String), Column("organization_id", String),
+    Column("resource_id", String), Column("revision_id", String),
+    Column("profile_revision_id", String),
+)
 repo_bindings = Table(
     "repo_bindings",
     metadata,

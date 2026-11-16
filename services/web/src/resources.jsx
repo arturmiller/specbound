@@ -5,7 +5,7 @@ import { ManifestProvenance, ManifestSourceFields } from './manifest-source.jsx'
 /** @typedef {{id: string, title: string, parts: NativePart[], parameters: unknown[], groupKey: string, methodStatus: string, binding: {target: {kind: string}, requiredEvidence: {capability: string}, assertions: unknown[]} | null}} ResourceControl */
 /** @typedef {{key: string, id: string | null, title: string, parent: string | null}} ResourceGroup */
 /** @typedef {{repository: string, ref: string, refType: string, commit: string, manifestPath: string, manifestUrl: string, commitUrl: string, schemaUrl: string, files: {path: string, url: string}[]}} ResourceSource */
-/** @typedef {{id: string | null, resourceType: string, resourceId: string, version: string, name: string, state: string, validationStatus: string, contentDigest: string, source: ResourceSource, manifest: Record<string, unknown>, resolved: {groups: ResourceGroup[], controls: ResourceControl[], bindingPath: string | null, catalog?: {resourceId: string, version: string, name: string, contentDigest: string, manifestPath: string, revisionId: string}}}} Resource */
+/** @typedef {{id: string | null, resourceType: string, resourceId: string, version: string, name: string, state: string, validationStatus: string, contentDigest: string, source: ResourceSource, manifest: Record<string, unknown>, resolved: {groups: ResourceGroup[], controls: ResourceControl[], bindingPath: string | null, productId?: string, repositories?: {provider: string, repository: string}[], profile?: {name: string, version: string}, catalog?: {resourceId: string, version: string, name: string, contentDigest: string, manifestPath: string, revisionId: string}}}} Resource */
 
 /** @param {{parts: NativePart[]}} props */
 function RequirementParts({ parts }) {
@@ -13,7 +13,7 @@ function RequirementParts({ parts }) {
 }
 
 /** @param {{resource: Resource}} props */
-function CatalogControls({ resource }) {
+export function CatalogControls({ resource }) {
   const [search, setSearch] = useState('');
   const controls = resource.resolved.controls.filter((control) => `${control.id} ${control.title} ${JSON.stringify(control.parts)}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   const requirementUrl = resource.resolved.catalog ? resource.source.files.find((file) => file.path === resource.resolved.catalog?.manifestPath)?.url : resource.source.manifestUrl;
@@ -46,18 +46,19 @@ function CatalogControls({ resource }) {
   </div>;
 }
 
-/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, resourceType?: 'Catalog' | 'Profile', onBusyChange: (busy: boolean) => void}} props */
+/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, resourceType?: 'Catalog' | 'Profile' | 'Product', onBusyChange: (busy: boolean) => void}} props */
 export function ResourceWorkspace({ organizationId, organization, accessToken = '', resourceType = 'Catalog', onBusyChange }) {
   const isProfile = resourceType === 'Profile';
-  const plural = isProfile ? 'Profile' : 'Kataloge';
-  const noun = isProfile ? 'Profil' : 'Katalog';
-  const description = isProfile ? 'Profile wählen Controls und Parameter aus einem Katalog.' : 'Gruppierte Anforderungen und ihre gespeicherten Quellen.';
-  const defaultPath = isProfile ? 'profiles/application-baseline.json' : 'catalogs/application.json';
+  const isProduct = resourceType === 'Product';
+  const plural = isProduct ? 'Produkte' : isProfile ? 'Profile' : 'Kataloge';
+  const noun = isProduct ? 'Produkt' : isProfile ? 'Profil' : 'Katalog';
+  const description = isProduct ? 'Das Produktmanifest definiert die Produktquellen und die genaue geltende Profilversion.' : isProfile ? 'Profile wählen Controls und Parameter aus einem Katalog.' : 'Gruppierte Anforderungen und ihre gespeicherten Quellen.';
+  const defaultPath = isProduct ? 'products/audio-visualizer.json' : isProfile ? 'profiles/application-baseline.json' : 'catalogs/application.json';
   const selected = new URLSearchParams(location.search).get('resource') || '';
-  const view = new URLSearchParams(location.search).get('view') || (selected ? 'detail' : 'list');
+  const view = resourceType === 'Product' ? 'connect' : new URLSearchParams(location.search).get('view') || (selected ? 'detail' : 'list');
   const scope = `${organizationId}:${accessToken}:${resourceType}`;
   const root = `/api/organizations/${encodeURIComponent(organizationId)}/resources`;
-  const listUrl = `${isProfile ? '/profiles' : '/catalogs'}?${new URLSearchParams({ organization: organizationId })}`;
+  const listUrl = `${isProduct ? '/products' : isProfile ? '/profiles' : '/catalogs'}?${new URLSearchParams({ organization: organizationId })}`;
   const [state, setState] = useState(/** @type {{scope: string, resources: Resource[], principal: {id: string, kind: string} | null, error: string}} */ ({ scope: '', resources: [], principal: null, error: '' }));
   const [repository, setRepository] = useState('');
   const [ref, setRef] = useState('main');
@@ -111,7 +112,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
       /** @type {Resource} */ const saved = await response.json();
       if (current.signal.aborted) return;
       if (previewOnly) setPreviewState({ key: configKey, value: saved });
-      else window.location.assign(`${listUrl}&resource=${encodeURIComponent(saved.id || '')}`);
+      else window.location.assign(isProduct ? `${listUrl}&product=${encodeURIComponent(saved.resolved.productId || '')}&view=scope` : `${listUrl}&resource=${encodeURIComponent(saved.id || '')}`);
     } catch (error) { if (!current.signal.aborted) setFailure(error instanceof Error ? error.message : 'Die Quelle konnte nicht verarbeitet werden.'); }
     finally { if (!current.signal.aborted) setBusy(false); }
   }
@@ -124,13 +125,13 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
         <label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label>
         <label className="field">Git-Ref<input required maxLength={200} value={ref} onChange={(event) => setRef(event.target.value)} /></label>
         <ManifestSourceFields path={path} onPath={setPath} refType={refType} onRefType={setRefType} defaultPath={defaultPath} />
-        <label className="field">Erwartete {noun}-ID<input required maxLength={128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isProfile ? 'application-baseline' : 'application-controls'} /></label>
+        <label className="field">Erwartete {noun}-ID<input required maxLength={128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isProduct ? 'audio-visualizer' : isProfile ? 'application-baseline' : 'application-controls'} /></label>
         <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={128} /></label>
         <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy}>{noun} registrieren</button></div>
         {busy && <p role="status">Quelle wird gelesen und geprüft …</p>}
         <p>Der Import prüft die Struktur und speichert eine feste Revision. Ein Produktprofil legt die geltenden Controls fest.</p>
       </form> : <p>Nur Organisationseigentümer können neue Quellen registrieren.</p>}
-      {preview && <section className="panel" aria-label={`${noun}vorschau`}><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} /><CatalogControls key={preview.contentDigest} resource={preview} /></section>}
+      {preview && <section className="panel" aria-label={`${noun}vorschau`}><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} />{isProduct ? <><p>{preview.resolved.controls.length} geltende Controls aus {preview.resolved.profile?.name} · {preview.resolved.profile?.version}</p><p>Produktquellen: {preview.resolved.repositories?.map((item) => item.repository).join(', ')}</p></> : <CatalogControls key={preview.contentDigest} resource={preview} />}</section>}
       <a href={listUrl}>Zu den {plural}</a>
     </> : selected ? resource ? <>
       <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · Registriert · Struktur geprüft</p></div><a href={listUrl}>Alle {plural}</a></div>

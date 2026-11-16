@@ -115,9 +115,12 @@ def get_contract(
         "provider-pack",
         "oscal-catalog",
         "oscal-profile",
+        "product",
         "resource-source",
     ],
 ):
+    if contract == "product":
+        return read(HERE / "product.schema.json")
     if contract == "oscal-catalog":
         return read(ROOT / "oscal/1.2.3/oscal_catalog_schema.json")
     if contract == "oscal-profile":

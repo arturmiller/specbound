@@ -86,7 +86,52 @@ class ManifestSourceMigrationTest(unittest.TestCase):
                     expected[revision_id] = (filename, manifest)
             upgraded = migrate("0022_manifest_sources")
             self.assertEqual(upgraded.returncode, 0, upgraded.stderr)
+            team_id, product_id, binding_id = (str(uuid4()) for _ in range(3))
             with scoped.begin() as db:
+                db.execute(
+                    text(
+                        "INSERT INTO teams (id, organization_id, name) VALUES (:id, :org, 'Legacy team')"
+                    ),
+                    {"id": team_id, "org": org},
+                )
+                db.execute(
+                    text(
+                        "INSERT INTO products (id, owner_team_id, name) VALUES (:id, :team, 'Existing product')"
+                    ),
+                    {"id": product_id, "team": team_id},
+                )
+                db.execute(
+                    text(
+                        "INSERT INTO repo_bindings (id, product_id, provider, repository) VALUES (:id, :product, 'github', 'legacy/product')"
+                    ),
+                    {"id": binding_id, "product": product_id},
+                )
+            current = migrate("head")
+            self.assertEqual(current.returncode, 0, current.stderr)
+            with scoped.begin() as db:
+                self.assertEqual(
+                    tuple(
+                        db.execute(
+                            text(
+                                "SELECT p.id, p.owner_team_id, p.name, r.id, r.repository FROM products p JOIN repo_bindings r ON r.product_id = p.id"
+                            )
+                        ).one()
+                    ),
+                    (
+                        product_id,
+                        team_id,
+                        "Existing product",
+                        binding_id,
+                        "legacy/product",
+                    ),
+                )
+                self.assertEqual(
+                    db.execute(
+                        text("SELECT count(*) FROM product_governance")
+                    ).scalar_one(),
+                    0,
+                    "Do not invent a historical profile assignment",
+                )
                 rows = (
                     db.execute(
                         text(

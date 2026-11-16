@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ProductGovernance } from './product-governance.jsx';
 
 /** @typedef {{id: string, name: string, ownerTeamId: string}} Product */
 /** @typedef {{id: number, bindingId: string, repository: string, provider: string, scanner: string, ref: string, status: string, sourceRevision: string | null, observedAt: string, files: string[], errors: {path: string, reason: string}[]}} Scan */
@@ -62,8 +63,8 @@ export function ProductDetail({ product, organizationId, teamName, accessToken, 
   </> : <>
     <p className="eyebrow">PRODUKTE / PRODUKTDETAILS</p><div className="page-heading"><div><h1 id="products-heading">◇ {product.name}</h1><p>Verantwortung, Beobachtungen und gespeicherte Bewertungen.</p></div><a className="primary-link" href={sourcesUrl}>Quellen verwalten →</a></div>
     <div className="team-metrics team-detail-metrics"><div className="panel"><span>Produkttyp</span><strong>UNKNOWN</strong></div><div className="panel"><span>Umgebung des Produkts</span><strong>UNKNOWN</strong></div><div className="panel"><span>Verantwortliches Team</span><strong>{teamName}</strong></div><div className="panel"><span>Scanbeobachtungen</span><strong>{scanError ? 'Nicht verfügbar' : scans === null ? '…' : scans.length}</strong></div></div>
-    <nav className="product-detail-nav" aria-label="Produktansichten"><a aria-current="page" href={detailUrl}>Produktdetails</a><a href={discoveryUrl}>Discovery</a><a href={sourcesUrl}>Git-Quellen</a></nav>
-    <div className="discovery-columns"><div className="panel"><h2>Produktdetails</h2><h3>Belegte Subjects und Herkunft</h3>
+    <nav className="product-detail-nav" aria-label="Produktansichten"><a aria-current="page" href={detailUrl}>Produktdetails</a><a href={url(organizationId, product.id, 'scope')}>Geltungsbereich</a><a href={discoveryUrl}>Discovery</a><a href={sourcesUrl}>Git-Quellen</a></nav>
+    <ProductGovernance key={product.id} productId={product.id} organizationId={organizationId} accessToken={accessToken} /><div className="discovery-columns"><div className="panel"><h2>Produktdetails</h2><h3>Belegte Subjects und Herkunft</h3>
       {assessmentError || reportError ? <p role="alert" className="alert">{assessmentError || reportError}</p> : assessments === null || (assessments.length > 0 && !report) ? <p role="status">Bewertungen werden geladen …</p> : subjects.length === 0 ? <div className="unknown-architecture"><strong>◇ {product.name}</strong><p>Keine bewerteten Subjects verfügbar. Komponenten und Beziehungen: UNKNOWN.</p></div> : <div className="discovery-scans">{subjects.map((subject) => <article key={subject.id} className="discovery-scan"><strong>{subject.labels?.name || subject.id}</strong><p>{subject.type}</p><p className="break-value">Quelle: {subject.provenance?.sourceRef || 'UNKNOWN'}</p><p className="break-value">Revision: {subject.provenance?.sourceRevision || 'UNKNOWN'}</p></article>)}</div>}
       <p>Subjects stammen aus dem zuletzt gespeicherten Assessment. Weitere Komponenten und Beziehungen werden nicht angenommen.</p><a href={discoveryUrl}>Scanabdeckung ansehen →</a>
     </div><div className="discovery-side"><div className="panel"><h2>Kontrollen im letzten Assessment</h2><AssessmentSummary assessments={assessments} assessmentError={assessmentError} report={report} reportError={reportError} /></div>
