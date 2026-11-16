@@ -4,7 +4,7 @@ import os
 from typing import Annotated, Callable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 from sqlalchemy import JSON, bindparam, delete, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Connection
@@ -15,23 +15,37 @@ from app.authorization import organization_access
 from app.database import get_connection
 from app.git_source import GitSource, GitSourceError
 from app.github_source import configured_github_source
-from app.governance_pack import load_governance_pack
 from app.identity import get_current_principal
-from app.manifest_io import ManifestError
+from app.manifest_io import ManifestError, validator
+from app.manifest_source import checked_manifest_path, load_pack_at
 from app.pack_revisions import TagMoved, pin_release
-from app.provider_pack import load_provider_pack
 from app.tables import pack_approvals, pack_catalog, pack_revisions
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
+schemas_router = APIRouter()
 NonBlank = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
 ]
 
 
 class ConnectPack(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     repository: NonBlank
-    tag: NonBlank
+    tag: NonBlank | None = None
+    ref: NonBlank | None = None
+    refType: Literal["tag", "branch", "commit"] = "tag"
+    manifestPath: str | None = None
     kind: Literal["governance", "provider"]
+
+    @model_validator(mode="after")
+    def source_fields(self):
+        if bool(self.tag) == bool(self.ref) or (self.tag and self.refType != "tag"):
+            raise ValueError("Supply one tag or one explicit ref")
+        self.manifestPath = checked_manifest_path(
+            self.manifestPath
+            or ("pack.yaml" if self.kind == "governance" else "provider.yaml")
+        )
+        return self
 
 
 def github_source_factory() -> Callable[[str], GitSource]:
@@ -45,6 +59,15 @@ def _serialize(row):
         "repository": row["repository"],
         "tag": row["tag"],
         "commit": row["commit_sha"],
+        "ref": row["tag"],
+        "refType": row["ref_kind"],
+        "manifestPath": row["manifest_path"],
+        "schemaUrl": f"/api/contracts/{row['kind']}-pack",
+        "manifestUrl": f"https://github.com/{row['repository']}/blob/{row['commit_sha']}/{row['manifest_path']}",
+        "commitUrl": f"https://github.com/{row['repository']}/commit/{row['commit_sha']}",
+        "validationStatus": "structure_validated",
+        "contentDigest": row["content_digest"],
+        "schemas": row["schemas"] or {},
         "kind": row["kind"],
         "manifest": row["manifest"],
         "controls": row["controls"],
@@ -60,6 +83,8 @@ def _query(organization_id):
             pack_catalog.c.manifest,
             pack_catalog.c.controls,
             pack_catalog.c.capabilities,
+            pack_catalog.c.content_digest,
+            pack_catalog.c.schemas,
         )
         .select_from(
             pack_revisions.join(
@@ -68,6 +93,16 @@ def _query(organization_id):
         )
         .where(pack_revisions.c.organization_id == organization_id)
     )
+
+
+@schemas_router.get("/contracts/{contract}")
+def get_contract(contract: Literal["governance-pack", "provider-pack"]):
+    filename = (
+        "governance-pack.schema.json"
+        if contract == "governance-pack"
+        else "evidence-provider-pack.schema.json"
+    )
+    return validator(filename).schema
 
 
 @router.get("/organizations/{organization_id}/packs/{revision_id}/approval")
@@ -230,26 +265,23 @@ def connect_pack(
     try:
         source = factory(data.repository)
         try:
-            commit = source.resolve_tag(data.tag)
-            previous = db.execute(
-                select(pack_revisions.c.commit_sha).where(
-                    pack_revisions.c.organization_id == organization_id,
-                    pack_revisions.c.repository == data.repository,
-                    pack_revisions.c.tag == data.tag,
-                )
-            ).scalar_one_or_none()
-            if previous is not None and previous != commit:
-                raise TagMoved(previous, commit)
+            if getattr(source, "repository", data.repository) != data.repository:
+                raise ValueError("Source repository does not match request")
+            ref = data.ref or data.tag
+            commit = source.resolve_tag(ref) if data.refType == "tag" else ref
             snapshot = source.fetch(commit)
-            if snapshot.commit != commit:
+            if data.refType != "branch" and snapshot.commit != commit:
                 raise ValueError("Snapshot did not match resolved commit")
-            loaded = (
-                load_governance_pack(snapshot)
-                if data.kind == "governance"
-                else load_provider_pack(snapshot)
-            )
+            loaded = load_pack_at(snapshot, data.manifestPath, data.kind)
             revision = pin_release(
-                db, organization_id, data.repository, data.tag, source
+                db,
+                organization_id,
+                data.repository,
+                ref,
+                source,
+                manifest_path=data.manifestPath,
+                ref_kind=data.refType,
+                resolved_commit=snapshot.commit,
             )
             if revision["commit"] != snapshot.commit:
                 raise TagMoved(snapshot.commit, revision["commit"])
@@ -261,12 +293,42 @@ def connect_pack(
             if data.kind == "governance"
             else loaded["manifest"]["capabilities"]
         )
+        for existing in db.execute(
+            _query(organization_id).where(pack_catalog.c.kind == data.kind)
+        ).mappings():
+            metadata = existing["manifest"]["metadata"]
+            if (
+                metadata["id"] == loaded["manifest"]["metadata"]["id"]
+                and metadata["version"] == loaded["manifest"]["metadata"]["version"]
+                and (
+                    (
+                        existing["content_digest"] is None
+                        and existing["id"] != revision["id"]
+                    )
+                    or (
+                        existing["content_digest"] is not None
+                        and existing["content_digest"] != loaded["contentDigest"]
+                    )
+                    or (
+                        existing["id"] == revision["id"]
+                        and (
+                            existing["manifest"] != loaded["manifest"]
+                            or existing["controls"] != controls
+                        )
+                    )
+                )
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Resource ID/version already identifies different content; publish a new version",
+                )
         insert = text(
-            "INSERT INTO pack_catalog (revision_id, kind, manifest, controls, capabilities) VALUES (:id, :kind, :manifest, :controls, :capabilities) ON CONFLICT (revision_id) DO NOTHING"
+            "INSERT INTO pack_catalog (revision_id, kind, manifest, controls, capabilities, content_digest, schemas) VALUES (:id, :kind, :manifest, :controls, :capabilities, :digest, :schemas) ON CONFLICT (revision_id) DO NOTHING"
         ).bindparams(
             bindparam("manifest", type_=JSON),
             bindparam("controls", type_=JSON),
             bindparam("capabilities", type_=JSON),
+            bindparam("schemas", type_=JSON),
         )
         db.execute(
             insert,
@@ -276,6 +338,8 @@ def connect_pack(
                 "manifest": loaded["manifest"],
                 "controls": controls,
                 "capabilities": capabilities,
+                "digest": loaded["contentDigest"],
+                "schemas": loaded.get("schemas", {}),
             },
         )
         row = (

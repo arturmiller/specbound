@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { GovernancePlans } from './governance-plans.jsx';
+import { ManifestProvenance, ManifestSourceFields } from './manifest-source.jsx';
 
 /** @typedef {{id: string, description?: string, target?: {kind?: string}, requiredEvidence?: {capability?: string}, assertions?: unknown[]}} Control */
-/** @typedef {{id: string, repository: string, tag: string, commit: string, kind: string, manifest: {metadata: {id: string, version: string}}, controls: Control[], capabilities: (string | {id: string, version: string})[]}} Pack */
+/** @typedef {{id: string, repository: string, tag: string, commit: string, kind: string, manifestPath?: string, schemaUrl?: string, manifestUrl?: string, commitUrl?: string, manifest: {metadata: {id: string, version: string}}, controls: Control[], capabilities: (string | {id: string, version: string})[]}} Pack */
 /** @typedef {{revisionId: string, approved: boolean, approvedBy: string | null, approvedAt?: string | null}} Approval */
 /** @typedef {{id: string, ownerPrincipalId?: string}} Organization */
 
@@ -23,6 +24,8 @@ export function PackWorkspace({ organizationId, organization, accessToken = '', 
   const [loading, setLoading] = useState(true);
   const [repository, setRepository] = useState('');
   const [tag, setTag] = useState('');
+  const [manifestPath, setManifestPath] = useState('');
+  const [refType, setRefType] = useState('tag');
   const [kind, setKind] = useState('governance');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -83,7 +86,7 @@ export function PackWorkspace({ organizationId, organization, accessToken = '', 
     if (!isOwner || !repository.trim() || !tag.trim()) return;
     setBusy(true); setError('');
     try {
-      const response = await fetch(root, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ repository: repository.trim(), tag: tag.trim(), kind }) });
+      const response = await fetch(root, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ repository: repository.trim(), ref: tag.trim(), refType, manifestPath: manifestPath.trim() || undefined, kind }) });
       if (!response.ok) {
         const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Der Tag wurde verschoben oder gehört zu einem anderen Pack-Typ; der gespeicherte Commit bleibt unverändert.', 422: 'Pack-Manifest oder Repository ist ungültig.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.' };
         throw new Error(messages[/** @type {403 | 409 | 422 | 503} */ (response.status)] || 'Pack konnte nicht verbunden werden.');
@@ -103,7 +106,7 @@ export function PackWorkspace({ organizationId, organization, accessToken = '', 
     </> : view === 'connect' ? <>
       <p className="eyebrow">PACKS / REPOSITORY VERBINDEN</p><div className="page-heading"><div><h1 id="packs-heading">Pack verbinden</h1><p>Git-Repository und Release-Tag auswählen und validieren.</p></div></div>
       <ol className="team-steps" aria-label="Pack-Verbindung"><li aria-current="step"><span>1</span>Quelle auswählen</li><li><span>2</span>Revision prüfen</li><li><span>3</span>Freigabe</li></ol>
-      <div className="team-columns"><div className="panel"><h2>Pack-Quelle</h2>{isOwner ? <form onSubmit={connect}><label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label><label className="field">Release-Tag<input required maxLength={200} value={tag} onChange={(event) => setTag(event.target.value)} placeholder="v1.0.0" /></label><label className="field">Pack-Typ<select aria-label="Pack-Typ" value={kind} onChange={(event) => setKind(event.target.value)}><option value="governance">Governance</option><option value="provider">Evidence Provider</option></select></label><button type="submit" disabled={busy}>Pack verbinden</button></form> : <p>Nur Organisationseigentümer können ein Pack verbinden.</p>}</div>
+      <div className="team-columns"><div className="panel"><h2>Pack-Quelle</h2>{isOwner ? <form onSubmit={connect}><label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label><label className="field">{refType === 'tag' ? 'Release-Tag' : 'Git-Ref'}<input required maxLength={200} value={tag} onChange={(event) => setTag(event.target.value)} placeholder="v1.0.0" /></label><label className="field">Pack-Typ<select aria-label="Pack-Typ" value={kind} onChange={(event) => setKind(event.target.value)}><option value="governance">Governance</option><option value="provider">Evidence Provider</option></select></label><ManifestSourceFields path={manifestPath} onPath={setManifestPath} refType={refType} onRefType={setRefType} defaultPath={kind === 'provider' ? 'provider.yaml' : 'pack.yaml'} /><button type="submit" disabled={busy}>Pack verbinden</button></form> : <p>Nur Organisationseigentümer können ein Pack verbinden.</p>}</div>
         <div className="panel"><h2>Integrität des Release</h2><p>Der Tag wird beim Verbinden auf einen Commit aufgelöst; ein später verschobener Tag ersetzt den gespeicherten Commit nicht.</p><div className="team-info">Manifest und Packstruktur werden vor dem Speichern validiert. Signatur und Tag-Schutz werden hier nicht geprüft.</div><p>Eine menschliche Freigabe aktiviert das Pack nicht und startet keine Collector-Ausführung.</p></div></div><a className="team-back" href={listUrl}>← Zurück zum Katalog</a>
     </> : ['releases', 'impact', 'activation', 'baseline-impact'].includes(view) ? <GovernancePlans organizationId={organizationId} packs={packs} selected={selected} view={view} /> : !detail ? <><h1 id="packs-heading">Pack nicht verfügbar</h1><p>Die Revision existiert nicht oder ist für dich nicht sichtbar.</p><a href={listUrl}>Zum Pack-Katalog</a></> : <>
       <p className="eyebrow">PACKS / REVISION</p><div className="page-heading"><div><h1 id="packs-heading">{detail.manifest.metadata.id}</h1><p>Version {detail.manifest.metadata.version} · {detail.kind === 'governance' ? 'Governance' : 'Evidence Provider'} · strukturell validiert</p></div></div>
@@ -114,7 +117,7 @@ export function PackWorkspace({ organizationId, organization, accessToken = '', 
           {approvalError && <p role="alert" className="alert">{approvalError}</p>}{isOwner && currentApproval && <button type="button" disabled={busy} onClick={() => { void changeApproval(); }}>{currentApproval.approved ? 'Freigabe zurücknehmen' : 'Governance-Pack freigeben'}</button>}</>}</div>
       <div className="pack-detail-columns"><div className="panel team-table-panel"><h2>Kontrollen</h2>{detail.controls.length ? <><p className="pack-scroll-hint">Tabelle horizontal scrollen, um alle Spalten zu sehen.</p><div className="team-table-scroll" tabIndex={0} aria-label="Kontrollen, horizontal scrollbar"><table className="team-table"><thead><tr><th>CONTROL</th><th>ZIEL</th><th>CAPABILITY</th></tr></thead><tbody>{detail.controls.map((item) => <tr key={item.id}><td><button type="button" className="pack-control-link" aria-pressed={control?.id === item.id} onClick={() => setControlId(item.id)}>{item.id}</button></td><td>{item.target?.kind || 'Nicht angegeben'}</td><td>{item.requiredEvidence?.capability || 'Nicht angegeben'}</td></tr>)}</tbody></table></div></> : <p className="product-empty">Keine Governance-Kontrollen.</p>}</div>
         <div className="panel"><h2>{control?.id || 'Control-Herkunft'}</h2>{control ? <><p>Quelle: {detail.repository} · Tag {detail.tag}</p><p className="break-value">Commit: {detail.commit}</p><p>Ziel: {control.target?.kind || 'Nicht angegeben'}</p><p>Evidence: {control.requiredEvidence?.capability || 'Nicht angegeben'}</p><details><summary>Control-Daten</summary><pre className="pack-json">{JSON.stringify(control, null, 2)}</pre></details></> : <p>Keine Control ausgewählt.</p>}</div></div>
-      <details className="panel pack-manifest"><summary>Manifest und Capabilities</summary><pre className="pack-json">{JSON.stringify(detail.manifest, null, 2)}</pre><ul>{detail.capabilities.map((capability) => { const value = typeof capability === 'string' ? capability : `${capability.id}/${capability.version}`; return <li key={value}>{value}</li>; })}</ul></details>
+      <ManifestProvenance source={detail} defaultPath={detail.kind === 'provider' ? 'provider.yaml' : 'pack.yaml'} /><details className="panel pack-manifest"><summary>Manifest und Capabilities</summary><pre className="pack-json">{JSON.stringify(detail.manifest, null, 2)}</pre><ul>{detail.capabilities.map((capability) => { const value = typeof capability === 'string' ? capability : `${capability.id}/${capability.version}`; return <li key={value}>{value}</li>; })}</ul></details>
       {detail.kind === 'governance' && <a className="primary-link" href={packUrl(organizationId, detail.id, 'impact')}>Auswirkung und Aktivierung ansehen →</a>}{' '}
       <a className="team-back" href={listUrl}>← Zurück zum Katalog</a>
     </>}

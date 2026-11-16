@@ -96,6 +96,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_pack_catalog.py' -v
+      - name: Upgrade legacy manifest sources without rewriting their history
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_manifest_source_migration.py' -v
       - name: Verify evidence freshness and tenant scope
         working-directory: services/api
         env:
