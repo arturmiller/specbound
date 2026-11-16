@@ -23,6 +23,7 @@ from app.products import router as products_router
 from app.provider_test_runs import router as provider_test_runs_router
 from app.public_license_scans import router as public_license_scans_router
 from app.readiness import check_readiness
+from app.resource_registry import router as resource_registry_router
 from app.teams import router as teams_router
 
 
@@ -37,6 +38,7 @@ app.include_router(github_repositories_router)
 app.include_router(pack_catalog_router)
 app.include_router(public_license_scans_router)
 app.include_router(schemas_router)
+app.include_router(resource_registry_router)
 app.include_router(agents_router)
 app.include_router(assessment_reports_router)
 app.include_router(overview_router)

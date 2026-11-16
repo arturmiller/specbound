@@ -23,6 +23,32 @@ def checked_manifest_path(path):
     return path
 
 
+def snapshot_for_ref(source, repository, ref, ref_kind):
+    """Resolve an explicit GitHub ref kind once, without ambiguous tag/branch names."""
+    if getattr(source, "repository", repository) != repository:
+        raise ValueError("Source repository does not match request")
+    if ref_kind not in ("tag", "branch", "commit"):
+        raise ValueError("Unsupported Git ref kind")
+    commit = source.resolve_tag(ref) if ref_kind == "tag" else ref
+    if ref_kind != "branch" and not re.fullmatch(
+        r"(?:[0-9a-f]{40}|[0-9a-f]{64})", commit
+    ):
+        raise ValueError("A full commit is required")
+    snapshot = source.fetch("heads/" + ref if ref_kind == "branch" else commit)
+    if ref_kind != "branch" and snapshot.commit != commit:
+        raise ValueError("Snapshot did not match resolved commit")
+    return snapshot
+
+
+def content_digest(files):
+    digest = hashlib.sha256()
+    for path in sorted(files):
+        name, content = path.encode(), files[path]
+        digest.update(len(name).to_bytes(8, "big") + name)
+        digest.update(len(content).to_bytes(8, "big") + content)
+    return digest.hexdigest()
+
+
 def load_pack_at(snapshot: GitSnapshot, manifest_path, kind):
     checked_manifest_path(manifest_path)
     if manifest_path not in snapshot.files:
@@ -48,9 +74,7 @@ def load_pack_at(snapshot: GitSnapshot, manifest_path, kind):
     else:
         paths.update(loaded["schemas"])
         paths.update(manifest.get("tests", []))
-    digest = hashlib.sha256()
-    for path in sorted(paths):
-        name, content = path.encode(), local[path]
-        digest.update(len(name).to_bytes(8, "big") + name)
-        digest.update(len(content).to_bytes(8, "big") + content)
-    return {**loaded, "contentDigest": digest.hexdigest()}
+    return {
+        **loaded,
+        "contentDigest": content_digest({path: local[path] for path in paths}),
+    }

@@ -139,7 +139,7 @@ class PackCatalogTest(unittest.TestCase):
 
         def nested(ref):
             source.calls += 1
-            snapshot = fetch(source.commit if ref == "main" else ref)
+            snapshot = fetch(source.commit if ref in ("main", "heads/main") else ref)
             files = {}
             for folder in ("one", "two"):
                 for path, content in snapshot.files.items():

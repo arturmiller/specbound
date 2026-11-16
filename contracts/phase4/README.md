@@ -28,6 +28,10 @@ Registrierte Manifestpfade sind relative Repositorypfade aus nichtleeren Segment
 
 ## Erster unterstützter OSCAL-Umfang
 
+Die Katalogstrecke verwendet den gemeinsamen produktiven Validator unter `services/api/app/resource_contracts.py`; der Offline-Checker ruft denselben Code auf. Kataloge sind über `/organizations/{id}/resources` und das Menü **Kataloge** registrierbar. Ein POST mit `preview=true` schreibt weder Quellpin noch Ressource. `X-Expected-Commit` schützt den anschließenden Import vor einem währenddessen geänderten Ref. Native Profile und Produktzuordnungen folgen in ihren vertikalen Slices.
+
+`ResourceSource.spec.refType` kann `branch` (Standard), `tag` oder `commit` sein. Branch-Namen werden für GitHub als `heads/<Name>` aufgelöst, damit ein gleichnamiger Tag nicht ausgewählt wird ([GitHub-Commitvertrag](https://docs.github.com/en/rest/commits/commits#get-a-commit)). Der bestehende Ref-Längenbereich des Adapters beträgt 200 Zeichen.
+
 - JSON-Inhalte und JSON-kompatibles YAML werden gegen die gepinnten JSON-Schemas validiert; der Offline-Beispielchecker liest JSON. Die vorhandenen Größen-/YAML-Schutzmaßnahmen gelten für den späteren Import weiter.
 - Ein Profil importiert genau einen Katalog aus demselben gepinnten Repository-Snapshot. `href` ist ein relativer Dateipfad. `../catalogs/application.json` ist zulässig, sofern die normalisierte Auflösung innerhalb der Repository-Wurzel bleibt. Absolute URLs, Abfragen, Fragmente, Prozentkodierung und das Verlassen des Repositories werden nicht unterstützt.
 - Auswahl ausschließlich über eine nichtleere `include-controls`-Auswahl mit eindeutigen `with-ids`. Keine stillschweigende Gesamtauswahl. Profile als Importquelle, mehrere Imports, Regex-Selektoren, `include-all`, `exclude-controls` und Child-Control-Auswahl werden zunächst explizit zurückgewiesen.

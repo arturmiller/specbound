@@ -290,6 +290,18 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 @media (max-width: 650px) { .pr-meta { grid-template-columns: minmax(0, 1fr); }.pr-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }.pr-findings li { flex-wrap: wrap; } }
 
 .agent-screen { font-size: 12px; }
+.resource-workspace, .resource-controls { min-width: 0; }
+.resource-source-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.resource-source-form > p, .resource-actions { grid-column: 1 / -1; }
+.resource-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.resource-group { margin: 22px 0; }
+.resource-control { margin: 10px 0; overflow-wrap: anywhere; }
+.resource-control > summary { cursor: pointer; padding: 4px 0; line-height: 1.6; }
+.resource-control[open] > summary { margin-bottom: 14px; }
+.resource-definition { display: flex; gap: 20px; flex-wrap: wrap; }
+.resource-definition dt { color: #53677e; font-size: 12px; }
+.resource-definition dd { margin: 5px 0; overflow-wrap: anywhere; }
+@media (max-width: 650px) { .resource-source-form { grid-template-columns: minmax(0, 1fr); } }
 .agent-screen .team-table { min-width: 650px; }
 .agent-steps { display: flex; gap: 24px; flex-wrap: wrap; padding: 16px; margin: 18px 0; border: 1px solid #dce6f2; border-radius: 9px; background: white; color: #70859c; }.agent-steps strong { color: #1b67ed; }
 .agent-team-list { list-style: none; padding: 0; }.agent-team-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid #e8eef6; }

@@ -194,7 +194,7 @@ class GitHubSource:
         return self._fetch_snapshot(ref, lockfiles_only=True)
 
     def _fetch_snapshot(self, ref: str, *, lockfiles_only: bool) -> GitSnapshot:
-        ref = self._ref(ref)
+        ref = "heads%2F" + self._ref(ref[6:]) if isinstance(ref, str) and ref.startswith("heads/") else self._ref(ref)
         token = self._token()
         details = self._request("GET", f"/repos/{self.repository}/commits/{ref}", token)
         commit = self._sha(details.get("sha"))

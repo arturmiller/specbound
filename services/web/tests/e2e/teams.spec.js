@@ -16,7 +16,14 @@ test('creates a team and member and shows them after reload', async ({ page, req
   await page.getByLabel('Rolle', { exact: true }).selectOption('viewer');
   await page.getByRole('button', { name: 'Mitglied hinzufügen' }).click();
   await expect(page.getByText('user:alice', { exact: true })).toBeVisible();
+  // Exercise reload after a committed role change while the network is slow.
+  await page.route('**/api/teams/*/members/*', async (route) => {
+    if (route.request().method() === 'PATCH') await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+  const roleSaved = page.waitForResponse((response) => response.request().method() === 'PATCH' && new URL(response.url()).pathname.includes('/members/'));
   await page.getByLabel('Rolle von user:alice').selectOption('maintainer');
+  expect((await roleSaved).status()).toBe(200);
   await page.reload();
   await expect(page.getByText('user:alice', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Rolle von user:alice')).toHaveValue('maintainer');
