@@ -219,6 +219,8 @@ def resolve_profile(document, catalogs, *, profile_path):
             raise ValueError("Unknown, duplicate or unsupported parameter change")
         changed.add(change["param-id"])
         parameters[change["param-id"]] = change["values"]
+    if any(not values for values in parameters.values()):
+        raise ValueError("Selected control parameter has no effective value")
     links = [
         link
         for link in catalog["metadata"].get("links", [])
@@ -271,6 +273,7 @@ def compile_bindings(document, resolved):
             if len(values) != 1:
                 raise ValueError("A scalar expectation requires one value")
             value = json.loads(values[0], parse_constant=reject_constant)
+            json.dumps(value, allow_nan=False)
             if isinstance(value, (dict, list)):
                 raise ValueError("Expected parameter must encode a JSON scalar")
             rule["expected"] = value

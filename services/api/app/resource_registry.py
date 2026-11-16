@@ -15,7 +15,7 @@ from app.git_source import GitSource, GitSourceError
 from app.identity import get_current_principal
 from app.manifest_io import ManifestError
 from app.manifest_source import snapshot_for_ref
-from app.oscal_resources import load_catalog
+from app.oscal_resources import load_catalog, load_profile
 from app.pack_catalog import github_source_factory, require_github_organization
 from app.pack_revisions import TagMoved, pin_release
 from app.resource_contracts import HERE, validate
@@ -149,8 +149,11 @@ def register_resource(
         validate(data, HERE / "resource-source.schema.json")
         config = data["spec"]
         kind = config["resourceType"]
-        if kind != "Catalog":
-            raise ValueError("Only native Catalog registration is supported here")
+        loaders = {"Catalog": load_catalog, "Profile": load_profile}
+        if kind not in loaders:
+            raise ValueError(
+                "Only native Catalog and Profile registration are supported here"
+            )
         source = factory(config["repository"])
         try:
             ref_kind = config.get("refType", "branch")
@@ -162,13 +165,43 @@ def register_resource(
                     status_code=409,
                     detail="Source changed after preview; check the new revision first",
                 )
-            loaded = load_catalog(snapshot, config["manifestPath"])
+            loaded = loaders[kind](snapshot, config["manifestPath"])
         finally:
             source.close()
         if config["expected"] != {"id": loaded["id"], "version": loaded["version"]}:
             raise ValueError(
                 "Manifest identity/version differs from the registered reference"
             )
+        if kind == "Profile":
+            catalog = loaded["resolved"]["catalog"]
+            matches = (
+                db.execute(
+                    _query(organization_id).where(
+                        resource_documents.c.kind == "Catalog",
+                        resource_documents.c.resource_id == catalog["resourceId"],
+                        resource_documents.c.resource_version == catalog["version"],
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            if not matches:
+                raise ValueError("Referenced catalog version must be registered first")
+            if {row["content_digest"] for row in matches} != {catalog["contentDigest"]}:
+                raise ValueError(
+                    "Referenced catalog version is ambiguous or has different content"
+                )
+            matches.sort(
+                key=lambda row: (
+                    not (
+                        row["repository"] == config["repository"]
+                        and row["manifest_path"] == catalog["manifestPath"]
+                        and row["commit_sha"] == snapshot.commit
+                    ),
+                    row["revision_id"],
+                )
+            )
+            catalog["revisionId"] = matches[0]["revision_id"]
         if preview:
             response.status_code = 200
             return {
