@@ -5,11 +5,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+from app.database import get_engine
 from app.git_source import GitSnapshot
 from app.identity import get_current_principal
 from app.main import app
 from app.pack_catalog import github_source_factory
+from app.tables import pack_catalog
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 
 COMMIT = "a" * 40
 FIXTURES = Path(__file__).parent / "fixtures" / "governance"
@@ -126,3 +130,149 @@ class PackCatalogTest(unittest.TestCase):
                 json={"repository": "example/packs", "tag": "v1", "kind": "governance"},
             )
             self.assertEqual(response.status_code, 403)
+
+    def use_nested_provider_source(self):
+        source = ProviderFixtureSource("example/providers")
+        fetch = source.fetch
+        source.calls = 0
+        source.changed = False
+
+        def nested(ref):
+            source.calls += 1
+            snapshot = fetch(source.commit if ref == "main" else ref)
+            files = {}
+            for folder in ("one", "two"):
+                for path, content in snapshot.files.items():
+                    if path == "provider.yaml":
+                        manifest = yaml.safe_load(content)
+                        manifest["metadata"]["id"] += "." + folder
+                        content = yaml.safe_dump(manifest).encode()
+                        path = "manifest.yaml"
+                    if source.changed and path == "schemas/reachability.json":
+                        content = b'{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"string"}'
+                    files[f"packs/{folder}/{path}"] = content
+            return GitSnapshot(snapshot.commit, files)
+
+        source.fetch = nested
+        self.source = source
+        return source
+
+    def test_two_manifests_in_one_repository_and_ref_are_independent(self):
+        source = self.use_nested_provider_source()
+        saved = []
+        for folder in ("one", "two"):
+            response = self.client.post(
+                self.url,
+                json={
+                    "repository": source.repository,
+                    "ref": "main",
+                    "refType": "branch",
+                    "manifestPath": f"packs/{folder}/manifest.yaml",
+                    "kind": "provider",
+                },
+            )
+            self.assertEqual(response.status_code, 201, response.text)
+            saved.append(response.json())
+        self.assertEqual(source.calls, 2, "Each registration must read one snapshot")
+        self.assertNotEqual(saved[0]["id"], saved[1]["id"])
+        self.assertEqual(saved[0]["ref"], "main")
+        self.assertEqual(saved[0]["commit"], COMMIT)
+        self.assertIn("schemas/reachability.json", saved[0]["schemas"])
+        self.assertTrue(
+            saved[0]["manifestUrl"].endswith(f"/{COMMIT}/packs/one/manifest.yaml")
+        )
+        self.assertEqual(
+            self.client.get(self.url + "/" + saved[1]["id"]).json(), saved[1]
+        )
+        self.assertEqual(len(self.client.get(self.url).json()), 2)
+        source.changed = True
+        source.commit = "b" * 40
+        conflict = self.client.post(
+            self.url,
+            json={
+                "repository": source.repository,
+                "ref": "main",
+                "refType": "branch",
+                "manifestPath": "packs/one/manifest.yaml",
+                "kind": "provider",
+            },
+        )
+        self.assertEqual(conflict.status_code, 409, conflict.text)
+        self.assertEqual(len(self.client.get(self.url).json()), 2)
+        self.assertEqual(
+            self.client.get(self.url + "/" + saved[0]["id"]).json(), saved[0]
+        )
+
+    def test_unsafe_paths_missing_files_and_wrong_sources_do_not_register(self):
+        source = self.use_nested_provider_source()
+        for path in (
+            "../manifest.yaml",
+            "/manifest.yaml",
+            "C:/manifest.json",
+            "packs/missing.yaml",
+        ):
+            with self.subTest(path=path):
+                response = self.client.post(
+                    self.url,
+                    json={
+                        "repository": source.repository,
+                        "ref": "main",
+                        "refType": "branch",
+                        "manifestPath": path,
+                        "kind": "provider",
+                    },
+                )
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertEqual(self.client.get(self.url).json(), [])
+        response = self.client.post(
+            self.url,
+            json={
+                "repository": "different/repository",
+                "ref": "main",
+                "refType": "branch",
+                "kind": "provider",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            source.calls, 1, "Only the safe missing-file request may fetch"
+        )
+
+    def test_migrated_unknown_digest_cannot_rebind_identity_to_a_new_commit(self):
+        source = self.use_nested_provider_source()
+        request = {
+            "repository": source.repository,
+            "ref": "main",
+            "refType": "branch",
+            "manifestPath": "packs/one/manifest.yaml",
+            "kind": "provider",
+        }
+        created = self.client.post(self.url, json=request)
+        self.assertEqual(created.status_code, 201, created.text)
+        revision_id = created.json()["id"]
+        with get_engine().begin() as db:
+            db.execute(
+                update(pack_catalog)
+                .where(pack_catalog.c.revision_id == revision_id)
+                .values(content_digest=None)
+            )
+        legacy = self.client.get(self.url + "/" + revision_id).json()
+        self.assertIsNone(legacy["contentDigest"])
+        self.assertEqual(self.client.post(self.url, json=request).json(), legacy)
+        source.changed = True
+        source.commit = "b" * 40
+        rejected = self.client.post(self.url, json=request)
+        self.assertEqual(rejected.status_code, 409, rejected.text)
+        self.assertEqual(self.client.get(self.url).json(), [legacy])
+
+    def test_known_schema_contracts_are_public_without_exposing_pack_data(self):
+        app.dependency_overrides.clear()
+        response = self.client.get("/contracts/provider-pack")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["properties"]["kind"]["const"], "EvidenceProviderPack"
+        )
+        self.assertEqual(
+            self.client.get("/contracts/https://evil.example/schema").status_code, 404
+        )
+        self.assertEqual(self.client.get(self.url).status_code, 401)

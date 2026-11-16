@@ -17,7 +17,7 @@ test('connects a provider pack and shows the real manifest and contract referenc
   await page.getByRole('link', { name: 'net.internet-reachability/v1' }).click();
   await expect(page.getByText('Schema-Referenz: schemas/reachability.json')).toBeVisible();
   await expect(page.getByText('tests/reachability.yaml', { exact: true })).toBeVisible();
-  await expect(page.getByText('Schema-Inhalt im Katalog nicht gespeichert.')).toBeVisible();
+  await expect(page.locator('.provider-code pre')).toContainText('https://json-schema.org/draft/2020-12/schema');
   await expect(page.getByText('Fixture-Inhalte und Testergebnisse sind im Katalog nicht gespeichert.')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Capability-Vertrag und Testreferenzen' })).toBeVisible();

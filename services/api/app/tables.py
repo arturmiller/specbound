@@ -106,15 +106,18 @@ pack_revisions = Table(
     "pack_revisions", metadata,
     Column("id", String), Column("organization_id", String),
     Column("repository", String), Column("tag", String), Column("commit_sha", String),
+    Column("manifest_path", String), Column("ref_kind", String),
 )
 pack_activations = Table(
     "pack_activations", metadata,
     Column("organization_id", String), Column("repository", String), Column("revision_id", String),
+    Column("manifest_path", String),
 )
 pack_catalog = Table(
     "pack_catalog", metadata,
     Column("revision_id", String), Column("kind", String), Column("manifest", JSON),
     Column("controls", JSON), Column("capabilities", JSON),
+    Column("content_digest", String), Column("schemas", JSON),
 )
 provider_test_runs = Table(
     "provider_test_runs", metadata,

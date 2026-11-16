@@ -25,19 +25,41 @@ def process_public_license_scan_fixture():
     from public_license_worker import poll_once
 
     def fixture(repository, ref):
-        return {"status": "ok", "result": {
-            "requestedRef": ref, "sourceRevision": "a" * 40, "coverage": "covered", "sourceCoverage": "covered",
-            "reason": "Fixture lockfile; no installation is implied.", "files": ["uv.lock"],
-            "unsupportedFiles": [], "packages": [
-                {"path": "uv.lock", "name": "sample-gpl", "version": "1.0", "source": "pypi",
-                 "markers": [], "licenseExpression": "GPL-3.0-only", "status": "FAIL",
-                 "metadata": {"status": "OBSERVED", "artifacts": [{
-                     "sourceUrl": "https://files.pythonhosted.org/packages/ab/sample.whl.metadata",
-                     "sourceKind": "distribution-metadata", "artifactSha256": "a" * 64,
-                     "metadataSha256": "b" * 64, "licenseExpression": "GPL-3.0-only",
-                 }]}},
-            ],
-        }}
+        return {
+            "status": "ok",
+            "result": {
+                "requestedRef": ref,
+                "sourceRevision": "a" * 40,
+                "coverage": "covered",
+                "sourceCoverage": "covered",
+                "reason": "Fixture lockfile; no installation is implied.",
+                "files": ["uv.lock"],
+                "unsupportedFiles": [],
+                "packages": [
+                    {
+                        "path": "uv.lock",
+                        "name": "sample-gpl",
+                        "version": "1.0",
+                        "source": "pypi",
+                        "markers": [],
+                        "licenseExpression": "GPL-3.0-only",
+                        "status": "FAIL",
+                        "metadata": {
+                            "status": "OBSERVED",
+                            "artifacts": [
+                                {
+                                    "sourceUrl": "https://files.pythonhosted.org/packages/ab/sample.whl.metadata",
+                                    "sourceKind": "distribution-metadata",
+                                    "artifactSha256": "a" * 64,
+                                    "metadataSha256": "b" * 64,
+                                    "licenseExpression": "GPL-3.0-only",
+                                }
+                            ],
+                        },
+                    },
+                ],
+            },
+        }
 
     return {"processed": poll_once(get_engine(), execute=fixture)}
 
@@ -103,14 +125,33 @@ class FixtureSource:
         self.repository = repository
 
     def resolve_tag(self, tag):
-        if tag != "v1.2.0" and not (self.repository == "arturmiller/specbound-example-provider" and tag == "v1.1.0"):
+        if tag != "v1.2.0" and not (
+            self.repository == "arturmiller/specbound-example-provider"
+            and tag == "v1.1.0"
+        ):
             raise ValueError("Unknown fixture tag")
         return "a" * 40
 
     def fetch(self, ref):
+        if self.repository == "fixture/multi-providers":
+            if ref not in ("main", "a" * 40):
+                raise ValueError("Unexpected fixture ref")
+            root = next(
+                parent / "contracts/phase4/examples"
+                for parent in Path(__file__).resolve().parents
+                if (parent / "contracts/phase4/examples").is_dir()
+            )
+            files = {
+                str(path.relative_to(root)).replace("\\", "/"): path.read_bytes()
+                for path in (root / "evidence").rglob("*.json")
+            }
+            return GitSnapshot("a" * 40, files)
         if ref != "a" * 40:
             raise ValueError("Unexpected fixture commit")
-        if self.repository.startswith("fixture/provider") or self.repository == "arturmiller/specbound-example-provider":
+        if (
+            self.repository.startswith("fixture/provider")
+            or self.repository == "arturmiller/specbound-example-provider"
+        ):
             fixtures = Path(__file__).parent / "fixtures" / "provider"
             schema = (fixtures / "schema.json").read_bytes()
             manifest = (fixtures / "provider.yaml").read_bytes()

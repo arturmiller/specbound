@@ -18,6 +18,7 @@ from app.identity import router as auth_router
 from app.metrics import render_metrics
 from app.overview import router as overview_router
 from app.pack_catalog import router as pack_catalog_router
+from app.pack_catalog import schemas_router
 from app.products import router as products_router
 from app.provider_test_runs import router as provider_test_runs_router
 from app.public_license_scans import router as public_license_scans_router
@@ -35,6 +36,7 @@ app.include_router(github_webhook_router)
 app.include_router(github_repositories_router)
 app.include_router(pack_catalog_router)
 app.include_router(public_license_scans_router)
+app.include_router(schemas_router)
 app.include_router(agents_router)
 app.include_router(assessment_reports_router)
 app.include_router(overview_router)
