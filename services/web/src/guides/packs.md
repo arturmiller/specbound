@@ -16,6 +16,10 @@ Im Menü **Kataloge** werden native OSCAL-Kataloge mit Gruppen und Controls aus 
 
 Die Katalogansicht zeigt Anforderungen, Parameter, benötigte Nachweistypen und konfigurierte Regeln. Ein Control ohne automatisierte Prüfmethode bleibt sichtbar. Die konkrete Geltung für ein Produkt entsteht durch dessen Profilzuordnung; ein registrierter Katalog ist keine Bewertung. Bisherige Governance-Packs bleiben über den verlinkten Legacy-Katalog erreichbar.
 
+Im Menü **Profile** werden native OSCAL-Profile registriert. Sie importieren in der ersten Stufe genau einen Katalog aus demselben Repository-Snapshot und wählen Controls ausdrücklich über ihre IDs aus. Unterstützte Parameteränderungen werden vor dem Speichern in die Prüfbindungen aufgelöst. Zuerst wird die passende Katalogversion registriert; fehlende oder widersprüchliche Referenzen sind ein Fehler. Profil und Katalog sind gegenseitig verlinkt, die tatsächlich eingebundenen Dateien besitzen eigene Commitlinks.
+
+Ändere gemeinsame Anforderungen oder Parameter im Repository und erhöhe die jeweilige Version. Ein bestehendes Profil darf auch dann keine anderen Katalog-/Bindingsinhalte bezeichnen, wenn sich nur seine relative Importdatei geändert hat. Die Auswahl des geltenden Profils für ein Produkt ist ein eigener Konfigurationsschritt.
+
 Mit installierten Python-Entwicklungsabhängigkeiten das mitgelieferte Governance-Beispiel validieren:
 
 ```sh

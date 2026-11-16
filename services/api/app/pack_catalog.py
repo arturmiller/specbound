@@ -111,11 +111,17 @@ def _query(organization_id):
 @schemas_router.get("/contracts/{contract}")
 def get_contract(
     contract: Literal[
-        "governance-pack", "provider-pack", "oscal-catalog", "resource-source"
+        "governance-pack",
+        "provider-pack",
+        "oscal-catalog",
+        "oscal-profile",
+        "resource-source",
     ],
 ):
     if contract == "oscal-catalog":
         return read(ROOT / "oscal/1.2.3/oscal_catalog_schema.json")
+    if contract == "oscal-profile":
+        return read(ROOT / "oscal/1.2.3/oscal_profile_schema.json")
     if contract == "resource-source":
         return read(HERE / "resource-source.schema.json")
     filename = (

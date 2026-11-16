@@ -5,7 +5,7 @@ import { ManifestProvenance, ManifestSourceFields } from './manifest-source.jsx'
 /** @typedef {{id: string, title: string, parts: NativePart[], parameters: unknown[], groupKey: string, methodStatus: string, binding: {target: {kind: string}, requiredEvidence: {capability: string}, assertions: unknown[]} | null}} ResourceControl */
 /** @typedef {{key: string, id: string | null, title: string, parent: string | null}} ResourceGroup */
 /** @typedef {{repository: string, ref: string, refType: string, commit: string, manifestPath: string, manifestUrl: string, commitUrl: string, schemaUrl: string, files: {path: string, url: string}[]}} ResourceSource */
-/** @typedef {{id: string | null, resourceType: string, resourceId: string, version: string, name: string, state: string, validationStatus: string, contentDigest: string, source: ResourceSource, manifest: Record<string, unknown>, resolved: {groups: ResourceGroup[], controls: ResourceControl[], bindingPath: string | null}}} Resource */
+/** @typedef {{id: string | null, resourceType: string, resourceId: string, version: string, name: string, state: string, validationStatus: string, contentDigest: string, source: ResourceSource, manifest: Record<string, unknown>, resolved: {groups: ResourceGroup[], controls: ResourceControl[], bindingPath: string | null, catalog?: {resourceId: string, version: string, name: string, contentDigest: string, manifestPath: string, revisionId: string}}}} Resource */
 
 /** @param {{parts: NativePart[]}} props */
 function RequirementParts({ parts }) {
@@ -16,6 +16,7 @@ function RequirementParts({ parts }) {
 function CatalogControls({ resource }) {
   const [search, setSearch] = useState('');
   const controls = resource.resolved.controls.filter((control) => `${control.id} ${control.title} ${JSON.stringify(control.parts)}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const requirementUrl = resource.resolved.catalog ? resource.source.files.find((file) => file.path === resource.resolved.catalog?.manifestPath)?.url : resource.source.manifestUrl;
   const groupsByKey = new Map(resource.resolved.groups.map((group) => [group.key, group]));
   const visibleGroups = new Set();
   for (const control of controls) {
@@ -34,7 +35,7 @@ function CatalogControls({ resource }) {
         <RequirementParts parts={control.parts} />
         {control.binding ? <><dl className="resource-definition"><div><dt>Zieltyp</dt><dd>{control.binding.target.kind}</dd></div><div><dt>Benötigter Nachweistyp</dt><dd>{control.binding.requiredEvidence.capability}</dd></div></dl><details><summary>Prüflogik anzeigen</summary><pre className="pack-json">{JSON.stringify(control.binding.assertions, null, 2)}</pre></details></> : <p>Keine automatisierte Prüfmethode definiert. Das Control bleibt im Katalog erhalten.</p>}
         {control.parameters.length > 0 && <details><summary>Parameter</summary><pre className="pack-json">{JSON.stringify(control.parameters, null, 2)}</pre></details>}
-        <p><a href={resource.source.manifestUrl}>Anforderung in Git</a>{resource.resolved.bindingPath && <>{' · '}<a href={resource.source.files.find((file) => file.path === resource.resolved.bindingPath)?.url}>Prüfbindungen in Git</a></>}</p>
+        <p><a href={requirementUrl}>Anforderung in Git</a>{resource.resolved.bindingPath && <>{' · '}<a href={resource.source.files.find((file) => file.path === resource.resolved.bindingPath)?.url}>Prüfbindungen in Git</a></>}</p>
       </details>)}
       {children.map((child) => groupView(child, group.key === '$root' ? 0 : depth + 1))}
     </section>;
@@ -45,18 +46,23 @@ function CatalogControls({ resource }) {
   </div>;
 }
 
-/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, onBusyChange: (busy: boolean) => void}} props */
-export function ResourceWorkspace({ organizationId, organization, accessToken = '', onBusyChange }) {
+/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, resourceType?: 'Catalog' | 'Profile', onBusyChange: (busy: boolean) => void}} props */
+export function ResourceWorkspace({ organizationId, organization, accessToken = '', resourceType = 'Catalog', onBusyChange }) {
+  const isProfile = resourceType === 'Profile';
+  const plural = isProfile ? 'Profile' : 'Kataloge';
+  const noun = isProfile ? 'Profil' : 'Katalog';
+  const description = isProfile ? 'Profile wählen Controls und Parameter aus einem Katalog.' : 'Gruppierte Anforderungen und ihre gespeicherten Quellen.';
+  const defaultPath = isProfile ? 'profiles/application-baseline.json' : 'catalogs/application.json';
   const selected = new URLSearchParams(location.search).get('resource') || '';
   const view = new URLSearchParams(location.search).get('view') || (selected ? 'detail' : 'list');
-  const scope = `${organizationId}:${accessToken}`;
+  const scope = `${organizationId}:${accessToken}:${resourceType}`;
   const root = `/api/organizations/${encodeURIComponent(organizationId)}/resources`;
-  const listUrl = `/catalogs?${new URLSearchParams({ organization: organizationId })}`;
+  const listUrl = `${isProfile ? '/profiles' : '/catalogs'}?${new URLSearchParams({ organization: organizationId })}`;
   const [state, setState] = useState(/** @type {{scope: string, resources: Resource[], principal: {id: string, kind: string} | null, error: string}} */ ({ scope: '', resources: [], principal: null, error: '' }));
   const [repository, setRepository] = useState('');
   const [ref, setRef] = useState('main');
   const [refType, setRefType] = useState('branch');
-  const [path, setPath] = useState('catalogs/application.json');
+  const [path, setPath] = useState(defaultPath);
   const [expectedId, setExpectedId] = useState('');
   const [version, setVersion] = useState('1.0.0');
   const [busy, setBusy] = useState(false);
@@ -65,11 +71,13 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   const controller = useRef(/** @type {AbortController | null} */ (null));
   const configKey = JSON.stringify([scope, repository, ref, refType, path, expectedId, version]);
   const preview = previewState?.key === configKey ? previewState.value : null;
-  const resources = state.scope === scope ? state.resources : [];
+  const allResources = state.scope === scope ? state.resources : [];
+  const resources = allResources.filter((item) => item.resourceType === resourceType);
   const loading = state.scope !== scope;
   const principal = state.scope === scope ? state.principal : null;
   const isOwner = principal?.kind === 'user' && principal.id === organization?.ownerPrincipalId;
   const resource = resources.find((item) => item.id === selected);
+  const usingProfiles = resource ? allResources.filter((item) => item.resourceType === 'Profile' && item.resolved.catalog?.resourceId === resource.resourceId && item.resolved.catalog.version === resource.version && item.resolved.catalog.contentDigest === resource.contentDigest) : [];
   /** @type {Record<string, string>} */ const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 
   useEffect(() => { onBusyChange(busy); return () => onBusyChange(false); }, [busy, onBusyChange]);
@@ -80,7 +88,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
     Promise.all([fetch(root, options), fetch('/api/auth/me', options)]).then(async ([response, me]) => {
       if (!response.ok || !me.ok) throw new Error(response.status === 403 ? 'Für diese Ressourcen fehlen die erforderlichen Rechte.' : 'Ressourcen konnten nicht geladen werden.');
       const [items, current] = await Promise.all([response.json(), me.json()]);
-      if (!readController.signal.aborted) setState({ scope, resources: items.filter((/** @type {Resource} */ item) => item.resourceType === 'Catalog'), principal: current, error: '' });
+      if (!readController.signal.aborted) setState({ scope, resources: items, principal: current, error: '' });
     }).catch((error) => { if (!readController.signal.aborted) setState({ scope, resources: [], principal: null, error: error.message }); });
     return () => readController.abort();
   }, [root, accessToken, scope]);
@@ -91,11 +99,11 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
     controller.current?.abort();
     const current = new AbortController(); controller.current = current;
     setBusy(true); setFailure('');
-    const config = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: expectedId.trim(), version: version.trim(), name: expectedId.trim() }, spec: { resourceType: 'Catalog', provider: 'github', repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || 'catalogs/application.json', expected: { id: expectedId.trim(), version: version.trim() } } };
+    const config = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: expectedId.trim(), version: version.trim(), name: expectedId.trim() }, spec: { resourceType, provider: 'github', repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || defaultPath, expected: { id: expectedId.trim(), version: version.trim() } } };
     try {
       const response = await fetch(`${root}?preview=${previewOnly}`, { method: 'POST', signal: current.signal, headers: { ...headers, 'Content-Type': 'application/json', ...(!previewOnly && preview ? { 'X-Expected-Commit': preview.source.commit } : {}) }, body: JSON.stringify(config) });
       if (!response.ok) {
-        const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: 'Katalog, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt. Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.' };
+        const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: 'Manifest, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt. Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.' };
         const body = await response.json().catch(() => ({}));
         const detail = typeof body.detail === 'string' ? ` ${body.detail}` : '';
         throw new Error((messages[/** @type {403 | 409 | 422 | 503} */ (response.status)] || 'Die Quelle konnte nicht verarbeitet werden.') + detail);
@@ -110,30 +118,32 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
 
   return <section className="resource-workspace" aria-labelledby="resources-heading">
     {(failure || (state.scope === scope && state.error)) && <p role="alert" className="alert">{failure || state.error}</p>}
-    {loading ? <p role="status">Kataloge werden geladen …</p> : state.error ? null : view === 'connect' ? <>
-      <h1 id="resources-heading">Katalogquelle konfigurieren</h1><p>Native OSCAL-Anforderungen aus einem versionierten Manifest.</p>
+    {loading ? <p role="status">{plural} werden geladen …</p> : state.error ? null : view === 'connect' ? <>
+      <h1 id="resources-heading">{noun}quelle konfigurieren</h1><p>{description}</p>
       {isOwner ? <form className="panel resource-source-form" onSubmit={(event) => { event.preventDefault(); void submit(false); }}>
         <label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label>
         <label className="field">Git-Ref<input required maxLength={200} value={ref} onChange={(event) => setRef(event.target.value)} /></label>
-        <ManifestSourceFields path={path} onPath={setPath} refType={refType} onRefType={setRefType} defaultPath="catalogs/application.json" />
-        <label className="field">Erwartete Katalog-ID<input required maxLength={128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder="application-controls" /></label>
+        <ManifestSourceFields path={path} onPath={setPath} refType={refType} onRefType={setRefType} defaultPath={defaultPath} />
+        <label className="field">Erwartete {noun}-ID<input required maxLength={128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isProfile ? 'application-baseline' : 'application-controls'} /></label>
         <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={128} /></label>
-        <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy}>Katalog registrieren</button></div>
+        <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy}>{noun} registrieren</button></div>
         {busy && <p role="status">Quelle wird gelesen und geprüft …</p>}
         <p>Der Import prüft die Struktur und speichert eine feste Revision. Ein Produktprofil legt die geltenden Controls fest.</p>
       </form> : <p>Nur Organisationseigentümer können neue Quellen registrieren.</p>}
-      {preview && <section className="panel" aria-label="Katalogvorschau"><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} /><CatalogControls key={preview.contentDigest} resource={preview} /></section>}
-      <a href={listUrl}>Zurück zu den Katalogen</a>
+      {preview && <section className="panel" aria-label={`${noun}vorschau`}><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} /><CatalogControls key={preview.contentDigest} resource={preview} /></section>}
+      <a href={listUrl}>Zu den {plural}</a>
     </> : selected ? resource ? <>
-      <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · Registriert · Struktur geprüft</p></div><a href={listUrl}>Alle Kataloge</a></div>
+      <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · Registriert · Struktur geprüft</p></div><a href={listUrl}>Alle {plural}</a></div>
       <ManifestProvenance source={resource.source} defaultPath={resource.source.manifestPath} />
+      {resource.resolved.catalog && <p>Katalogdefinition: <a href={`/catalogs?${new URLSearchParams({ organization: organizationId, resource: resource.resolved.catalog.revisionId })}`}>{resource.resolved.catalog.name} · {resource.resolved.catalog.version}</a>{' · '}<a href={resource.source.files.find((file) => file.path === resource.resolved.catalog?.manifestPath)?.url}>Eingebundene Katalogdatei</a></p>}
       <p>{resource.resolved.controls.length} Controls · Produktgeltung durch ausdrückliche Profilauswahl.</p>
       <CatalogControls key={resource.id} resource={resource} />
+      {!isProfile && <section className="panel"><h2>Verwendet in Profilen</h2>{usingProfiles.length ? <ul>{usingProfiles.map((profile) => <li key={profile.id}><a href={`/profiles?${new URLSearchParams({ organization: organizationId, resource: profile.id || '' })}`}>{profile.name} · {profile.version}</a></li>)}</ul> : <p>Noch keine gespeicherten Profile für diese Katalogversion.</p>}</section>}
       <details className="panel"><summary>Manifest und Quellen</summary><pre className="pack-json">{JSON.stringify(resource.manifest, null, 2)}</pre><ul>{resource.source.files.map((file) => <li key={file.path}><a href={file.url}>{file.path}</a></li>)}</ul><p className="break-value">Quelldigest (SHA-256): {resource.contentDigest}</p></details>
-    </> : <><h1 id="resources-heading">Katalog nicht verfügbar</h1><p>Die Revision existiert nicht oder ist für dich nicht sichtbar.</p><a href={listUrl}>Alle Kataloge</a></> : <>
-      <div className="page-heading"><div><h1 id="resources-heading">Kataloge</h1><p>Gruppierte Anforderungen und ihre gespeicherten Quellen.</p></div>{isOwner && <a className="primary-link" href={`${listUrl}&view=connect`}>Katalog registrieren</a>}</div>
-      {resources.length ? <div className="panel team-table-scroll"><table className="team-table"><thead><tr><th>KATALOG</th><th>VERSION</th><th>CONTROLS</th><th>QUELLE</th><th>STATUS</th></tr></thead><tbody>{resources.map((item) => <tr key={item.id}><td><a href={`${listUrl}&resource=${encodeURIComponent(item.id || '')}`}>{item.name}</a><small>{item.resourceId}</small></td><td>{item.version}</td><td>{item.resolved.controls.length}</td><td className="break-value"><a href={item.source.manifestUrl}>{item.source.repository} · {item.source.manifestPath}</a></td><td>Registriert · Struktur geprüft</td></tr>)}</tbody></table></div> : <p>Noch keine nativen Kataloge registriert.</p>}
-      <p><a href={`/packs?${new URLSearchParams({ organization: organizationId })}`}>Bestehende Governance-Packs ansehen</a></p>
+    </> : <><h1 id="resources-heading">{noun} nicht verfügbar</h1><p>Die Revision existiert nicht oder ist für dich nicht sichtbar.</p><a href={listUrl}>Alle {plural}</a></> : <>
+      <div className="page-heading"><div><h1 id="resources-heading">{plural}</h1><p>{description}</p></div>{isOwner && <a className="primary-link" href={`${listUrl}&view=connect`}>{noun} registrieren</a>}</div>
+      {resources.length ? <div className="panel team-table-scroll"><table className="team-table"><thead><tr><th>{noun.toLocaleUpperCase()}</th><th>VERSION</th><th>CONTROLS</th><th>QUELLE</th><th>STATUS</th></tr></thead><tbody>{resources.map((item) => <tr key={item.id}><td><a href={`${listUrl}&resource=${encodeURIComponent(item.id || '')}`}>{item.name}</a><small>{item.resourceId}</small></td><td>{item.version}</td><td>{item.resolved.controls.length}</td><td className="break-value"><a href={item.source.manifestUrl}>{item.source.repository} · {item.source.manifestPath}</a></td><td>Registriert · Struktur geprüft</td></tr>)}</tbody></table></div> : <p>Noch keine nativen {plural} registriert.</p>}
+      {!isProfile && <p><a href={`/packs?${new URLSearchParams({ organization: organizationId })}`}>Bestehende Governance-Packs ansehen</a></p>}
     </>}
   </section>;
 }
