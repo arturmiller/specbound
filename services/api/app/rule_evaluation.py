@@ -174,7 +174,9 @@ def evaluate_and_store(
             if len(evidence) != 1:
                 result = AssessmentResult(
                     AssessmentStatus.UNKNOWN,
-                    "Aktueller Nachweis fehlt oder ist mehrdeutig",
+                    "Aktueller Nachweis fehlt"
+                    if not evidence
+                    else "Aktuelle Nachweise sind mehrdeutig",
                 )
             else:
                 decision = evaluate_assertions(

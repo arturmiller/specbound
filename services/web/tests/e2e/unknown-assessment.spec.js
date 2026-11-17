@@ -14,7 +14,7 @@ test('missing provider evidence stays UNKNOWN with reason and coverage', async (
   await expect(status).toHaveText('UNKNOWN');
   await expect(status).toHaveClass(/status-unknown/);
   await expect(status).not.toHaveClass(/status-pass/);
-  await expect(page.getByText(/Grund: Aktueller Nachweis fehlt oder ist mehrdeutig/)).toBeVisible();
+  await expect(page.getByText(/Grund: Aktueller Nachweis fehlt/)).toBeVisible();
   await expect(page.getByText(/Quellabdeckung: covered/)).toBeVisible();
   await expect(page.getByText('Keine Evidence für diesen Snapshot.')).toBeVisible();
 });

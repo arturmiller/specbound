@@ -9,7 +9,7 @@ import { ManifestProvenance, ManifestSourceFields } from './manifest-source.jsx'
 /** @typedef {{id: string | null, resourceType: string, resourceId: string, version: string, name: string, state: string, validationStatus: string, contentDigest: string, source: ResourceSource, manifest: Record<string, unknown>, resolved: {groups: ResourceGroup[], controls: ResourceControl[], bindingPath: string | null, capabilities?: {id: string, version: string}[], productId?: string, repositories?: {provider: string, repository: string}[], profile?: {name: string, version: string}, catalog?: {resourceId: string, version: string, name: string, contentDigest: string, manifestPath: string, revisionId: string}}}} Resource */
 
 /** @param {{parts: NativePart[]}} props */
-function RequirementParts({ parts }) {
+export function RequirementParts({ parts }) {
   return <>{parts.map((part, index) => <React.Fragment key={index}>{part.prose && <p className="break-value">{part.prose}</p>}{part.parts && <RequirementParts parts={part.parts} />}</React.Fragment>)}</>;
 }
 

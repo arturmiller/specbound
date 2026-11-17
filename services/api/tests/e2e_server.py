@@ -21,7 +21,7 @@ WORKSPACE_DIRECTORY = tempfile.TemporaryDirectory(prefix="specbound-e2e-workspac
 
 
 @app.post("/__e2e/process-public-license-scan")
-def process_public_license_scan_fixture():
+def process_public_license_scan_fixture(package_count: int = 1):
     """Run the real queue processor with a deterministic source in test only."""
     import sys
 
@@ -29,7 +29,7 @@ def process_public_license_scan_fixture():
     from public_license_worker import poll_once
 
     def fixture(repository, ref):
-        return {
+        response = {
             "status": "ok",
             "result": {
                 "requestedRef": ref,
@@ -65,17 +65,31 @@ def process_public_license_scan_fixture():
             },
         }
 
+        if not 1 <= package_count <= 200:
+            raise ValueError("Invalid fixture package count")
+        if package_count > 1:
+            import copy
+
+            package = response["result"]["packages"][0]
+            response["result"]["packages"] = [
+                {**copy.deepcopy(package), "name": f"package-{index + 1:02}"}
+                for index in range(package_count)
+            ]
+        return response
+
     return {"processed": poll_once(get_engine(), execute=fixture)}
 
 
 @app.post("/__e2e/assessment")
-def create_assessment_fixture(failing: bool = False, missing_provider: bool = False):
+def create_assessment_fixture(
+    failing: bool = False, missing_provider: bool = False, workspace: bool = False
+):
     """Seed a complete report only in this test-only server."""
     import sys
 
     from app.findings import apply_snapshot
     from app.snapshots import create_snapshot
-    from app.tables import organizations
+    from app.tables import organizations, teams
     from sqlalchemy import update
 
     sys.path.insert(0, str(Path(__file__).parent))
@@ -83,6 +97,14 @@ def create_assessment_fixture(failing: bool = False, missing_provider: bool = Fa
 
     fixture = fixtures.RuleEvaluationTest(methodName="runTest")
     fixture.setUp()
+    if workspace:
+        with get_engine().begin() as db:
+            db.execute(
+                update(teams)
+                .where(teams.c.id == fixture.team)
+                .values(organization_id=FIXTURE_ORGANIZATION)
+            )
+        fixture.org = FIXTURE_ORGANIZATION
     if not missing_provider:
         fixture.save_evidence()
     control = fixture.control

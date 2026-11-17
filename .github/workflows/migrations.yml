@@ -137,7 +137,13 @@ jobs:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_public_license_scans.py' -v
       - name: Install collector runner dependencies
+        # Product requirements reuse the same real worker and authorized reports.
         run: pip install -r services/worker/requirements.txt
+      - name: Verify complete product requirements and evidence history
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
+        run: python -m unittest discover -s tests -p 'test_product_requirements.py' -v
       - name: Pull pinned test collector
         run: docker pull python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
       - name: Verify a collector observation is shared
