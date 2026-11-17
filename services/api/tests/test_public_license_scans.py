@@ -1,14 +1,20 @@
 """Portal scan requests and worker leases use real scoped PostgreSQL data."""
 
+import copy
+import json
+import os
 import sys
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from app.database import get_engine
 from app.identity import get_current_principal
 from app.main import app
+from app.pack_catalog import github_source_factory
 from app.tables import (
     assessment_snapshots,
     evidence_records,
@@ -18,6 +24,8 @@ from app.tables import (
 )
 from fastapi.testclient import TestClient
 from sqlalchemy import func, insert, select, update
+
+from tests.test_resource_registry import ResourceFixtureSource
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "worker"))
 from public_license_worker import claim, finish, poll_once  # noqa: E402
@@ -58,6 +66,330 @@ class PublicLicenseScansTest(unittest.TestCase):
     def tearDown(self):
         self.client.close()
         app.dependency_overrides.clear()
+
+    def configure_native_product(
+        self, *, allowed=None, unbound=False, license_controls=1
+    ):
+        self.source = ResourceFixtureSource("example/governance")
+        if allowed:
+            profile = json.loads(
+                self.source.files["profiles/application-baseline.json"]
+            )
+            profile["profile"]["modify"]["set-parameters"][0]["values"] = allowed
+            self.source.files["profiles/application-baseline.json"] = json.dumps(
+                profile
+            ).encode()
+        if unbound:
+            catalog = json.loads(self.source.files["catalogs/application.json"])
+            catalog["catalog"]["groups"][0]["controls"].append(
+                {"id": "UNBOUND-001", "title": "Manual governance requirement"}
+            )
+            self.source.files["catalogs/application.json"] = json.dumps(
+                catalog
+            ).encode()
+            profile = json.loads(
+                self.source.files["profiles/application-baseline.json"]
+            )
+            profile["profile"]["imports"][0]["include-controls"][0]["with-ids"].append(
+                "UNBOUND-001"
+            )
+            self.source.files["profiles/application-baseline.json"] = json.dumps(
+                profile
+            ).encode()
+        if license_controls > 1:
+            catalog = json.loads(self.source.files["catalogs/application.json"])
+            profile = json.loads(
+                self.source.files["profiles/application-baseline.json"]
+            )
+            bindings = json.loads(self.source.files["checks/application.json"])
+            original = next(
+                control
+                for control in catalog["catalog"]["groups"][0]["controls"]
+                if control["id"] == "PY-LIC-001"
+            )
+            for index in range(2, license_controls + 1):
+                control_id = f"PY-LIC-{index:03}"
+                control = {**copy.deepcopy(original), "id": control_id}
+                control.pop("params", None)
+                catalog["catalog"]["groups"][0]["controls"].append(control)
+                profile["profile"]["imports"][0]["include-controls"][0][
+                    "with-ids"
+                ].append(control_id)
+                bindings["spec"]["controls"].append(
+                    {
+                        "id": control_id,
+                        "target": {"kind": "python.package"},
+                        "requiredEvidence": {"capability": "python.package-license/v1"},
+                        "assertions": [
+                            {
+                                "operator": "spdx-allowlist",
+                                "path": "licenseExpression",
+                                "allowed": ["MIT"],
+                            }
+                        ],
+                    }
+                )
+            self.source.files["catalogs/application.json"] = json.dumps(
+                catalog
+            ).encode()
+            self.source.files["profiles/application-baseline.json"] = json.dumps(
+                profile
+            ).encode()
+            self.source.files["checks/application.json"] = json.dumps(bindings).encode()
+        app.dependency_overrides[github_source_factory] = lambda: (
+            lambda _repo: self.source
+        )
+        directory = tempfile.TemporaryDirectory(prefix="native-license-test-")
+        self.addCleanup(directory.cleanup)
+        workspace_path = Path(directory.name) / "workspace.json"
+        workspace_path.write_text(
+            json.dumps({"organizationId": self.org, "defaultOwnerTeamId": self.team}),
+            encoding="utf-8",
+        )
+        environment = patch.dict(
+            os.environ,
+            {
+                "GITHUB_ORGANIZATION_ID": self.org,
+                "SPECBOUND_WORKSPACE_CONFIG": str(workspace_path),
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        for kind, path, resource_id in (
+            ("Catalog", "catalogs/application.json", "application-controls"),
+            ("Profile", "profiles/application-baseline.json", "application-baseline"),
+            ("Product", "products/audio-visualizer.json", "audio-visualizer"),
+        ):
+            response = self.client.post(
+                f"/organizations/{self.org}/resources",
+                json={
+                    "apiVersion": "specbound.example/v1alpha1",
+                    "kind": "ResourceSource",
+                    "metadata": {"id": "source", "version": "1.0.0", "name": "Source"},
+                    "spec": {
+                        "resourceType": kind,
+                        "provider": "github",
+                        "repository": self.source.repository,
+                        "ref": "main",
+                        "manifestPath": path,
+                        "expected": {"id": resource_id, "version": "1.0.0"},
+                    },
+                },
+            )
+            self.assertEqual(response.status_code, 201, response.text)
+        self.product = response.json()["resolved"]["productId"]
+        self.binding = self.client.get(f"/products/{self.product}/repositories").json()[
+            0
+        ]["id"]
+        self.url = (
+            f"/products/{self.product}/repositories/{self.binding}/public-license-scans"
+        )
+
+    @staticmethod
+    def observed_result(expression, *, partial=False):
+        return {
+            "sourceRevision": "b" * 40,
+            "coverage": "partial" if partial else "covered",
+            "sourceCoverage": "partial" if partial else "covered",
+            "files": ["uv.lock"],
+            "unsupportedFiles": ["other/poetry.lock"] if partial else [],
+            "packages": [
+                {
+                    "path": "uv.lock",
+                    "name": "sample",
+                    "version": "1.0",
+                    "source": "pypi",
+                    "markers": [],
+                    "licenseExpression": expression,
+                    "status": "FAIL",
+                    "metadata": {
+                        "status": "OBSERVED",
+                        "artifacts": [
+                            {
+                                "sourceUrl": "https://files.pythonhosted.org/packages/ab/sample.whl.metadata",
+                                "sourceKind": "distribution-metadata",
+                                "artifactSha256": "a" * 64,
+                                "metadataSha256": "b" * 64,
+                                "licenseExpression": expression,
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+
+    def finish_profile_scan(self, result):
+        job = self.client.post(self.url, json={"ref": "main"})
+        self.assertEqual(job.status_code, 201, job.text)
+        self.assertTrue(
+            poll_once(
+                get_engine(),
+                execute=lambda _repository, _ref: {"status": "ok", "result": result},
+            )
+        )
+        stored = self.client.get(self.url).json()[0]
+        self.assertIsNotNone(stored["assessmentId"], stored)
+        return self.client.get("/assessments/" + stored["assessmentId"]).json()
+
+    def test_native_profile_is_frozen_at_start_and_overrides_the_example_policy(self):
+        self.configure_native_product(allowed=["GPL-3.0-only"])
+        job = self.client.post(self.url, json={"ref": "main"}).json()
+        frozen = copy.deepcopy(job["governanceContext"])
+        self.assertEqual(frozen["mode"], "profile")
+        self.assertEqual(
+            frozen["profile"]["resolved"]["selectedControlIds"],
+            ["SEC-API-001", "PY-LIC-001"],
+        )
+        calls_before = len(self.source.calls)
+        self.source.commit = "c" * 40
+        profile = json.loads(self.source.files["profiles/application-baseline.json"])
+        profile["profile"]["modify"]["set-parameters"][0]["values"] = ["MIT"]
+        self.source.files["profiles/application-baseline.json"] = json.dumps(
+            profile
+        ).encode()
+        self.assertTrue(
+            poll_once(
+                get_engine(),
+                execute=lambda _repository, _ref: {
+                    "status": "ok",
+                    "result": self.observed_result("GPL-3.0-only"),
+                },
+            )
+        )
+        stored = self.client.get(self.url).json()[0]
+        report = self.client.get("/assessments/" + stored["assessmentId"]).json()
+        self.assertEqual(report["assessment"]["governanceContext"], frozen)
+        self.assertEqual(
+            len(self.source.calls),
+            calls_before,
+            "Worker must not re-resolve source refs",
+        )
+        self.assertEqual(report["assessment"]["packSha"], "a" * 40)
+        self.assertEqual(report["evaluations"][0]["status"], "PASS", report)
+        self.assertEqual(report["findings"], [])
+        self.assertEqual(report["evidence"][0]["producerKind"], "public-license-scan")
+
+    def test_selected_unsupported_and_unbound_controls_stay_visible_without_fake_na(
+        self,
+    ):
+        self.configure_native_product(unbound=True)
+        report = self.finish_profile_scan(self.observed_result("GPL-3.0-only"))
+        controls = {
+            item["controlId"]: item for item in report["assessment"]["controls"]
+        }
+        self.assertEqual(
+            (
+                controls["SEC-API-001"]["executionStatus"],
+                controls["SEC-API-001"]["status"],
+            ),
+            ("unsupported", "UNKNOWN"),
+        )
+        self.assertEqual(
+            (
+                controls["UNBOUND-001"]["executionStatus"],
+                controls["UNBOUND-001"]["status"],
+            ),
+            ("not_evaluated", "UNKNOWN"),
+        )
+        self.assertEqual(
+            (
+                controls["PY-LIC-001"]["executionStatus"],
+                controls["PY-LIC-001"]["status"],
+            ),
+            ("evaluated", "FAIL"),
+        )
+        self.assertEqual(len(report["evaluations"]), 1)
+        self.assertEqual(len(report["findings"]), 1)
+
+    def test_native_missing_observations_and_partial_pass_do_not_close_findings(self):
+        self.configure_native_product()
+        initial = self.finish_profile_scan(self.observed_result("GPL-3.0-only"))
+        finding_id = initial["findings"][0]["id"]
+        empty = self.finish_profile_scan(
+            {
+                "sourceRevision": "b" * 40,
+                "coverage": "UNKNOWN",
+                "sourceCoverage": "UNKNOWN",
+                "files": [],
+                "unsupportedFiles": ["poetry.lock"],
+                "packages": [],
+                "reason": "no supported lockfile",
+            }
+        )
+        self.assertEqual(empty["evaluations"], [])
+        self.assertEqual(
+            {item["status"] for item in empty["assessment"]["controls"]}, {"UNKNOWN"}
+        )
+        self.assertEqual(len(empty["assessment"]["controls"]), 2)
+        self.assertEqual(empty["sourceScan"]["reason"], "no supported lockfile")
+        self.assertEqual(empty["sourceScan"]["unsupportedFiles"], ["poetry.lock"])
+        partial = self.finish_profile_scan(self.observed_result("MIT", partial=True))
+        self.assertEqual(partial["findings"][0]["state"], "open")
+        complete = self.finish_profile_scan(self.observed_result("MIT"))
+        self.assertEqual(complete["findings"][0]["id"], finding_id)
+        self.assertEqual(complete["findings"][0]["state"], "resolved")
+
+    def test_historical_job_does_not_receive_a_current_profile(self):
+        job = self.client.post(self.url, json={"ref": "main"}).json()
+        with get_engine().begin() as db:
+            db.execute(
+                update(public_license_scans)
+                .where(public_license_scans.c.id == job["id"])
+                .values(governance_context=None)
+            )
+        self.assertTrue(
+            poll_once(
+                get_engine(),
+                execute=lambda _repo, _ref: {
+                    "status": "ok",
+                    "result": self.observed_result("GPL-3.0-only"),
+                },
+            )
+        )
+        stored = self.client.get(self.url).json()[0]
+        report = self.client.get("/assessments/" + stored["assessmentId"]).json()
+        self.assertIsNone(report["assessment"]["governanceContext"])
+        self.assertIsNone(report["assessment"]["controls"])
+
+    def test_control_capacity_preserves_the_assessment_and_explicit_remaining_gaps(
+        self,
+    ):
+        from app.frozen_governance import plan_public_scan
+
+        self.configure_native_product(license_controls=6)
+        job = self.client.post(self.url, json={"ref": "main"}).json()
+        policy, gaps = plan_public_scan(job["governanceContext"], 200)
+        self.assertEqual(len(policy["controls"]) * 200, 1000)
+        self.assertEqual(gaps, {"PY-LIC-006": "evaluation-limit"})
+        result = self.observed_result("GPL-3.0-only")
+        result["packages"] = [
+            {**copy.deepcopy(result["packages"][0]), "name": f"sample-{index}"}
+            for index in range(3)
+        ]
+        with patch("app.frozen_governance.MAX_EVALUATIONS", 4):
+            self.assertTrue(
+                poll_once(
+                    get_engine(),
+                    execute=lambda *_args: {"status": "ok", "result": result},
+                )
+            )
+        stored = self.client.get(self.url).json()[0]
+        self.assertIsNotNone(stored["assessmentId"], stored)
+        self.assertNotIn("assessmentError", stored["result"])
+        report = self.client.get("/assessments/" + stored["assessmentId"]).json()
+        self.assertEqual(len(report["evaluations"]), 3)
+        self.assertEqual(len(report["assessment"]["controls"]), 7)
+        self.assertEqual(len(report["evidence"]), 3)
+        self.assertEqual(len(report["findings"]), 3)
+        control = next(
+            item
+            for item in report["assessment"]["controls"]
+            if item["controlId"] == "PY-LIC-002"
+        )
+        self.assertEqual(
+            (control["executionStatus"], control["status"], control["reason"]),
+            ("not_evaluated", "UNKNOWN", "evaluation-limit"),
+        )
 
     def test_scan_job_worker_and_result_survive_reload_without_fake_assessment(self):
         response = self.client.post(self.url, json={"ref": "main"})

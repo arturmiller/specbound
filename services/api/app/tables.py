@@ -141,6 +141,7 @@ public_license_scans = Table(
     Column("lease_token", String), Column("lease_until", DateTime(timezone=True)),
     Column("error_code", String), Column("result", JSON),
     Column("assessment_id", String),
+    Column("governance_context", JSON(none_as_null=True)),
 )
 pack_approvals = Table(
     "pack_approvals", metadata,
@@ -179,6 +180,7 @@ assessment_snapshots = Table(
     Column("environment", String), Column("git_sha", String), Column("pack_sha", String),
     Column("evaluation_ids", JSON), Column("evidence_ids", JSON), Column("counts", JSON),
     Column("evaluations", JSON), Column("created_at", DateTime(timezone=True)),
+    Column("governance_context", JSON(none_as_null=True)), Column("control_results", JSON(none_as_null=True)),
 )
 findings = Table(
     "findings", metadata,

@@ -42,5 +42,11 @@ Bestehende Produkte bleiben **Ohne Profilzuordnung**. Gleiche Namen oder Reposit
 
 ## Einschränkungen
 
+Eine neue öffentliche Lizenzprüfung fixiert beim Start den Produkt-, Profil-, Katalog- und Bindungsstand aus der Registrierung. Profilparameter bestimmen die spätere Bewertung; die feste Beispielrichtlinie ersetzt keine ausdrückliche Produktkonfiguration. Der Worker liest die Regeln nicht erneut von einem beweglichen Branch.
+
+Im Assessment bleiben alle ausgewählten Controls sichtbar. Der Python-Scanner liefert `python.package-license/v1` für beobachtete Python-Pakete. Andere Bindungen sind für diesen Lauf **Nicht unterstützt**, Controls ohne Methode oder Beobachtungen **Nicht bewertet**; ihr Ergebnis ist UNKNOWN. NOT_APPLICABLE entsteht nur aus einer tatsächlichen Einzelbewertung im passenden beobachteten Scope. Control-Anzahl und Paket-Einzelbewertungen sind getrennt.
+
+Bestehende historische Scans erhalten keine nachträglichen Profilangaben. Neue Prüfungen bestehender unzugeordneter Produkte verwenden einen ausdrücklich gespeicherten Legacy-Beispielstand. Öffentliche Evidence behält ihren tatsächlichen Erzeuger und ihre Metadatenherkunft. Fehlende Beobachtungen und unvollständige Scans schließen keine Findings; die bisherigen Prozess- und Paketgrenzen gelten weiter. Die Grenze von 1.000 Einzelbewertungen wird vor der Bewertung auf vollständige Controls verteilt. Weitere ausgewählte Controls bleiben mit dem ausdrücklichen Grund **Bewertungsgrenze erreicht** als nicht bewertet und UNKNOWN sichtbar; ihre Findings werden nicht geschlossen.
+
 - Das Beispiel verwendet lokale Fixtures und verbindet kein Repository.
 - Eine erfolgreiche Validierung oder ein gespeicherter Release-Pin ist keine Freigabe für den produktiven Einsatz.

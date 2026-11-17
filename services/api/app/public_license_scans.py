@@ -10,6 +10,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection
 
 from app.database import get_connection
+from app.frozen_governance import freeze_product_governance
 from app.github_source import REPOSITORY
 from app.identity import get_current_principal
 from app.products import _product
@@ -63,6 +64,7 @@ def _serialize(row):
         "errorCode": row["error_code"],
         "result": row["result"],
         "assessmentId": row["assessment_id"],
+        "governanceContext": row["governance_context"],
     }
 
 
@@ -120,6 +122,9 @@ def start_scan(
                 status="pending",
                 created_at=datetime.now(timezone.utc),
                 attempts=0,
+                governance_context=freeze_product_governance(
+                    db, team["organization_id"], product_id
+                ),
             )
             .returning(public_license_scans)
         )
