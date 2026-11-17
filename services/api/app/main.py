@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from app.agents import router as agents_router
 from app.assessment_reports import router as assessment_reports_router
 from app.database import get_engine
+from app.evidence_packs import router as evidence_packs_router
 from app.evidence_registry import router as evidence_registry_router
 from app.github_repositories import router as github_repositories_router
 from app.github_webhook import router as github_webhook_router
@@ -48,6 +49,7 @@ app.include_router(products_router)
 app.include_router(provider_test_runs_router)
 app.include_router(teams_router)
 app.include_router(workspace_router)
+app.include_router(evidence_packs_router)
 
 request_logger = logging.getLogger("specbound.http")
 

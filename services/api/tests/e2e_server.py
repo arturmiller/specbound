@@ -137,10 +137,17 @@ class FixtureSource:
         return "a" * 40
 
     def fetch(self, ref):
-        if self.repository == "fixture/oscal":
+        if self.repository in ("fixture/oscal", "fixture/oscal-invalid"):
             from tests.test_resource_registry import ResourceFixtureSource
 
-            return ResourceFixtureSource(self.repository).fetch(ref)
+            snapshot = ResourceFixtureSource(self.repository).fetch(ref)
+            if self.repository.endswith("-invalid"):
+                files = dict(snapshot.files)
+                files["evidence/second/contracts/request.json"] = (
+                    b'{"$schema":"https://json-schema.org/draft/2020-12/schema","type":42}'
+                )
+                return GitSnapshot(snapshot.commit, files)
+            return snapshot
         if self.repository == "fixture/multi-providers":
             if ref not in ("main", "heads/main", "a" * 40):
                 raise ValueError("Unexpected fixture ref")

@@ -11,6 +11,7 @@ export const navigation = [
   { id: 'findings', label: 'Findings', icon: '⚑', href: '/findings' },
   { id: 'pr-checks', label: 'PR Checks', icon: '⑂', href: '/pr-checks' },
   { id: 'evidence', label: 'Evidence', icon: '◈', href: '/evidence' },
+  { id: 'evidence-packs', label: 'Evidence Packs', icon: '◇', href: '/evidence-packs' },
   { id: 'providers', label: 'Provider', icon: '⌁', href: '/providers' },
   { id: 'docs', label: 'Dokumentation', icon: '▤', href: '/docs' },
   { id: 'settings', label: 'Einstellungen', icon: '⚙', href: '/settings' },

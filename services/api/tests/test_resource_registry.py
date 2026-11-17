@@ -238,6 +238,113 @@ class ResourceRegistryTest(unittest.TestCase):
         self.addCleanup(self.workspace.stop)
         return team
 
+    def evidence_config(self, folder):
+        config = copy.deepcopy(self.config)
+        config["spec"].update(
+            resourceType="EvidenceProviderPack",
+            manifestPath=f"evidence/{folder}/provider.json",
+            expected={
+                "id": "org.specbound.example-auth"
+                if folder == "example"
+                else "org.specbound.example-license",
+                "version": "1.0.0",
+            },
+        )
+        return config
+
+    def test_two_evidence_sources_keep_real_contracts_and_versioned_control_usage(self):
+        self.assertEqual(self.post().status_code, 201)
+        catalog_config = copy.deepcopy(self.config)
+        self.config = self.evidence_config("example")
+        preview = self.post(preview=True)
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual(len(self.client.get(self.url).json()), 1)
+        self.assertEqual(self.client.get(f"/organizations/{self.org}/packs").json(), [])
+        created = self.post()
+        self.assertEqual(created.status_code, 201, created.text)
+        first = created.json()
+        self.config = catalog_config
+        self.config = self.evidence_config("second")
+        created = self.post()
+        self.assertEqual(created.status_code, 201, created.text)
+        second = created.json()
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertEqual(
+            second["resolved"]["permissions"], {"github": ["contents:read"]}
+        )
+        self.assertEqual(second["resolved"]["executionApproval"], "not_available")
+        self.assertIn("schemas/license.json", second["resolved"]["schemas"])
+        self.assertEqual(self.client.get(self.url + "/" + second["id"]).json(), second)
+        packs = self.client.get(f"/organizations/{self.org}/packs").json()
+        self.assertEqual({item["id"] for item in packs}, {first["id"], second["id"]})
+        usage = self.client.get(f"/organizations/{self.org}/evidence-pack-usage").json()
+        self.assertEqual({item["status"] for item in usage["controls"]}, {"available"})
+        license_control = next(
+            item for item in usage["controls"] if item["controlId"] == "PY-LIC-001"
+        )
+        self.assertEqual(license_control["providerRevisionIds"], [second["id"]])
+        from sqlalchemy import text
+
+        with get_engine().begin() as db:
+            db.execute(
+                text(
+                    "INSERT INTO principals (id, kind, issuer, subject) VALUES ('user:owner', 'user', 'test:resources', 'owner') ON CONFLICT DO NOTHING"
+                )
+            )
+        self.assertEqual(
+            self.client.put(
+                f"/organizations/{self.org}/packs/{second['id']}/approval"
+            ).status_code,
+            422,
+        )
+        self.assertFalse(
+            self.client.get(
+                f"/organizations/{self.org}/packs/{second['id']}/approval"
+            ).json()["approved"]
+        )
+
+    def test_capability_missing_and_incompatible_versions_are_distinct(self):
+        self.assertEqual(self.post().status_code, 201)
+        usage_url = f"/organizations/{self.org}/evidence-pack-usage"
+        self.assertEqual(
+            {item["status"] for item in self.client.get(usage_url).json()["controls"]},
+            {"missing"},
+        )
+        self.config = self.evidence_config("second")
+        manifest = json.loads(self.source.files["evidence/second/provider.json"])
+        manifest["capabilities"][0]["version"] = "v2"
+        self.source.files["evidence/second/provider.json"] = json.dumps(
+            manifest
+        ).encode()
+        self.assertEqual(self.post().status_code, 201)
+        controls = self.client.get(usage_url).json()["controls"]
+        self.assertEqual(
+            next(
+                item["status"] for item in controls if item["controlId"] == "PY-LIC-001"
+            ),
+            "incompatible_version",
+        )
+        app.dependency_overrides[get_current_principal] = lambda: "user:outsider"
+        self.assertEqual(self.client.get(usage_url).status_code, 403)
+        self.assertEqual(self.post(preview=True).status_code, 403)
+
+    def test_invalid_provider_contract_or_identity_does_not_leave_a_pack(self):
+        self.config = self.evidence_config("second")
+        original = copy.deepcopy(self.source.files)
+        for variant in ("schema", "identity"):
+            self.source.files = copy.deepcopy(original)
+            if variant == "schema":
+                self.source.files["evidence/second/contracts/request.json"] = (
+                    b'{"$schema":"https://json-schema.org/draft/2020-12/schema","type":42}'
+                )
+            else:
+                self.config["spec"]["expected"]["id"] = "wrong-id"
+            self.assertEqual(self.post().status_code, 422)
+            self.assertEqual(self.client.get(self.url).json(), [])
+            self.assertEqual(
+                self.client.get(f"/organizations/{self.org}/packs").json(), []
+            )
+
     def test_product_manifest_creates_only_product_sources_and_explicit_profile(self):
         team = self.prepare_product()
         preview = self.post(preview=True)

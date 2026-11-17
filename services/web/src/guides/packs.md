@@ -28,6 +28,10 @@ python services/api/examples/docs_examples.py packs
 
 Die Ausgabe nennt das Pack com.acme.security und das Control SEC-NET-001.
 
+## Evidence Packs
+
+Unter **Evidence Packs** lassen sich mehrere Provider-Manifeste desselben Repositorys über ihren jeweiligen Manifestpfad registrieren. Die Quellregistrierung verwendet den Typ `EvidenceProviderPack` und den bestehenden Manifestvertrag. Das Detail zeigt die gespeicherten Input-, Output- und Capability-Schemas, Image-Digest, deklarierte Berechtigungen sowie passende Controls. Der Abgleich unterscheidet genaue Capability-Versionen, fehlende Anbieter und inkompatible Versionen. Registrierung und Strukturvalidierung erteilen keine Ausführungs-, Secret- oder Egress-Freigabe. Allgemeine Freigaben werden separat umgesetzt (#51).
+
 ## Produkte als Code
 
 Unter **Produkte → Produkt aus Manifest registrieren** wird ein Produktmanifest aus Git geprüft und übernommen. `spec.repositories` enthält nur die tatsächlichen Prüfquellen, `spec.profile` die genaue registrierte Profil-ID und Version. Die Herkunft des Produktmanifests ist davon getrennt. Im Produkt zeigt **Geltungsbereich** die Kette Produkt → Profil → Katalog sowie die ausgewählten Controls.
