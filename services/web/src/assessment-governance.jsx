@@ -7,7 +7,7 @@ import { ManifestProvenance } from './manifest-source.jsx';
 /** @param {{context?: FrozenContext | null, controls?: ControlResult[] | null, sourceScan?: SourceScan | null}} props */
 export function AssessmentGovernance({ context, controls, sourceScan }) {
   const labels = /** @type {Record<string, string>} */ ({ evaluated: 'Bewertet', unsupported: 'Nicht unterstützt', not_evaluated: 'Nicht bewertet' });
-  const reasons = /** @type {Record<string, string>} */ ({ 'method-not-configured': 'Keine Prüfmethode definiert', 'scanner-does-not-support-binding': 'Dieser Scanner liefert den benötigten Ziel- oder Nachweistyp nicht', 'no-evaluable-observations': 'Keine bewertbaren Beobachtungen vorhanden', 'individual-evaluations': 'Ergebnis aus gespeicherten Einzelbewertungen' });
+  const reasons = /** @type {Record<string, string>} */ ({ 'evaluation-limit': 'Bewertungsgrenze erreicht; dieses Control wurde in diesem Lauf nicht ausgeführt', 'method-not-configured': 'Keine Prüfmethode definiert', 'scanner-does-not-support-binding': 'Dieser Scanner liefert den benötigten Ziel- oder Nachweistyp nicht', 'no-evaluable-observations': 'Keine bewertbaren Beobachtungen vorhanden', 'individual-evaluations': 'Ergebnis aus gespeicherten Einzelbewertungen' });
   return <section className="panel" aria-label="Fixierter Geltungsbereich"><h2>Fixierter Geltungsbereich</h2>
     {!context ? <p>Für diesen historischen Stand wurde kein Produkt-/Profilabschluss gespeichert. Fehlende Angaben bleiben unbekannt.</p> : context.mode === 'profile' && context.product && context.profile ? <>
       <p>Produkt: {context.product.name} · {context.product.version}</p><p>Profil: <strong>{context.profile.name} · {context.profile.version}</strong></p>

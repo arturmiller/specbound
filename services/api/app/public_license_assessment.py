@@ -11,7 +11,7 @@ from sqlalchemy import insert
 
 from app.coverage import PYTHON_LICENSE_SCANNER
 from app.findings import apply_snapshot
-from app.frozen_governance import execution_policy
+from app.frozen_governance import plan_public_scan
 from app.rule_evaluation import evaluate_and_store
 from app.snapshots import create_snapshot
 from app.tables import evidence_records, scanner_coverage
@@ -128,7 +128,7 @@ def create_public_license_assessment(db, job, result, *, now):
         return None
     if any(not isinstance(path, str) or not path or len(path) > 500 for path in files):
         raise ValueError("Invalid lockfile coverage")
-    policy = execution_policy(context)
+    policy, execution_gaps = plan_public_scan(context, len(packages))
     coverage_status = (
         source_coverage if source_coverage in ("covered", "partial") else "failed"
     )
@@ -230,6 +230,7 @@ def create_public_license_assessment(db, job, result, *, now):
         evaluation_ids=evaluation_ids,
         now=now,
         governance_context=context,
+        execution_gaps=execution_gaps,
     )
     apply_snapshot(db, job["organization_id"], snapshot["id"])
     return snapshot["id"]

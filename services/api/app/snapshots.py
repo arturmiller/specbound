@@ -8,7 +8,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection
 
 from app.coverage import OPENAPI_SCANNER, PYTHON_LICENSE_SCANNER, scan_covers
-from app.frozen_governance import summarize_controls
+from app.frozen_governance import MAX_EVALUATIONS, summarize_controls
 from app.tables import (
     assessment_snapshots,
     evidence_records,
@@ -90,6 +90,7 @@ def create_snapshot(
     evaluation_ids,
     now,
     governance_context=None,
+    execution_gaps=None,
 ):
     """Freeze evaluated results only when all provenance matches the requested context."""
     if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
@@ -117,7 +118,7 @@ def create_snapshot(
         raise ValueError("Full Git commit IDs are required")
     if (
         not isinstance(evaluation_ids, list)
-        or not 0 <= len(evaluation_ids) <= 1000
+        or not 0 <= len(evaluation_ids) <= MAX_EVALUATIONS
         or (
             not evaluation_ids
             and (not governance_context or governance_context.get("mode") != "profile")
@@ -166,6 +167,7 @@ def create_snapshot(
         organization_id=organization_id,
         product_id=product_id,
         pack_sha=pack_sha,
+        execution_gaps=execution_gaps,
     )
     counts = dict.fromkeys(STATUSES, 0)
     evidence_ids, pairs, details = set(), set(), []

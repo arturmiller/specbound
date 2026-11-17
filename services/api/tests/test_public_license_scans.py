@@ -67,7 +67,9 @@ class PublicLicenseScansTest(unittest.TestCase):
         self.client.close()
         app.dependency_overrides.clear()
 
-    def configure_native_product(self, *, allowed=None, unbound=False):
+    def configure_native_product(
+        self, *, allowed=None, unbound=False, license_controls=1
+    ):
         self.source = ResourceFixtureSource("example/governance")
         if allowed:
             profile = json.loads(
@@ -94,6 +96,46 @@ class PublicLicenseScansTest(unittest.TestCase):
             self.source.files["profiles/application-baseline.json"] = json.dumps(
                 profile
             ).encode()
+        if license_controls > 1:
+            catalog = json.loads(self.source.files["catalogs/application.json"])
+            profile = json.loads(
+                self.source.files["profiles/application-baseline.json"]
+            )
+            bindings = json.loads(self.source.files["checks/application.json"])
+            original = next(
+                control
+                for control in catalog["catalog"]["groups"][0]["controls"]
+                if control["id"] == "PY-LIC-001"
+            )
+            for index in range(2, license_controls + 1):
+                control_id = f"PY-LIC-{index:03}"
+                control = {**copy.deepcopy(original), "id": control_id}
+                control.pop("params", None)
+                catalog["catalog"]["groups"][0]["controls"].append(control)
+                profile["profile"]["imports"][0]["include-controls"][0][
+                    "with-ids"
+                ].append(control_id)
+                bindings["spec"]["controls"].append(
+                    {
+                        "id": control_id,
+                        "target": {"kind": "python.package"},
+                        "requiredEvidence": {"capability": "python.package-license/v1"},
+                        "assertions": [
+                            {
+                                "operator": "spdx-allowlist",
+                                "path": "licenseExpression",
+                                "allowed": ["MIT"],
+                            }
+                        ],
+                    }
+                )
+            self.source.files["catalogs/application.json"] = json.dumps(
+                catalog
+            ).encode()
+            self.source.files["profiles/application-baseline.json"] = json.dumps(
+                profile
+            ).encode()
+            self.source.files["checks/application.json"] = json.dumps(bindings).encode()
         app.dependency_overrides[github_source_factory] = lambda: (
             lambda _repo: self.source
         )
@@ -225,9 +267,7 @@ class PublicLicenseScansTest(unittest.TestCase):
         self.assertEqual(report["assessment"]["packSha"], "a" * 40)
         self.assertEqual(report["evaluations"][0]["status"], "PASS", report)
         self.assertEqual(report["findings"], [])
-        self.assertEqual(
-            report["evidence"][0]["producerKind"], "public-license-scan"
-        )
+        self.assertEqual(report["evidence"][0]["producerKind"], "public-license-scan")
 
     def test_selected_unsupported_and_unbound_controls_stay_visible_without_fake_na(
         self,
@@ -310,6 +350,46 @@ class PublicLicenseScansTest(unittest.TestCase):
         report = self.client.get("/assessments/" + stored["assessmentId"]).json()
         self.assertIsNone(report["assessment"]["governanceContext"])
         self.assertIsNone(report["assessment"]["controls"])
+
+    def test_control_capacity_preserves_the_assessment_and_explicit_remaining_gaps(
+        self,
+    ):
+        from app.frozen_governance import plan_public_scan
+
+        self.configure_native_product(license_controls=6)
+        job = self.client.post(self.url, json={"ref": "main"}).json()
+        policy, gaps = plan_public_scan(job["governanceContext"], 200)
+        self.assertEqual(len(policy["controls"]) * 200, 1000)
+        self.assertEqual(gaps, {"PY-LIC-006": "evaluation-limit"})
+        result = self.observed_result("GPL-3.0-only")
+        result["packages"] = [
+            {**copy.deepcopy(result["packages"][0]), "name": f"sample-{index}"}
+            for index in range(3)
+        ]
+        with patch("app.frozen_governance.MAX_EVALUATIONS", 4):
+            self.assertTrue(
+                poll_once(
+                    get_engine(),
+                    execute=lambda *_args: {"status": "ok", "result": result},
+                )
+            )
+        stored = self.client.get(self.url).json()[0]
+        self.assertIsNotNone(stored["assessmentId"], stored)
+        self.assertNotIn("assessmentError", stored["result"])
+        report = self.client.get("/assessments/" + stored["assessmentId"]).json()
+        self.assertEqual(len(report["evaluations"]), 3)
+        self.assertEqual(len(report["assessment"]["controls"]), 7)
+        self.assertEqual(len(report["evidence"]), 3)
+        self.assertEqual(len(report["findings"]), 3)
+        control = next(
+            item
+            for item in report["assessment"]["controls"]
+            if item["controlId"] == "PY-LIC-002"
+        )
+        self.assertEqual(
+            (control["executionStatus"], control["status"], control["reason"]),
+            ("not_evaluated", "UNKNOWN", "evaluation-limit"),
+        )
 
     def test_scan_job_worker_and_result_survive_reload_without_fake_assessment(self):
         response = self.client.post(self.url, json={"ref": "main"})

@@ -9,6 +9,7 @@ from app.resource_store import resources_query, serialize_resource
 from app.tables import product_governance, resource_documents
 
 CAPABILITY = "python.package-license/v1"
+MAX_EVALUATIONS = 1000
 
 
 def freeze_product_governance(db, organization_id, product_id):
@@ -86,6 +87,17 @@ def executable_by_public_scanner(binding):
     )
 
 
+def plan_public_scan(context, package_count, *, budget=None):
+    """Budget whole controls so a partially evaluated control cannot claim PASS."""
+    policy = execution_policy(context)
+    capacity = (MAX_EVALUATIONS if budget is None else budget) // max(package_count, 1)
+    gaps = {
+        control["id"]: "evaluation-limit" for control in policy["controls"][capacity:]
+    }
+    policy["controls"] = policy["controls"][:capacity]
+    return policy, gaps
+
+
 def selected_controls(context):
     if context["mode"] == "profile":
         return context["profile"]["resolved"]["controls"]
@@ -95,7 +107,9 @@ def selected_controls(context):
     ]
 
 
-def summarize_controls(context, evaluations, *, organization_id, product_id, pack_sha):
+def summarize_controls(
+    context, evaluations, *, organization_id, product_id, pack_sha, execution_gaps=None
+):
     if context is None:
         return None
     if context["productId"] != product_id:
@@ -129,10 +143,20 @@ def summarize_controls(context, evaluations, *, organization_id, product_id, pac
     by_id = {control["id"]: control for control in controls}
     if len(by_id) != len(controls) or not controls:
         raise ValueError("Frozen control selection is empty or ambiguous")
+    gaps = execution_gaps or {}
+    for control_id, reason in gaps.items():
+        if (
+            reason != "evaluation-limit"
+            or control_id not in by_id
+            or not executable_by_public_scanner(by_id[control_id].get("binding"))
+        ):
+            raise ValueError("Invalid execution gap")
     for evaluation in evaluations:
         control = by_id.get(evaluation["control_id"])
         if control is None or control.get("binding") != evaluation["control"]:
             raise ValueError("Evaluation differs from frozen control binding")
+        if evaluation["control_id"] in gaps:
+            raise ValueError("A capacity-limited control cannot be partially evaluated")
     result = []
     for control in controls:
         rows = [row for row in evaluations if row["control_id"] == control["id"]]
@@ -172,7 +196,7 @@ def summarize_controls(context, evaluations, *, organization_id, product_id, pac
                 "title": control["title"],
                 "status": status,
                 "executionStatus": execution,
-                "reason": reason,
+                "reason": gaps.get(control["id"], reason),
                 "evaluationIds": [row["id"] for row in rows],
                 "evidenceIds": sorted(
                     {evidence_id for row in rows for evidence_id in row["evidence_ids"]}
