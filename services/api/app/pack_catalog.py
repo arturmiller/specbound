@@ -304,74 +304,7 @@ def connect_pack(
                 raise TagMoved(snapshot.commit, revision["commit"])
         finally:
             source.close()
-        controls = loaded.get("controls", [])
-        capabilities = (
-            loaded["manifest"].get("requiresCapabilities", [])
-            if data.kind == "governance"
-            else loaded["manifest"]["capabilities"]
-        )
-        for existing in db.execute(
-            _query(organization_id).where(pack_catalog.c.kind == data.kind)
-        ).mappings():
-            metadata = existing["manifest"]["metadata"]
-            if (
-                metadata["id"] == loaded["manifest"]["metadata"]["id"]
-                and metadata["version"] == loaded["manifest"]["metadata"]["version"]
-                and (
-                    (
-                        existing["content_digest"] is None
-                        and existing["id"] != revision["id"]
-                    )
-                    or (
-                        existing["content_digest"] is not None
-                        and existing["content_digest"] != loaded["contentDigest"]
-                    )
-                    or (
-                        existing["id"] == revision["id"]
-                        and (
-                            existing["manifest"] != loaded["manifest"]
-                            or existing["controls"] != controls
-                        )
-                    )
-                )
-            ):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Resource ID/version already identifies different content; publish a new version",
-                )
-        insert = text(
-            "INSERT INTO pack_catalog (revision_id, kind, manifest, controls, capabilities, content_digest, schemas) VALUES (:id, :kind, :manifest, :controls, :capabilities, :digest, :schemas) ON CONFLICT (revision_id) DO NOTHING"
-        ).bindparams(
-            bindparam("manifest", type_=JSON),
-            bindparam("controls", type_=JSON),
-            bindparam("capabilities", type_=JSON),
-            bindparam("schemas", type_=JSON),
-        )
-        db.execute(
-            insert,
-            {
-                "id": revision["id"],
-                "kind": data.kind,
-                "manifest": loaded["manifest"],
-                "controls": controls,
-                "capabilities": capabilities,
-                "digest": loaded["contentDigest"],
-                "schemas": loaded.get("schemas", {}),
-            },
-        )
-        row = (
-            db.execute(
-                _query(organization_id).where(pack_revisions.c.id == revision["id"])
-            )
-            .mappings()
-            .one()
-        )
-        if row["kind"] != data.kind:
-            raise HTTPException(
-                status_code=409,
-                detail="Pinned release already belongs to another pack kind",
-            )
-        return _serialize(row)
+        return persist_loaded_pack(db, organization_id, revision, data.kind, loaded)
     except TagMoved as exc:
         raise HTTPException(
             status_code=409, detail="Tag moved from its pinned commit"
@@ -382,3 +315,72 @@ def connect_pack(
         ) from exc
     except GitSourceError as exc:
         raise HTTPException(status_code=503, detail="Git source unavailable") from exc
+
+
+def persist_loaded_pack(db, organization_id, revision, kind, loaded):
+    controls = loaded.get("controls", [])
+    capabilities = (
+        loaded["manifest"].get("requiresCapabilities", [])
+        if kind == "governance"
+        else loaded["manifest"]["capabilities"]
+    )
+    for existing in db.execute(
+        _query(organization_id).where(pack_catalog.c.kind == kind)
+    ).mappings():
+        metadata = existing["manifest"]["metadata"]
+        if (
+            metadata["id"] == loaded["manifest"]["metadata"]["id"]
+            and metadata["version"] == loaded["manifest"]["metadata"]["version"]
+            and (
+                (
+                    existing["content_digest"] is None
+                    and existing["id"] != revision["id"]
+                )
+                or (
+                    existing["content_digest"] is not None
+                    and existing["content_digest"] != loaded["contentDigest"]
+                )
+                or (
+                    existing["id"] == revision["id"]
+                    and (
+                        existing["manifest"] != loaded["manifest"]
+                        or existing["controls"] != controls
+                    )
+                )
+            )
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Resource ID/version already identifies different content; publish a new version",
+            )
+    insert = text(
+        "INSERT INTO pack_catalog (revision_id, kind, manifest, controls, capabilities, content_digest, schemas) VALUES (:id, :kind, :manifest, :controls, :capabilities, :digest, :schemas) ON CONFLICT (revision_id) DO NOTHING"
+    ).bindparams(
+        bindparam("manifest", type_=JSON),
+        bindparam("controls", type_=JSON),
+        bindparam("capabilities", type_=JSON),
+        bindparam("schemas", type_=JSON),
+    )
+    db.execute(
+        insert,
+        {
+            "id": revision["id"],
+            "kind": kind,
+            "manifest": loaded["manifest"],
+            "controls": controls,
+            "capabilities": capabilities,
+            "digest": loaded["contentDigest"],
+            "schemas": loaded.get("schemas", {}),
+        },
+    )
+    row = (
+        db.execute(_query(organization_id).where(pack_revisions.c.id == revision["id"]))
+        .mappings()
+        .one()
+    )
+    if row["kind"] != kind:
+        raise HTTPException(
+            status_code=409,
+            detail="Pinned release already belongs to another pack kind",
+        )
+    return _serialize(row)

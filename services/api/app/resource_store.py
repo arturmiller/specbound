@@ -37,6 +37,7 @@ def resource_source(repository, ref, ref_kind, commit, path, dependencies, kind)
             "Catalog": "/api/contracts/oscal-catalog",
             "Profile": "/api/contracts/oscal-profile",
             "Product": "/api/contracts/product",
+            "EvidenceProviderPack": "/api/contracts/provider-pack",
         }[kind],
         "files": [
             {"path": name, "url": f"{base}/blob/{commit}/{quote(name, safe='/')}"}

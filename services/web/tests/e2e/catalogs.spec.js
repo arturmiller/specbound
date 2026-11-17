@@ -4,6 +4,8 @@ const org = '123e4567-e89b-12d3-a456-426614174000';
 const root = `/api/organizations/${org}/resources`;
 
 test('previews and imports grouped native OSCAL controls with real stored provenance', async ({ page }) => {
+  const consoleErrors = [];
+  page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   await page.goto(`/catalogs?organization=${org}&view=connect`);
   await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
   await page.getByLabel('Erwartete Katalog-ID').fill('application-controls');
@@ -37,6 +39,7 @@ test('previews and imports grouped native OSCAL controls with real stored proven
   await expect(page.getByRole('button', { name: 'Suche zurücksetzen' })).toBeVisible();
   await page.getByRole('button', { name: 'Suche zurücksetzen' }).click();
   await expect(page.locator('summary').filter({ hasText: 'PY-LIC-001' })).toBeVisible();
+  expect(consoleErrors).toEqual([]);
 });
 
 test('wrong native identity stays an explicit error and does not create a revision', async ({ page }) => {

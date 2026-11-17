@@ -10,12 +10,17 @@ from sqlalchemy.engine import Connection
 
 from app.authorization import organization_access, team_access, visible_teams
 from app.database import get_connection
+from app.evidence_packs import load_evidence_pack
 from app.git_source import GitSource, GitSourceError
 from app.identity import get_current_principal
 from app.manifest_io import ManifestError
 from app.manifest_source import snapshot_for_ref
 from app.oscal_resources import load_catalog, load_profile
-from app.pack_catalog import github_source_factory, require_github_organization
+from app.pack_catalog import (
+    github_source_factory,
+    persist_loaded_pack,
+    require_github_organization,
+)
 from app.pack_revisions import TagMoved, _lock_org, pin_release
 from app.product_governance import attach_product, load_product, resolve_product
 from app.resource_contracts import HERE, validate
@@ -121,6 +126,7 @@ def register_resource(
             "Catalog": load_catalog,
             "Profile": load_profile,
             "Product": load_product,
+            "EvidenceProviderPack": load_evidence_pack,
         }
         if kind not in loaders:
             raise ValueError("Unsupported resource type")
@@ -262,6 +268,10 @@ def register_resource(
             raise HTTPException(
                 status_code=409,
                 detail="Source revision already identifies another resource",
+            )
+        if kind == "EvidenceProviderPack":
+            persist_loaded_pack(
+                db, organization_id, revision, "provider", loaded["providerPack"]
             )
         if kind == "Product":
             attach_product(db, organization_id, revision["id"], loaded, current_product)

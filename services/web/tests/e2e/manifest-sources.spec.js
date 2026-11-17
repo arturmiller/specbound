@@ -22,6 +22,6 @@ test('registers two manifest paths from the same branch through the persisted AP
   expect(saved[0]).not.toEqual(saved[1]);
   await page.goto(`/providers?organization=${org}&view=catalog`);
   for (const id of ['org.specbound.example-auth', 'org.specbound.example-license']) {
-    await expect(page.getByText(id, { exact: true })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'fixture/multi-providers' }).getByText(id, { exact: true })).toBeVisible();
   }
 });

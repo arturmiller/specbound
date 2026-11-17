@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { CapabilityUsage } from './capability-usage.jsx';
 import { ManifestProvenance, ManifestSourceFields } from './manifest-source.jsx';
 
 /** @typedef {{prose?: string, parts?: NativePart[]}} NativePart */
 /** @typedef {{id: string, title: string, parts: NativePart[], parameters: unknown[], groupKey: string, methodStatus: string, binding: {target: {kind: string}, requiredEvidence: {capability: string}, assertions: unknown[]} | null}} ResourceControl */
 /** @typedef {{key: string, id: string | null, title: string, parent: string | null}} ResourceGroup */
 /** @typedef {{repository: string, ref: string, refType: string, commit: string, manifestPath: string, manifestUrl: string, commitUrl: string, schemaUrl: string, files: {path: string, url: string}[]}} ResourceSource */
-/** @typedef {{id: string | null, resourceType: string, resourceId: string, version: string, name: string, state: string, validationStatus: string, contentDigest: string, source: ResourceSource, manifest: Record<string, unknown>, resolved: {groups: ResourceGroup[], controls: ResourceControl[], bindingPath: string | null, productId?: string, repositories?: {provider: string, repository: string}[], profile?: {name: string, version: string}, catalog?: {resourceId: string, version: string, name: string, contentDigest: string, manifestPath: string, revisionId: string}}}} Resource */
+/** @typedef {{id: string | null, resourceType: string, resourceId: string, version: string, name: string, state: string, validationStatus: string, contentDigest: string, source: ResourceSource, manifest: Record<string, unknown>, resolved: {groups: ResourceGroup[], controls: ResourceControl[], bindingPath: string | null, capabilities?: {id: string, version: string}[], productId?: string, repositories?: {provider: string, repository: string}[], profile?: {name: string, version: string}, catalog?: {resourceId: string, version: string, name: string, contentDigest: string, manifestPath: string, revisionId: string}}}} Resource */
 
 /** @param {{parts: NativePart[]}} props */
 function RequirementParts({ parts }) {
@@ -46,19 +47,20 @@ export function CatalogControls({ resource }) {
   </div>;
 }
 
-/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, resourceType?: 'Catalog' | 'Profile' | 'Product', onBusyChange: (busy: boolean) => void}} props */
+/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, resourceType?: 'Catalog' | 'Profile' | 'Product' | 'EvidenceProviderPack', onBusyChange: (busy: boolean) => void}} props */
 export function ResourceWorkspace({ organizationId, organization, accessToken = '', resourceType = 'Catalog', onBusyChange }) {
   const isProfile = resourceType === 'Profile';
   const isProduct = resourceType === 'Product';
-  const plural = isProduct ? 'Produkte' : isProfile ? 'Profile' : 'Kataloge';
-  const noun = isProduct ? 'Produkt' : isProfile ? 'Profil' : 'Katalog';
-  const description = isProduct ? 'Das Produktmanifest definiert die Produktquellen und die genaue geltende Profilversion.' : isProfile ? 'Profile wählen Controls und Parameter aus einem Katalog.' : 'Gruppierte Anforderungen und ihre gespeicherten Quellen.';
-  const defaultPath = isProduct ? 'products/audio-visualizer.json' : isProfile ? 'profiles/application-baseline.json' : 'catalogs/application.json';
+  const isEvidence = resourceType === 'EvidenceProviderPack';
+  const plural = isEvidence ? 'Evidence Packs' : isProduct ? 'Produkte' : isProfile ? 'Profile' : 'Kataloge';
+  const noun = isEvidence ? 'Evidence Pack' : isProduct ? 'Produkt' : isProfile ? 'Profil' : 'Katalog';
+  const description = isEvidence ? 'Ein Evidence Pack beschreibt versionierte Capabilities und ihre Datenverträge. Die Registrierung erteilt keine Ausführungsrechte.' : isProduct ? 'Das Produktmanifest definiert die Produktquellen und die genaue geltende Profilversion.' : isProfile ? 'Profile wählen Controls und Parameter aus einem Katalog.' : 'Gruppierte Anforderungen und ihre gespeicherten Quellen.';
+  const defaultPath = isEvidence ? 'provider.yaml' : isProduct ? 'products/audio-visualizer.json' : isProfile ? 'profiles/application-baseline.json' : 'catalogs/application.json';
   const selected = new URLSearchParams(location.search).get('resource') || '';
-  const view = resourceType === 'Product' ? 'connect' : new URLSearchParams(location.search).get('view') || (selected ? 'detail' : 'list');
+  const view = (isProduct || isEvidence) ? 'connect' : new URLSearchParams(location.search).get('view') || (selected ? 'detail' : 'list');
   const scope = `${organizationId}:${accessToken}:${resourceType}`;
   const root = `/api/organizations/${encodeURIComponent(organizationId)}/resources`;
-  const listUrl = `${isProduct ? '/products' : isProfile ? '/profiles' : '/catalogs'}?${new URLSearchParams({ organization: organizationId })}`;
+  const listUrl = `${isEvidence ? '/evidence-packs' : isProduct ? '/products' : isProfile ? '/profiles' : '/catalogs'}?${new URLSearchParams({ organization: organizationId })}`;
   const [state, setState] = useState(/** @type {{scope: string, resources: Resource[], principal: {id: string, kind: string} | null, error: string}} */ ({ scope: '', resources: [], principal: null, error: '' }));
   const [repository, setRepository] = useState('');
   const [ref, setRef] = useState('main');
@@ -100,7 +102,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
     controller.current?.abort();
     const current = new AbortController(); controller.current = current;
     setBusy(true); setFailure('');
-    const config = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: expectedId.trim(), version: version.trim(), name: expectedId.trim() }, spec: { resourceType, provider: 'github', repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || defaultPath, expected: { id: expectedId.trim(), version: version.trim() } } };
+    const config = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: isEvidence ? 'evidence-source' : expectedId.trim(), version: isEvidence ? '1.0.0' : version.trim(), name: expectedId.trim() }, spec: { resourceType, provider: 'github', repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || defaultPath, expected: { id: expectedId.trim(), version: version.trim() } } };
     try {
       const response = await fetch(`${root}?preview=${previewOnly}`, { method: 'POST', signal: current.signal, headers: { ...headers, 'Content-Type': 'application/json', ...(!previewOnly && preview ? { 'X-Expected-Commit': preview.source.commit } : {}) }, body: JSON.stringify(config) });
       if (!response.ok) {
@@ -112,7 +114,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
       /** @type {Resource} */ const saved = await response.json();
       if (current.signal.aborted) return;
       if (previewOnly) setPreviewState({ key: configKey, value: saved });
-      else window.location.assign(isProduct ? `${listUrl}&product=${encodeURIComponent(saved.resolved.productId || '')}&view=scope` : `${listUrl}&resource=${encodeURIComponent(saved.id || '')}`);
+      else window.location.assign(isEvidence ? `${listUrl}&pack=${encodeURIComponent(saved.id || '')}` : isProduct ? `${listUrl}&product=${encodeURIComponent(saved.resolved.productId || '')}&view=scope` : `${listUrl}&resource=${encodeURIComponent(saved.id || '')}`);
     } catch (error) { if (!current.signal.aborted) setFailure(error instanceof Error ? error.message : 'Die Quelle konnte nicht verarbeitet werden.'); }
     finally { if (!current.signal.aborted) setBusy(false); }
   }
@@ -125,13 +127,13 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
         <label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label>
         <label className="field">Git-Ref<input required maxLength={200} value={ref} onChange={(event) => setRef(event.target.value)} /></label>
         <ManifestSourceFields path={path} onPath={setPath} refType={refType} onRefType={setRefType} defaultPath={defaultPath} />
-        <label className="field">Erwartete {noun}-ID<input required maxLength={128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isProduct ? 'audio-visualizer' : isProfile ? 'application-baseline' : 'application-controls'} /></label>
-        <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={128} /></label>
+        <label className="field">Erwartete {noun}-ID<input required maxLength={isEvidence ? 200 : 128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isEvidence ? 'org.example.provider' : isProduct ? 'audio-visualizer' : isProfile ? 'application-baseline' : 'application-controls'} /></label>
+        <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={isEvidence ? undefined : 128} /></label>
         <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy}>{noun} registrieren</button></div>
         {busy && <p role="status">Quelle wird gelesen und geprüft …</p>}
         <p>Der Import prüft die Struktur und speichert eine feste Revision. Ein Produktprofil legt die geltenden Controls fest.</p>
       </form> : <p>Nur Organisationseigentümer können neue Quellen registrieren.</p>}
-      {preview && <section className="panel" aria-label={`${noun}vorschau`}><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} />{isProduct ? <><p>{preview.resolved.controls.length} geltende Controls aus {preview.resolved.profile?.name} · {preview.resolved.profile?.version}</p><p>Produktquellen: {preview.resolved.repositories?.map((item) => item.repository).join(', ')}</p></> : <CatalogControls key={preview.contentDigest} resource={preview} />}</section>}
+      {preview && <section className="panel" aria-label={`${noun}vorschau`}><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} />{isEvidence ? <p>{preview.resolved.capabilities?.map((item) => `${item.id}/${item.version}`).join(', ')} · Struktur geprüft, keine Ausführungsfreigabe</p> : isProduct ? <><p>{preview.resolved.controls.length} geltende Controls aus {preview.resolved.profile?.name} · {preview.resolved.profile?.version}</p><p>Produktquellen: {preview.resolved.repositories?.map((item) => item.repository).join(', ')}</p></> : <CatalogControls key={preview.contentDigest} resource={preview} />}</section>}
       <a href={listUrl}>Zu den {plural}</a>
     </> : selected ? resource ? <>
       <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · Registriert · Struktur geprüft</p></div><a href={listUrl}>Alle {plural}</a></div>
@@ -140,7 +142,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
       <p>{resource.resolved.controls.length} Controls · Produktgeltung durch ausdrückliche Profilauswahl.</p>
       <CatalogControls key={resource.id} resource={resource} />
       {!isProfile && <section className="panel"><h2>Verwendet in Profilen</h2>{usingProfiles.length ? <ul>{usingProfiles.map((profile) => <li key={profile.id}><a href={`/profiles?${new URLSearchParams({ organization: organizationId, resource: profile.id || '' })}`}>{profile.name} · {profile.version}</a></li>)}</ul> : <p>Noch keine gespeicherten Profile für diese Katalogversion.</p>}</section>}
-      <details className="panel"><summary>Manifest und Quellen</summary><pre className="pack-json">{JSON.stringify(resource.manifest, null, 2)}</pre><ul>{resource.source.files.map((file) => <li key={file.path}><a href={file.url}>{file.path}</a></li>)}</ul><p className="break-value">Quelldigest (SHA-256): {resource.contentDigest}</p></details>
+      <CapabilityUsage key={`capability-${resource.id}`} organizationId={organizationId} accessToken={accessToken} resourceId={resource.id} /><details className="panel"><summary>Manifest und Quellen</summary><pre className="pack-json">{JSON.stringify(resource.manifest, null, 2)}</pre><ul>{resource.source.files.map((file) => <li key={file.path}><a href={file.url}>{file.path}</a></li>)}</ul><p className="break-value">Quelldigest (SHA-256): {resource.contentDigest}</p></details>
     </> : <><h1 id="resources-heading">{noun} nicht verfügbar</h1><p>Die Revision existiert nicht oder ist für dich nicht sichtbar.</p><a href={listUrl}>Alle {plural}</a></> : <>
       <div className="page-heading"><div><h1 id="resources-heading">{plural}</h1><p>{description}</p></div>{isOwner && <a className="primary-link" href={`${listUrl}&view=connect`}>{noun} registrieren</a>}</div>
       {resources.length ? <div className="panel team-table-scroll"><table className="team-table"><thead><tr><th>{noun.toLocaleUpperCase()}</th><th>VERSION</th><th>CONTROLS</th><th>QUELLE</th><th>STATUS</th></tr></thead><tbody>{resources.map((item) => <tr key={item.id}><td><a href={`${listUrl}&resource=${encodeURIComponent(item.id || '')}`}>{item.name}</a><small>{item.resourceId}</small></td><td>{item.version}</td><td>{item.resolved.controls.length}</td><td className="break-value"><a href={item.source.manifestUrl}>{item.source.repository} · {item.source.manifestPath}</a></td><td>Registriert · Struktur geprüft</td></tr>)}</tbody></table></div> : <p>Noch keine nativen {plural} registriert.</p>}
