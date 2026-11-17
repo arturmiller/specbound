@@ -18,6 +18,7 @@ from app.tables import (
     evidence_records,
     finding_history,
     findings,
+    public_license_scans,
     rule_evaluations,
     scanner_coverage,
 )
@@ -66,9 +67,8 @@ def finding_history_report(
         .all()
     )
     by_id = {snapshot["id"]: snapshot for snapshot in snapshots}
-    if (
-        len(by_id) != len(snapshot_ids)
-        or (history and history[-1]["snapshotId"] != finding["last_snapshot_id"])
+    if len(by_id) != len(snapshot_ids) or (
+        history and history[-1]["snapshotId"] != finding["last_snapshot_id"]
     ):
         raise HTTPException(status_code=409, detail="Finding provenance is incomplete")
     return {
@@ -164,8 +164,38 @@ def assessment_report(
         .all()
     )
     scan_by_id = {row["id"]: row for row in scans}
+    public_scan = (
+        db.execute(
+            select(public_license_scans).where(
+                public_license_scans.c.assessment_id == snapshot_id,
+                public_license_scans.c.organization_id == snapshot["organization_id"],
+                public_license_scans.c.product_id == snapshot["product_id"],
+                public_license_scans.c.binding_id == snapshot["binding_id"],
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    source_scan = None
+    if public_scan is not None:
+        result = public_scan["result"] or {}
+        if result.get("sourceRevision") != snapshot["git_sha"]:
+            raise HTTPException(
+                status_code=409, detail="Scan provenance does not match assessment"
+            )
+        source_scan = {
+            "id": public_scan["id"],
+            "repository": public_scan["repository"],
+            "ref": public_scan["ref"],
+            "sourceRevision": result["sourceRevision"],
+            "coverage": result.get("sourceCoverage"),
+            "files": result.get("files", []),
+            "unsupportedFiles": result.get("unsupportedFiles", []),
+            "reason": result.get("reason"),
+        }
     return {
         "assessment": serialize_snapshot(snapshot),
+        "sourceScan": source_scan,
         "evaluations": [
             {
                 "id": row["id"],

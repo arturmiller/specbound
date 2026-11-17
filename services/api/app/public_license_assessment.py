@@ -10,8 +10,8 @@ from uuid import uuid4
 from sqlalchemy import insert
 
 from app.coverage import PYTHON_LICENSE_SCANNER
-from app.example_license_pack import load_example_license_pack
 from app.findings import apply_snapshot
+from app.frozen_governance import execution_policy
 from app.rule_evaluation import evaluate_and_store
 from app.snapshots import create_snapshot
 from app.tables import evidence_records, scanner_coverage
@@ -111,37 +111,55 @@ def create_public_license_assessment(db, job, result, *, now):
         result.get("sourceCoverage"),
         result.get("sourceRevision"),
     )
+    context = job.get("governance_context")
+    profile_bound = context is not None and context.get("mode") == "profile"
     if (
-        source_coverage not in ("covered", "partial")
+        (not profile_bound and source_coverage not in ("covered", "partial"))
         or not isinstance(revision, str)
         or not GIT_SHA.fullmatch(revision)
     ):
         return None
     if (
         not isinstance(packages, list)
-        or not 0 < len(packages) <= 200
+        or not 0 <= len(packages) <= 200
         or not isinstance(files, list)
-        or not files
+        or (not profile_bound and (not packages or not files))
     ):
         return None
     if any(not isinstance(path, str) or not path or len(path) > 500 for path in files):
         raise ValueError("Invalid lockfile coverage")
-    policy = load_example_license_pack()
-    control = policy["controls"][0]
+    policy = execution_policy(context)
+    coverage_status = (
+        source_coverage if source_coverage in ("covered", "partial") else "failed"
+    )
     scan = db.execute(
         insert(scanner_coverage)
         .values(
             binding_id=job["binding_id"],
             scanner=PYTHON_LICENSE_SCANNER,
             ref=job["ref"],
-            status=source_coverage,
+            status=coverage_status,
             source_revision=revision,
             observed_at=now,
             files=files,
-            errors=[
-                {"path": path, "reason": "unsupported lockfile"}
-                for path in result.get("unsupportedFiles", [])
-            ],
+            errors=(
+                [
+                    {"path": path, "reason": "unsupported lockfile"}
+                    for path in result.get("unsupportedFiles", [])
+                ]
+                + (
+                    [
+                        {
+                            "path": "",
+                            "reason": str(
+                                result.get("reason", "Source coverage unavailable")
+                            )[:500],
+                        }
+                    ]
+                    if coverage_status == "failed"
+                    else []
+                )
+            ),
         )
         .returning(scanner_coverage.c.id)
     ).scalar_one()
@@ -184,20 +202,21 @@ def create_public_license_assessment(db, job, result, *, now):
             "targetRevision": revision,
             "environment": ENVIRONMENT,
         }
-        evaluation = evaluate_and_store(
-            db,
-            job["organization_id"],
-            scope,
-            subject,
-            control,
-            policy["revision"],
-            now=now,
-            scan_id=scan,
-            binding_id=job["binding_id"],
-            ref=job["ref"],
-            selected_evidence_id=evidence_id,
-        )
-        evaluation_ids.append(evaluation["id"])
+        for control in policy["controls"]:
+            evaluation = evaluate_and_store(
+                db,
+                job["organization_id"],
+                scope,
+                subject,
+                control,
+                policy["revision"],
+                now=now,
+                scan_id=scan,
+                binding_id=job["binding_id"],
+                ref=job["ref"],
+                selected_evidence_id=evidence_id,
+            )
+            evaluation_ids.append(evaluation["id"])
     snapshot = create_snapshot(
         db,
         job["organization_id"],
@@ -210,6 +229,7 @@ def create_public_license_assessment(db, job, result, *, now):
         pack_sha=policy["revision"],
         evaluation_ids=evaluation_ids,
         now=now,
+        governance_context=context,
     )
     apply_snapshot(db, job["organization_id"], snapshot["id"])
     return snapshot["id"]
