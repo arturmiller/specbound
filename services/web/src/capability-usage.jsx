@@ -14,12 +14,12 @@ export function CapabilityUsage({ organizationId, accessToken, resourceId, packI
     return () => controller.abort();
   }, [organizationId, accessToken, scope]);
   const controls = state.controls.filter((item) => resourceId ? item.revisionId === resourceId : packId ? item.providerRevisionIds.includes(packId) || item.incompatibleProviderRevisionIds.includes(packId) : true);
-  return <section className="panel" aria-label="Capability-Zuordnung"><h2>{packId ? 'Verwendung durch Controls' : 'Benötigte Nachweise und Anbieter'}</h2>
-    {state.scope !== scope ? <p role="status">Zuordnungen werden geladen …</p> : state.error ? <p role="alert">{state.error}</p> : controls.length === 0 ? <p>Keine gespeicherten Control-Bindungen für diese Auswahl.</p> : <ul>{controls.map((item) => <li key={`${item.revisionId}:${item.controlId}`}>
+  return <section className="panel" aria-label="Capability-Zuordnung"><h2>{packId ? 'Control-Verwendung und Versionsabgleich' : 'Benötigte Nachweise und Anbieter'}</h2>
+    {state.scope !== scope ? <p role="status">Zuordnungen werden geladen …</p> : state.error ? <p role="alert">{state.error}</p> : controls.length === 0 ? <p>Keine gespeicherten Control-Bindungen für diese Auswahl.</p> : <ul>{controls.map((item) => { const status = packId ? item.providerRevisionIds.includes(packId) ? 'available' : 'incompatible_version' : item.status; return <li key={`${item.revisionId}:${item.controlId}`}>
       <a href={`/${item.resourceType === 'Profile' ? 'profiles' : 'catalogs'}?${new URLSearchParams({ organization: organizationId, resource: item.revisionId })}`}>{item.name} · {item.version} · {item.controlId}</a>
-      <p className="break-value">{item.capability} · {item.status === 'available' ? 'Passende Capability registriert' : item.status === 'incompatible_version' ? 'Keine passende Version; andere Version registriert' : 'Kein passender Anbieter registriert'}</p>
+      <p className="break-value">{item.capability} · {status === 'available' ? 'Passende Capability registriert' : status === 'incompatible_version' ? packId ? 'Dieses Pack: inkompatible Capability-Version' : 'Keine passende Version; andere Version registriert' : 'Kein passender Anbieter registriert'}</p>
       {item.providerRevisionIds.map((id) => { const provider = state.providers.find((value) => value.revisionId === id); return <p key={id}><a href={`/evidence-packs?${new URLSearchParams({ organization: organizationId, pack: id })}`}>{provider?.name || id} · {provider?.version}</a></p>; })}
-    </li>)}</ul>}
+    </li>; })}</ul>}
     <p>Der Abgleich prüft die genaue Capability-Version. Eine registrierte Capability belegt weder eine Ausführungsfreigabe noch einen erhobenen Nachweis.</p>
   </section>;
 }

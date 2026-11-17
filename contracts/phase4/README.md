@@ -1,6 +1,6 @@
 # Phase-4-Verträge und validierte Beispiele
 
-Grundlage: [ADR 0035](../../docs/adr/0035-oscal-resources-and-workspace.md). Fachliche Richtung bestätigt; diese Dateien definieren die Verträge für Folgeaufgaben. Sie implementieren noch keinen produktiven Ressourcenimport oder Datenbankmigration.
+Grundlage: [ADR 0035](../../docs/adr/0035-oscal-resources-and-workspace.md). Diese Dateien definieren die Verträge für Ressourcenimport, Auflösung und Registrierung. API und Offline-Beispielprüfung verwenden dieselben Validatoren.
 
 ## Formate
 
@@ -28,7 +28,9 @@ Registrierte Manifestpfade sind relative Repositorypfade aus nichtleeren Segment
 
 ## Erster unterstützter OSCAL-Umfang
 
-Kataloge und Profile verwenden den gemeinsamen produktiven Validator unter `services/api/app/resource_contracts.py`; der Offline-Checker ruft denselben Code auf. Sie sind über `/organizations/{id}/resources` und die Menüs **Kataloge** und **Profile** registrierbar. Ein POST mit `preview=true` schreibt weder Quellpin noch Ressource. `X-Expected-Commit` schützt den anschließenden Import vor einem währenddessen geänderten Ref. Produktzuordnungen folgen im nächsten vertikalen Slice.
+Kataloge und Profile verwenden den gemeinsamen produktiven Validator unter `services/api/app/resource_contracts.py`; der Offline-Checker ruft denselben Code auf. Sie sind über `/organizations/{id}/resources` und die Menüs **Kataloge** und **Profile** registrierbar. Ein POST mit `preview=true` schreibt weder Quellpin noch Ressource. `X-Expected-Commit` schützt den anschließenden Import vor einem währenddessen geänderten Ref. Produktmanifeste verweisen ausdrücklich auf eine registrierte Profilversion und legen ausschließlich ihre eigenen Produktquellen fest.
+
+`EvidenceProviderPack` ist im selben Quellendpunkt registrierbar und verwendet unverändert den vorhandenen v1-Parser. Die quellenseitige erwartete ID/Version erhält dafür die v1-Grenzen (ID bis 200 Zeichen, gültige Version ohne zusätzliche 128-Zeichen-Grenze); neue native Ressourcentypen behalten ihre engeren Grenzen. Quellkonfigurations-ID/-Version bleiben davon getrennt. Der Import speichert Datenverträge und deklarierte Berechtigungen, erteilt jedoch keine Laufzeitfreigabe. Der Capability-Abgleich prüft genaue Versionen; auf einer Packdetailseite wird die Kompatibilität dieses Packs unabhängig von anderen Anbietern dargestellt.
 
 Vor einem Profil wird seine Katalogversion registriert. Der Profilimport liest Katalog und Bindungen aus demselben Snapshot wie die Profildatei und gleicht deren Inhaltsdigest mit der registrierten Katalogidentität ab. Inhaltsgleiche registrierte Definitionen an einer anderen Revision bleiben referenzierbar; die tatsächlich eingebundene Datei wird zusätzlich mit dem Commit des Profilimports verlinkt. Mehrdeutige oder abweichende Kataloginhalte werden abgewiesen. Die gespeicherte Profilauswahl enthält ausschließlich ausdrücklich ausgewählte Controls und aufgelöste Bindungsparameter; Änderungen der Abhängigkeitsmenge benötigen eine neue Profilversion.
 

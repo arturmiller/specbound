@@ -42,3 +42,27 @@ test('rejects invalid provider contracts without saving a source', async ({ page
   const resources = await (await page.request.get(`/api/organizations/${org}/resources`)).json();
   expect(resources.some((item) => item.source.repository === 'fixture/oscal-invalid')).toBe(false);
 });
+
+test('marks the current pack incompatible even when another pack supplies the required version', async ({ page }) => {
+  await page.goto(`/evidence-packs?organization=${org}`);
+  const root = `/api/organizations/${org}/resources`;
+  for (const [resourceType, repository, manifestPath, id] of [
+    ['Catalog', 'fixture/oscal', 'catalogs/application.json', 'application-controls'],
+    ['EvidenceProviderPack', 'fixture/oscal', 'evidence/second/provider.json', 'org.specbound.example-license'],
+    ['EvidenceProviderPack', 'fixture/oscal-v2', 'evidence/second/provider.json', 'org.specbound.example-license.v2'],
+  ]) {
+    const response = await page.request.post(root, { data: {
+      apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: 'source', version: '1.0.0', name: 'Source' },
+      spec: { resourceType, provider: 'github', repository, ref: 'main', manifestPath, expected: { id, version: '1.0.0' } },
+    } });
+    expect(response.status()).toBe(201);
+    if (repository.endsWith('-v2')) {
+      const pack = await response.json();
+      await page.goto(`/evidence-packs?organization=${org}&pack=${pack.id}`);
+    }
+  }
+  const usage = page.getByRole('region', { name: 'Capability-Zuordnung' });
+  await expect(usage).toContainText('PY-LIC-001');
+  await expect(usage).toContainText('Dieses Pack: inkompatible Capability-Version');
+  await expect(usage.getByText('Passende Capability registriert', { exact: true })).toHaveCount(0);
+});

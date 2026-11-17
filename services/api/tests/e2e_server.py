@@ -137,7 +137,11 @@ class FixtureSource:
         return "a" * 40
 
     def fetch(self, ref):
-        if self.repository in ("fixture/oscal", "fixture/oscal-invalid"):
+        if self.repository in (
+            "fixture/oscal",
+            "fixture/oscal-invalid",
+            "fixture/oscal-v2",
+        ):
             from tests.test_resource_registry import ResourceFixtureSource
 
             snapshot = ResourceFixtureSource(self.repository).fetch(ref)
@@ -146,6 +150,13 @@ class FixtureSource:
                 files["evidence/second/contracts/request.json"] = (
                     b'{"$schema":"https://json-schema.org/draft/2020-12/schema","type":42}'
                 )
+                return GitSnapshot(snapshot.commit, files)
+            if self.repository.endswith("-v2"):
+                files = dict(snapshot.files)
+                manifest = json.loads(files["evidence/second/provider.json"])
+                manifest["metadata"]["id"] += ".v2"
+                manifest["capabilities"][0]["version"] = "v2"
+                files["evidence/second/provider.json"] = json.dumps(manifest).encode()
                 return GitSnapshot(snapshot.commit, files)
             return snapshot
         if self.repository == "fixture/multi-providers":

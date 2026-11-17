@@ -345,6 +345,32 @@ class ResourceRegistryTest(unittest.TestCase):
                 self.client.get(f"/organizations/{self.org}/packs").json(), []
             )
 
+    def test_evidence_source_preserves_existing_v1_identity_and_version_limits(self):
+        self.config = self.evidence_config("second")
+        provider_id, version = "p" * 200, "1" * 2000 + ".0.0"
+        manifest = json.loads(self.source.files["evidence/second/provider.json"])
+        manifest["metadata"].update(id=provider_id, version=version)
+        self.source.files["evidence/second/provider.json"] = json.dumps(
+            manifest
+        ).encode()
+        self.config["spec"]["expected"] = {"id": provider_id, "version": version}
+        response = self.post()
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(
+            (response.json()["resourceId"], response.json()["version"]),
+            (provider_id, version),
+        )
+        self.assertEqual(
+            self.client.get(self.url + "/" + response.json()["id"]).json(),
+            response.json(),
+        )
+        self.assertEqual(
+            self.client.get(f"/organizations/{self.org}/packs").json()[0]["manifest"][
+                "metadata"
+            ]["version"],
+            version,
+        )
+
     def test_product_manifest_creates_only_product_sources_and_explicit_profile(self):
         team = self.prepare_product()
         preview = self.post(preview=True)
