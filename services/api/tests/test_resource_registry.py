@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -222,13 +223,16 @@ class ResourceRegistryTest(unittest.TestCase):
         team = self.client.post(
             f"/organizations/{self.org}/teams", json={"name": "Product owner"}
         ).json()["id"]
+        directory = tempfile.TemporaryDirectory(prefix="specbound-workspace-")
+        self.addCleanup(directory.cleanup)
+        self.workspace_path = Path(directory.name) / "workspace.json"
+        self.workspace_path.write_text(
+            json.dumps({"organizationId": self.org, "defaultOwnerTeamId": team}),
+            encoding="utf-8",
+        )
         self.workspace = patch.dict(
             os.environ,
-            {
-                "SPECBOUND_WORKSPACE_CONFIG": json.dumps(
-                    {"organizationId": self.org, "defaultOwnerTeamId": team}
-                )
-            },
+            {"SPECBOUND_WORKSPACE_CONFIG": str(self.workspace_path)},
         )
         self.workspace.start()
         self.addCleanup(self.workspace.stop)
@@ -304,7 +308,10 @@ class ResourceRegistryTest(unittest.TestCase):
             "{}",
             json.dumps({"organizationId": self.org, "defaultOwnerTeamId": self.org}),
         ):
-            with patch.dict(os.environ, {"SPECBOUND_WORKSPACE_CONFIG": config}):
+            self.workspace_path.write_text(config, encoding="utf-8")
+            with patch.dict(
+                os.environ, {"SPECBOUND_WORKSPACE_CONFIG": str(self.workspace_path)}
+            ):
                 self.assertEqual(self.post(preview=True).status_code, 503)
 
     def test_product_resources_retain_team_boundaries(self):

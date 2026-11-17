@@ -32,7 +32,7 @@ Die Ausgabe nennt das Pack com.acme.security und das Control SEC-NET-001.
 
 Unter **Produkte → Produkt aus Manifest registrieren** wird ein Produktmanifest aus Git geprüft und übernommen. `spec.repositories` enthält nur die tatsächlichen Prüfquellen, `spec.profile` die genaue registrierte Profil-ID und Version. Die Herkunft des Produktmanifests ist davon getrennt. Im Produkt zeigt **Geltungsbereich** die Kette Produkt → Profil → Katalog sowie die ausgewählten Controls.
 
-Der Server benötigt `SPECBOUND_WORKSPACE_CONFIG` als JSON mit `organizationId` und `defaultOwnerTeamId`; Organisation und Team müssen bereits existieren und zusammengehören. Fehlende Konfiguration wird nicht durch eine automatisch gewählte Organisation ersetzt. Authentifizierung und Teamrechte gelten weiterhin.
+Der Server benötigt `SPECBOUND_WORKSPACE_CONFIG` als Pfad zu einer lokalen JSON-Datei mit `organizationId` und `defaultOwnerTeamId`; Organisation und Team müssen bereits existieren und zusammengehören. Fehlende Konfiguration wird nicht durch eine automatisch gewählte Organisation ersetzt. Authentifizierung und Teamrechte gelten weiterhin.
 
 Bestehende Produkte bleiben **Ohne Profilzuordnung**. Gleiche Namen oder Repositorys erzeugen keine rückwirkende Zuordnung. Manifestverwaltete Produkte lassen sich nicht zusätzlich über die bisherigen Produkt-/Repository-Endpunkte umkonfigurieren. Für Änderungen wird eine neue Manifestversion veröffentlicht und anschließend ausdrücklich übernommen; die Übernahme neuer Revisionen folgt im eigenen Änderungsvorgang.
 

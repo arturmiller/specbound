@@ -1,7 +1,7 @@
 """Trusted installation context; never inferred from browser state or database order."""
 
-import json
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from jsonschema import ValidationError
@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.authorization import organization_access
 from app.database import get_connection
 from app.identity import get_current_principal
-from app.resource_contracts import HERE, validate
+from app.resource_contracts import HERE, read, validate
 from app.tables import organizations, teams
 
 router = APIRouter()
@@ -18,9 +18,12 @@ router = APIRouter()
 
 def configured_workspace(db):
     try:
-        config = json.loads(os.environ.get("SPECBOUND_WORKSPACE_CONFIG", ""))
+        path = Path(os.environ.get("SPECBOUND_WORKSPACE_CONFIG", ""))
+        if not path.is_file() or path.stat().st_size > 65536:
+            raise ValueError("Missing or excessive workspace configuration")
+        config = read(path)
         validate(config, HERE / "workspace.schema.json")
-    except (ValueError, ValidationError, TypeError) as exc:
+    except (OSError, ValueError, ValidationError, TypeError) as exc:
         raise HTTPException(
             status_code=503, detail="Workspace is not configured correctly"
         ) from exc
