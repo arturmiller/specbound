@@ -2,14 +2,13 @@
 
 import re
 from typing import Annotated, Callable
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from jsonschema import ValidationError
 from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection
 
-from app.authorization import organization_access
+from app.authorization import organization_access, team_access, visible_teams
 from app.database import get_connection
 from app.git_source import GitSource, GitSourceError
 from app.identity import get_current_principal
@@ -17,72 +16,13 @@ from app.manifest_io import ManifestError
 from app.manifest_source import snapshot_for_ref
 from app.oscal_resources import load_catalog, load_profile
 from app.pack_catalog import github_source_factory, require_github_organization
-from app.pack_revisions import TagMoved, pin_release
+from app.pack_revisions import TagMoved, _lock_org, pin_release
+from app.product_governance import attach_product, load_product, resolve_product
 from app.resource_contracts import HERE, validate
-from app.tables import pack_revisions, resource_documents
+from app.resource_store import resource_source, resources_query, serialize_resource
+from app.tables import product_governance, products, resource_documents
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
-
-
-def _query(organization_id):
-    return (
-        select(pack_revisions, resource_documents)
-        .select_from(
-            pack_revisions.join(
-                resource_documents,
-                resource_documents.c.revision_id == pack_revisions.c.id,
-            )
-        )
-        .where(
-            pack_revisions.c.organization_id == organization_id,
-            resource_documents.c.organization_id == organization_id,
-        )
-    )
-
-
-def _source(repository, ref, ref_kind, commit, path, dependencies, kind):
-    base = f"https://github.com/{repository}"
-    return {
-        "repository": repository,
-        "ref": ref,
-        "refType": ref_kind,
-        "commit": commit,
-        "manifestPath": path,
-        "manifestUrl": f"{base}/blob/{commit}/{quote(path, safe='/')}",
-        "commitUrl": f"{base}/commit/{commit}",
-        "schemaUrl": "/api/contracts/oscal-catalog"
-        if kind == "Catalog"
-        else "/api/contracts/oscal-profile",
-        "files": [
-            {"path": name, "url": f"{base}/blob/{commit}/{quote(name, safe='/')}"}
-            for name in dependencies
-        ],
-    }
-
-
-def _serialize(row):
-    return {
-        "id": row["revision_id"],
-        "organizationId": row["organization_id"],
-        "resourceType": row["kind"],
-        "resourceId": row["resource_id"],
-        "version": row["resource_version"],
-        "name": row["name"],
-        "state": "registered",
-        "validationStatus": "structure_validated",
-        "source": _source(
-            row["repository"],
-            row["tag"],
-            row["ref_kind"],
-            row["commit_sha"],
-            row["manifest_path"],
-            row["dependencies"],
-            row["kind"],
-        ),
-        "manifest": row["document"],
-        "resolved": row["resolved"],
-        "contentDigest": row["content_digest"],
-    }
 
 
 @router.get("/organizations/{organization_id}/resources")
@@ -92,10 +32,21 @@ def list_resources(
     db: Annotated[Connection, Depends(get_connection, scope="function")],
 ):
     organization_access(db, organization_id, principal, write=False)
+    team_ids = [team["id"] for team in visible_teams(db, organization_id, principal)]
+    visible_products = (
+        select(product_governance.c.revision_id)
+        .join(products, products.c.id == product_governance.c.product_id)
+        .where(products.c.owner_team_id.in_(team_ids))
+    )
     return [
-        _serialize(row)
+        serialize_resource(row)
         for row in db.execute(
-            _query(organization_id).order_by(
+            resources_query(organization_id)
+            .where(
+                (resource_documents.c.kind != "Product")
+                | resource_documents.c.revision_id.in_(visible_products)
+            )
+            .order_by(
                 resource_documents.c.name,
                 resource_documents.c.resource_version,
                 resource_documents.c.revision_id,
@@ -114,7 +65,7 @@ def get_resource(
     organization_access(db, organization_id, principal, write=False)
     row = (
         db.execute(
-            _query(organization_id).where(
+            resources_query(organization_id).where(
                 resource_documents.c.revision_id == revision_id
             )
         )
@@ -123,7 +74,24 @@ def get_resource(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Resource revision not found")
-    return _serialize(row)
+    if row["kind"] == "Product":
+        product = (
+            db.execute(
+                select(products)
+                .join(
+                    product_governance, products.c.id == product_governance.c.product_id
+                )
+                .where(product_governance.c.revision_id == revision_id)
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if product is None:
+            raise HTTPException(
+                status_code=404, detail="Product resource is unavailable"
+            )
+        team_access(db, product["owner_team_id"], principal, "read")
+    return serialize_resource(row)
 
 
 @router.post("/organizations/{organization_id}/resources", status_code=201)
@@ -149,11 +117,13 @@ def register_resource(
         validate(data, HERE / "resource-source.schema.json")
         config = data["spec"]
         kind = config["resourceType"]
-        loaders = {"Catalog": load_catalog, "Profile": load_profile}
+        loaders = {
+            "Catalog": load_catalog,
+            "Profile": load_profile,
+            "Product": load_product,
+        }
         if kind not in loaders:
-            raise ValueError(
-                "Only native Catalog and Profile registration are supported here"
-            )
+            raise ValueError("Unsupported resource type")
         source = factory(config["repository"])
         try:
             ref_kind = config.get("refType", "branch")
@@ -172,11 +142,18 @@ def register_resource(
             raise ValueError(
                 "Manifest identity/version differs from the registered reference"
             )
+        if kind == "Product" and not preview:
+            _lock_org(db, organization_id)
+        current_product = (
+            resolve_product(db, organization_id, loaded, principal)
+            if kind == "Product"
+            else None
+        )
         if kind == "Profile":
             catalog = loaded["resolved"]["catalog"]
             matches = (
                 db.execute(
-                    _query(organization_id).where(
+                    resources_query(organization_id).where(
                         resource_documents.c.kind == "Catalog",
                         resource_documents.c.resource_id == catalog["resourceId"],
                         resource_documents.c.resource_version == catalog["version"],
@@ -213,7 +190,7 @@ def register_resource(
                 "name": loaded["name"],
                 "state": "preview",
                 "validationStatus": "structure_validated",
-                "source": _source(
+                "source": resource_source(
                     config["repository"],
                     config["ref"],
                     ref_kind,
@@ -286,6 +263,8 @@ def register_resource(
                 status_code=409,
                 detail="Source revision already identifies another resource",
             )
+        if kind == "Product":
+            attach_product(db, organization_id, revision["id"], loaded, current_product)
         return get_resource(organization_id, revision["id"], principal, db)
     except TagMoved as exc:
         raise HTTPException(

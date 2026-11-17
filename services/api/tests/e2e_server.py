@@ -1,6 +1,8 @@
 """Test-only server: an in-process identity override, never enabled by the application."""
 
+import json
 import os
+import tempfile
 from pathlib import Path
 
 import uvicorn
@@ -14,6 +16,8 @@ from app.pack_catalog import github_source_factory
 from sqlalchemy import text
 
 FIXTURE_ORGANIZATION = "123e4567-e89b-12d3-a456-426614174000"
+FIXTURE_OWNER_TEAM = "123e4567-e89b-12d3-a456-426614174001"
+WORKSPACE_DIRECTORY = tempfile.TemporaryDirectory(prefix="specbound-e2e-workspace-")
 
 
 @app.post("/__e2e/process-public-license-scan")
@@ -205,6 +209,17 @@ def main():
         )
     os.environ["DATABASE_URL"] = test_url
     os.environ["GITHUB_ORGANIZATION_ID"] = FIXTURE_ORGANIZATION
+    workspace_path = Path(WORKSPACE_DIRECTORY.name) / "workspace.json"
+    workspace_path.write_text(
+        json.dumps(
+            {
+                "organizationId": FIXTURE_ORGANIZATION,
+                "defaultOwnerTeamId": FIXTURE_OWNER_TEAM,
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.environ["SPECBOUND_WORKSPACE_CONFIG"] = str(workspace_path)
     with get_engine().begin() as db:
         db.execute(
             text(
@@ -220,6 +235,12 @@ def main():
                 "name": "Fixture Organization",
                 "owner": "user:e2e",
             },
+        )
+        db.execute(
+            text(
+                "INSERT INTO teams (id, organization_id, name) VALUES (:id, :org, 'Workspace owner') ON CONFLICT DO NOTHING"
+            ),
+            {"id": FIXTURE_OWNER_TEAM, "org": FIXTURE_ORGANIZATION},
         )
     app.dependency_overrides[get_current_principal] = lambda: "user:e2e"
     app.dependency_overrides[github_source_factory] = lambda: FixtureSource

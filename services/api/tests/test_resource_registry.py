@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -209,6 +210,170 @@ class ResourceRegistryTest(unittest.TestCase):
             expected={"id": "application-baseline", "version": "1.0.0"},
         )
         return config
+
+    def prepare_product(self):
+        self.assertEqual(self.post().status_code, 201)
+        self.config = self.profile_config()
+        self.assertEqual(self.post().status_code, 201)
+        self.config["spec"].update(
+            resourceType="Product",
+            manifestPath="products/audio-visualizer.json",
+            expected={"id": "audio-visualizer", "version": "1.0.0"},
+        )
+        team = self.client.post(
+            f"/organizations/{self.org}/teams", json={"name": "Product owner"}
+        ).json()["id"]
+        directory = tempfile.TemporaryDirectory(prefix="specbound-workspace-")
+        self.addCleanup(directory.cleanup)
+        self.workspace_path = Path(directory.name) / "workspace.json"
+        self.workspace_path.write_text(
+            json.dumps({"organizationId": self.org, "defaultOwnerTeamId": team}),
+            encoding="utf-8",
+        )
+        self.workspace = patch.dict(
+            os.environ,
+            {"SPECBOUND_WORKSPACE_CONFIG": str(self.workspace_path)},
+        )
+        self.workspace.start()
+        self.addCleanup(self.workspace.stop)
+        return team
+
+    def test_product_manifest_creates_only_product_sources_and_explicit_profile(self):
+        team = self.prepare_product()
+        preview = self.post(preview=True)
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual(
+            self.client.get(f"/organizations/{self.org}/products").json(), []
+        )
+        created = self.post()
+        self.assertEqual(created.status_code, 201, created.text)
+        product_id = created.json()["resolved"]["productId"]
+        product = self.client.get(f"/products/{product_id}").json()
+        self.assertEqual(product["ownerTeamId"], team)
+        self.assertEqual(product["configurationStatus"], "manifest_managed")
+        self.assertEqual(product["resourceId"], "audio-visualizer")
+        bindings = self.client.get(f"/products/{product_id}/repositories").json()
+        self.assertEqual(
+            [item["repository"] for item in bindings], ["djfun/audio-visualizer-python"]
+        )
+        scope = self.client.get(f"/products/{product_id}/governance").json()
+        self.assertEqual(scope["profile"]["resourceId"], "application-baseline")
+        self.assertEqual(
+            scope["profile"]["resolved"]["selectedControlIds"],
+            ["SEC-API-001", "PY-LIC-001"],
+        )
+        self.assertEqual(self.post().json(), created.json())
+        for method, suffix, data in (
+            ("patch", "", {"name": "UI override"}),
+            (
+                "post",
+                "/repositories",
+                {"provider": "github", "repository": "other/repo"},
+            ),
+            (
+                "patch",
+                "/repositories/" + bindings[0]["id"],
+                {"provider": "github", "repository": "other/repo"},
+            ),
+        ):
+            response = getattr(self.client, method)(
+                f"/products/{product_id}" + suffix, json=data
+            )
+            self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            self.client.delete(
+                f"/products/{product_id}/repositories/{bindings[0]['id']}"
+            ).status_code,
+            409,
+        )
+
+    def test_product_missing_profile_and_invalid_workspace_leave_no_partial_product(
+        self,
+    ):
+        self.prepare_product()
+        document = json.loads(self.source.files["products/audio-visualizer.json"])
+        document["spec"]["profile"]["version"] = "99.0.0"
+        self.source.files["products/audio-visualizer.json"] = json.dumps(
+            document
+        ).encode()
+        response = self.post()
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("profile version must be registered", response.json()["detail"])
+        self.assertEqual(len(self.client.get(self.url).json()), 2)
+        self.assertEqual(
+            self.client.get(f"/organizations/{self.org}/products").json(), []
+        )
+        for config in (
+            "",
+            "{}",
+            json.dumps({"organizationId": self.org, "defaultOwnerTeamId": self.org}),
+        ):
+            self.workspace_path.write_text(config, encoding="utf-8")
+            with patch.dict(
+                os.environ, {"SPECBOUND_WORKSPACE_CONFIG": str(self.workspace_path)}
+            ):
+                self.assertEqual(self.post(preview=True).status_code, 503)
+
+    def test_product_resources_retain_team_boundaries(self):
+        team = self.prepare_product()
+        created = self.post().json()
+        product_id = created["resolved"]["productId"]
+        another = self.client.post(
+            f"/organizations/{self.org}/teams", json={"name": "Unrelated team"}
+        ).json()["id"]
+        for owner, selected_team in (
+            ("user:viewer", team),
+            ("user:other-member", another),
+        ):
+            self.client.post(
+                f"/teams/{selected_team}/members",
+                json={"principalId": owner, "role": "viewer"},
+            )
+        app.dependency_overrides[get_current_principal] = lambda: "user:other-member"
+        self.assertEqual(
+            self.client.get(f"/products/{product_id}/governance").status_code, 403
+        )
+        self.assertEqual(
+            self.client.get(self.url + "/" + created["id"]).status_code, 403
+        )
+        self.assertFalse(
+            any(
+                item["resourceType"] == "Product"
+                for item in self.client.get(self.url).json()
+            )
+        )
+        self.assertEqual(self.post().status_code, 403)
+        app.dependency_overrides[get_current_principal] = lambda: "user:viewer"
+        self.assertEqual(
+            self.client.get(f"/products/{product_id}/governance").status_code, 200
+        )
+        self.assertEqual(
+            self.client.get(self.url + "/" + created["id"]).status_code, 200
+        )
+        self.assertEqual(self.post().status_code, 403)
+
+    def test_existing_product_is_explicitly_unassigned_and_never_guessed(self):
+        team = self.prepare_product()
+        old = self.client.post(
+            f"/organizations/{self.org}/products",
+            json={"name": "Audio Visualizer", "ownerTeamId": team},
+        ).json()
+        old_url = f"/products/{old['id']}"
+        self.client.post(
+            old_url + "/repositories",
+            json={"provider": "github", "repository": "djfun/audio-visualizer-python"},
+        )
+        self.assertEqual(old["configurationStatus"], "profile_unassigned")
+        self.assertEqual(
+            self.client.get(old_url + "/governance").json(),
+            {"state": "profile_unassigned", "product": None, "profile": None},
+        )
+        registered = self.post().json()
+        self.assertNotEqual(registered["resolved"]["productId"], old["id"])
+        self.assertEqual(
+            self.client.get(old_url + "/governance").json()["state"],
+            "profile_unassigned",
+        )
 
     def test_profile_selects_controls_explicitly_and_expands_its_parameters(self):
         document = json.loads(self.source.files["profiles/application-baseline.json"])
