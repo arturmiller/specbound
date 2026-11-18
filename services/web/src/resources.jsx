@@ -72,16 +72,18 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   const [busy, setBusy] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [failure, setFailure] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [previewState, setPreviewState] = useState(/** @type {{key: string, value: Resource} | null} */ (null));
   const controller = useRef(/** @type {AbortController | null} */ (null));
   const configKey = JSON.stringify([scope, repository, ref, refType, path, expectedId, version]);
   const preview = previewState?.key === configKey ? previewState.value : null;
   const allResources = state.scope === scope ? state.resources : [];
-  const resources = allResources.filter((item) => item.resourceType === resourceType);
+  const resources = allResources.filter((item) => item.resourceType === resourceType && item.state !== 'archived');
+  const archivedCatalogs = allResources.filter((item) => item.resourceType === 'Catalog' && item.state === 'archived');
   const loading = state.scope !== scope;
   const principal = state.scope === scope ? state.principal : null;
   const isOwner = principal?.kind === 'user' && principal.id === organization?.ownerPrincipalId;
-  const resource = resources.find((item) => item.id === selected);
+  const resource = allResources.find((item) => item.resourceType === resourceType && item.id === selected);
   const usingProfiles = resource ? allResources.filter((item) => item.resourceType === 'Profile' && item.resolved.catalog?.resourceId === resource.resourceId && item.resolved.catalog.version === resource.version && item.resolved.catalog.contentDigest === resource.contentDigest) : [];
   /** @type {Record<string, string>} */ const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 
@@ -90,13 +92,35 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   useEffect(() => {
     const readController = new AbortController();
     /** @type {RequestInit} */ const options = { signal: readController.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} };
-    Promise.all([fetch(root, options), fetch('/api/auth/me', options)]).then(async ([response, me]) => {
+    Promise.all([fetch(resourceType === 'Catalog' ? `${root}?include_archived=true` : root, options), fetch('/api/auth/me', options)]).then(async ([response, me]) => {
       if (!response.ok || !me.ok) throw new Error(response.status === 403 ? 'Für diese Ressourcen fehlen die erforderlichen Rechte.' : 'Ressourcen konnten nicht geladen werden.');
       const [items, current] = await Promise.all([response.json(), me.json()]);
       if (!readController.signal.aborted) setState({ scope, resources: items, principal: current, error: '' });
     }).catch((error) => { if (!readController.signal.aborted) setState({ scope, resources: [], principal: null, error: error.message }); });
     return () => readController.abort();
-  }, [root, accessToken, scope]);
+  }, [root, accessToken, scope, resourceType]);
+
+  /** @param {boolean} archived */
+  async function changeCatalogArchive(archived) {
+    if (!isOwner || busy || resource?.resourceType !== 'Catalog') return;
+    const current = new AbortController(); controller.current = current;
+    setBusy(true); setPreviewBusy(false); setFailure('');
+    const timeout = setTimeout(() => current.abort(), 45000);
+    try {
+      const response = await fetch(`${root}/${encodeURIComponent(resource.id || '')}${archived ? '' : '/restore'}`, { method: archived ? 'DELETE' : 'POST', headers, signal: current.signal });
+      if (!response.ok) throw new Error(response.status === 403 ? 'Für diese Aktion fehlen die erforderlichen Rechte.' : 'Der Katalog konnte nicht geändert werden. Bitte erneut versuchen.');
+      const saved = archived ? { ...resource, state: 'archived' } : await response.json();
+      if (!current.signal.aborted) {
+        setState((previous) => previous.scope === scope ? { ...previous, resources: previous.resources.map((item) => item.id === saved.id ? saved : item) } : previous);
+        setConfirmRemove(false);
+      }
+    } catch (error) {
+      if (controller.current === current) setFailure(current.signal.aborted ? 'Zeitlimit erreicht. Bitte die Seite neu laden und den Katalogstatus prüfen.' : error instanceof Error ? error.message : 'Der Katalog konnte nicht geändert werden.');
+    } finally {
+      clearTimeout(timeout);
+      if (controller.current === current) setBusy(false);
+    }
+  }
 
   /** @param {boolean} previewOnly */
   async function submit(previewOnly) {
@@ -153,9 +177,13 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
       {preview && <section className="panel" aria-label={`${noun}vorschau`}><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} />{isEvidence ? <p>{preview.resolved.capabilities?.map((item) => `${item.id}/${item.version}`).join(', ')} · Struktur geprüft, keine Ausführungsfreigabe</p> : isProduct ? <><p>{preview.resolved.controls.length} geltende Controls aus {preview.resolved.profile?.name} · {preview.resolved.profile?.version}</p><p>Produktquellen: {preview.resolved.repositories?.map((item) => item.repository).join(', ')}</p></> : <CatalogControls key={preview.contentDigest} resource={preview} />}</section>}
       <a href={listUrl}>Zu den {plural}</a>
     </> : selected ? resource ? <>
-      <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · Registriert · Struktur geprüft</p></div><a href={listUrl}>Alle {plural}</a></div>
+      <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · {resource.state === 'archived' ? 'Archiviert' : 'Registriert'} · Struktur geprüft</p></div><a href={listUrl}>Alle {plural}</a></div>
+      {resourceType === 'Catalog' && (isOwner || resource.state === 'archived') && <section className="panel" aria-label="Katalogregistrierung">
+        {resource.state === 'archived' ? <><p role="status">Dieser Katalog wurde aus der aktiven Liste entfernt. Bestehende Profile und Prüfungen behalten ihre feste Referenz.</p>{isOwner && <button type="button" disabled={busy} onClick={() => { void changeCatalogArchive(false); }}>Katalog wiederherstellen</button>}</> : isOwner && (confirmRemove ? <><h2>Katalog entfernen?</h2><p>Diese registrierte Revision wird archiviert. Bestehende Profile, Prüfungen und Quellenlinks bleiben erhalten. Du kannst den Katalog später wiederherstellen.</p><div className="resource-actions"><button type="button" disabled={busy} onClick={() => { void changeCatalogArchive(true); }}>Entfernen bestätigen</button><button type="button" disabled={busy} onClick={() => setConfirmRemove(false)}>Abbrechen</button></div></> : <button type="button" disabled={busy} onClick={() => setConfirmRemove(true)}>Katalog entfernen</button>)}
+        {busy && <p role="status">Katalogregistrierung wird geändert …</p>}
+      </section>}
       <ManifestProvenance source={resource.source} defaultPath={resource.source.manifestPath} />
-      <ResourceRevisions key={`revision-${resource.id}`} organizationId={organizationId} revisionId={resource.id || ''} accessToken={accessToken} isOwner={isOwner} />
+      {resource.state !== 'archived' && <ResourceRevisions key={`revision-${resource.id}`} organizationId={organizationId} revisionId={resource.id || ''} accessToken={accessToken} isOwner={isOwner} />}
       {resource.resolved.catalog && <p>Katalogdefinition: <a href={`/catalogs?${new URLSearchParams({ organization: organizationId, resource: resource.resolved.catalog.revisionId })}`}>{resource.resolved.catalog.name} · {resource.resolved.catalog.version}</a>{' · '}<a href={resource.source.files.find((file) => file.path === resource.resolved.catalog?.manifestPath)?.url}>Eingebundene Katalogdatei</a></p>}
       <p>{resource.resolved.controls.length} Controls · Produktgeltung durch ausdrückliche Profilauswahl.</p>
       <CatalogControls key={resource.id} resource={resource} />
@@ -164,6 +192,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
     </> : <><h1 id="resources-heading">{noun} nicht verfügbar</h1><p>Die Revision existiert nicht oder ist für dich nicht sichtbar.</p><a href={listUrl}>Alle {plural}</a></> : <>
       <div className="page-heading"><div><h1 id="resources-heading">{plural}</h1><p>{description}</p></div>{isOwner && <a className="primary-link" href={`${listUrl}&view=connect`}>{noun} registrieren</a>}</div>
       {resources.length ? <div className="resource-product-grid">{resources.map((item) => <article className="panel" key={item.id}><h2><a href={`${listUrl}&resource=${encodeURIComponent(item.id || '')}`}>{item.name}</a></h2><p className="break-value">{item.resourceId} · Version {item.version}</p><p>{item.resolved.controls.length} Controls · Registriert · Struktur geprüft</p><p className="break-value">Repository: <a href={`https://github.com/${item.source.repository}`}>{item.source.repository}</a></p><ManifestProvenance source={item.source} defaultPath={item.source.manifestPath} /></article>)}</div> : <p>Noch keine nativen {plural} registriert.</p>}
+      {resourceType === 'Catalog' && archivedCatalogs.length > 0 && <details className="panel"><summary>Entfernte Kataloge ({archivedCatalogs.length})</summary><ul>{archivedCatalogs.map((item) => <li key={item.id}><a href={`${listUrl}&resource=${encodeURIComponent(item.id || '')}`}>{item.name} · {item.version}</a></li>)}</ul></details>}
       {!isProfile && <p><a href={`/packs?${new URLSearchParams({ organization: organizationId })}`}>Bestehende Governance-Packs ansehen</a></p>}
     </>}
   </section>;

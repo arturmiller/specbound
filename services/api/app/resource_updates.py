@@ -44,6 +44,11 @@ class AdoptionRequest(RevisionRequest):
 def revision_config(db, organization_id, revision_id, principal, request):
     organization_access(db, organization_id, principal, write=True)
     before = get_resource(organization_id, revision_id, principal, db)
+    if before["state"] == "archived":
+        raise HTTPException(
+            status_code=409,
+            detail="Catalog is archived; restore it before checking revisions",
+        )
     row = (
         db.execute(
             resources_query(organization_id).where(

@@ -199,6 +199,7 @@ class FixtureSource:
     def fetch(self, ref):
         if self.repository in (
             "fixture/oscal",
+            "fixture/oscal-removal",
             "fixture/oscal-invalid",
             "fixture/oscal-v2",
             "fixture/oscal-requirements",

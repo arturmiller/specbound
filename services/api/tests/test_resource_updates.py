@@ -30,6 +30,22 @@ class ResourceUpdatesTest(unittest.TestCase):
         self.resources = f"/organizations/{self.org}/resources"
         self.product_url = self.resources + "/" + self.original_product["id"]
 
+    def test_catalog_archival_keeps_product_and_saved_assessment_unchanged(self):
+        self.prepare()
+        report = self.finish_profile_scan(self.observed_result("GPL-3.0-only"))
+        governance_url = f"/products/{self.product}/governance"
+        before = self.client.get(governance_url).json()
+        catalog_id = self.original_profile["resolved"]["catalog"]["revisionId"]
+        removed = self.client.delete(self.resources + "/" + catalog_id)
+        self.assertEqual(removed.status_code, 204, removed.text)
+        self.assertEqual(self.client.get(governance_url).json(), before)
+        self.assertEqual(
+            self.client.get("/assessments/" + report["assessment"]["id"]).json(), report
+        )
+        self.assertEqual(
+            self.client.post(self.url, json={"ref": "main"}).status_code, 201
+        )
+
     def change(self, path, edit):
         document = json.loads(self.source.files[path])
         edit(document)

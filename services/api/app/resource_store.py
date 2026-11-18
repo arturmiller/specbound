@@ -69,7 +69,7 @@ def serialize_resource(row):
         "resourceId": row["resource_id"],
         "version": row["resource_version"],
         "name": row["name"],
-        "state": "registered",
+        "state": "archived" if row["archived"] else "registered",
         "validationStatus": "structure_validated",
         "source": resource_source(
             row["repository"],
