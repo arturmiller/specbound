@@ -10,6 +10,11 @@ test('authenticated resource portal keeps product context above tabs and exposes
   await expect(page.getByRole('combobox', { name: 'Organisation', exact: true })).toHaveCount(0);
   const nav = page.getByRole('navigation', { name: 'Hauptnavigation' });
   await expect(nav.getByRole('link')).toHaveCount(4);
+  await page.getByText('Weitere Funktionen', { exact: true }).click();
+  for (const label of ['Findings', 'PR Checks', 'Manuelle Produktverwaltung', 'Administration']) {
+    await expect(page.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', /organization=123e4567-e89b-12d3-a456-426614174010/);
+  }
+  await page.getByText('Weitere Funktionen', { exact: true }).click();
   await page.getByRole('link', { name: 'Audio Visualizer', exact: true }).click();
   const picker = page.getByRole('combobox', { name: 'Produkt auswählen' });
   await expect(picker).toHaveValue(/.+/);

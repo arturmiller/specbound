@@ -46,7 +46,7 @@ export function PortalShell({ section, organizationId, organizations, onOrganiza
   const initials = organization?.name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0].toLocaleUpperCase()).join('') || 'S';
   return <div className="portal-layout">
     <aside className="portal-sidebar">
-      <a className="portal-brand" href={organizationHref('/settings', organizationId)}><span className="brand-mark" aria-hidden="true">◇</span> Specbound</a>
+      <a className="portal-brand" href="/products"><span className="brand-mark" aria-hidden="true">◇</span> Specbound</a>
       <nav aria-label="Hauptnavigation" className="portal-nav">
         {navigation.map((item) => <a key={item.id} className={`portal-nav-link ${section === item.id ? 'is-active' : ''}`}
           aria-current={section === item.id ? 'page' : undefined} href={organizationHref(item.href, organizationId)}>

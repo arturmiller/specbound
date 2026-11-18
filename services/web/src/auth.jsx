@@ -6,6 +6,18 @@ import { Documentation } from './docs.jsx';
 
 /** @typedef {{enabled: boolean, issuer: string, clientId: string, audience: string}} AuthConfig */
 
+/** @param {string} path */
+function canonicalLocation(path) {
+  const url = new URL(path, location.origin);
+  if (url.pathname === '/' && !url.searchParams.has('code') && !url.searchParams.has('state')) {
+    if (url.hash.startsWith('#docs/')) url.pathname = '/docs';
+    else if (url.searchParams.has('product') || url.hash === '#products-heading') url.pathname = '/products';
+    else if (url.searchParams.has('pack') || url.hash === '#packs-heading') url.pathname = '/packs';
+    else if (url.searchParams.has('team') || url.hash === '#teams-heading') url.pathname = '/teams';
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 /** @param {{apiStatus: string}} props */
 export function AuthWorkspace({ apiStatus }) {
   const [ready, setReady] = useState(false);
@@ -19,6 +31,7 @@ export function AuthWorkspace({ apiStatus }) {
     let cleanup = () => {};
     async function initialize() {
       try {
+        history.replaceState(null, '', canonicalLocation(location.href));
         const response = await fetch('/api/auth/config');
         if (!response.ok) throw new Error('Authentication configuration unavailable');
         /** @type {AuthConfig} */
@@ -58,7 +71,7 @@ export function AuthWorkspace({ apiStatus }) {
               }
             }
           }
-          finally { window.history.replaceState(null, '', target); }
+          finally { window.history.replaceState(null, '', canonicalLocation(target)); }
         } else {
           current = await oidc.getUser();
         }

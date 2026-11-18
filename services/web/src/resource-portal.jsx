@@ -51,10 +51,15 @@ export function ResourcePortal({ accessToken = '', onSignOut, apiStatus = '' }) 
     location.assign(`/products?${query}`);
   }
 
+  /** @param {string} path */
+  function workspaceHref(path) {
+    return workspace ? `${path}?${new URLSearchParams({ organization: workspace.organizationId })}` : path;
+  }
+
   return <div className="portal-layout resource-portal">
     <aside className="portal-sidebar"><a className="portal-brand" href="/products"><span className="brand-mark" aria-hidden="true">◇</span> Specbound</a>
       <nav className="portal-nav" aria-label="Hauptnavigation">{navigation.map(([id, label, href]) => <a className={`portal-nav-link ${section === id ? 'is-active' : ''}`} aria-current={section === id ? 'page' : undefined} key={id} href={href}>{label}</a>)}</nav>
-      <div className="resource-support"><a href="/docs">Dokumentation</a><details><summary>Weitere Funktionen</summary><a href="/findings">Findings</a><a href="/pr-checks">PR Checks</a><a href="/legacy-products">Manuelle Produktverwaltung</a><a href="/settings">Administration</a></details></div>
+      <div className="resource-support"><a href={workspaceHref('/docs')}>Dokumentation</a><details><summary>Weitere Funktionen</summary><a href={workspaceHref('/findings')}>Findings</a><a href={workspaceHref('/pr-checks')}>PR Checks</a><a href={workspaceHref('/legacy-products')}>Manuelle Produktverwaltung</a><a href={workspaceHref('/settings')}>Administration</a></details></div>
     </aside>
     <div className="portal-main"><header className="portal-top"><p className="portal-breadcrumb">Arbeitsbereich <strong>{workspace?.organization.name || 'Specbound'}</strong></p><span className="api-status" role="status">{apiStatus}</span>{onSignOut && <><span className="signed-in">Angemeldet.</span><button className="sign-out" onClick={onSignOut}>Lokal abmelden</button></>}</header>
       <main className="portal-content" id="main-content">
