@@ -96,6 +96,18 @@ class ResourceLifecycleTest(unittest.TestCase):
         self.assertEqual(self.client.post(foreign + "/restore").status_code, 404)
         self.assertEqual(self.client.get(url).json(), catalog)
 
+    def test_another_commit_cannot_reactivate_the_same_archived_identity(self):
+        catalog = self.post().json()
+        url = self.url + "/" + catalog["id"]
+        self.assertEqual(self.client.delete(url).status_code, 204)
+        self.source.commit = "b" * 40
+        self.assertEqual(self.post(preview=True).status_code, 409)
+        self.assertEqual(self.post().status_code, 409)
+        history = self.client.get(self.url, params={"include_archived": True}).json()
+        self.assertEqual(history, [{**catalog, "state": "archived"}])
+        self.assertEqual(self.client.post(url + "/restore").status_code, 200)
+        self.assertEqual(self.post().status_code, 201)
+
     def test_profile_removal_is_not_enabled_by_the_catalog_endpoint(self):
         self.post()
         self.config = self.profile_config()

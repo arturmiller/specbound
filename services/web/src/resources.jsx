@@ -136,6 +136,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
       if (!response.ok) {
         const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: 'Manifest, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt. Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.', 504: 'Zeitlimit beim Lesen der Git-Quelle erreicht. Bitte erneut versuchen.' };
         const body = await response.json().catch(() => ({}));
+        if (response.status === 409 && typeof body.detail === 'string' && body.detail.startsWith('Catalog is archived;')) throw new Error('Dieser Katalog ist archiviert. Stelle ihn unter „Entfernte Kataloge“ wieder her.');
         const detail = typeof body.detail === 'string' ? ` ${body.detail}` : '';
         throw new Error((messages[/** @type {403 | 409 | 422 | 503 | 504} */ (response.status)] || 'Die Quelle konnte nicht verarbeitet werden.') + detail);
       }

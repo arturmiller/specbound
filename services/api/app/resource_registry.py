@@ -243,6 +243,11 @@ def import_resource(
                 status_code=409,
                 detail="Resource ID/version already identifies different content; publish a new version",
             )
+        if kind == "Catalog" and previous and all(row["archived"] for row in previous):
+            raise HTTPException(
+                status_code=409,
+                detail="Catalog is archived; restore its registered revision first",
+            )
         if ref_kind == "tag":
             pinned = db.execute(
                 select(pack_revisions.c.commit_sha).where(

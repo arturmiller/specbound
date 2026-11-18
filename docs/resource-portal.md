@@ -27,6 +27,8 @@ Im Katalogdetail können Eigentümer **Katalog entfernen** und anschließend **E
 
 Manifest, Commitlinks und die Bindung von ID/Version an unveränderte Inhalte bleiben erhalten. Bestehende Profile, Produkte und gespeicherte Prüfungen behalten ihre festen Referenzen; auch neue Prüfungen bestehender Produkte können weiterlaufen. Neue Profilregistrierungen benötigen einen aktiven Katalog. Ein erneuter Import oder eine Revisionsübernahme stellt einen archivierten Stand nicht stillschweigend wieder her. Die Aktionen verlangen Eigentümerrechte und werden mit Akteur, Zeitpunkt und Revision protokolliert. Dateien im Git-Repository werden nicht gelöscht.
 
+Sind alle Registrierungen einer Katalog-ID und Version archiviert, gilt diese Sperre auch für einen anderen Commit mit unverändertem Kataloginhalt. Zuerst muss eine gespeicherte Registrierung ausdrücklich wiederhergestellt werden. Andere bereits aktive Registrierungen und neue Katalogversionen bleiben unabhängig davon nutzbar.
+
 `DELETE .../resources/{revisionId}` archiviert einen Katalog; `POST .../resources/{revisionId}/restore` stellt ihn wieder her. `GET .../resources` listet aktive Ressourcen, `?include_archived=true` bezieht archivierte Stände ein. Direkte berechtigte Detailabrufe bleiben verfügbar. Migration `0028_catalog_archival` verhindert ein Downgrade, solange archivierte Kataloge existieren.
 
 ### Vorschau und Revisionsübernahme
