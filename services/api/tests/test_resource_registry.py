@@ -485,6 +485,33 @@ class ResourceRegistryTest(unittest.TestCase):
         )
         self.assertEqual(self.post().status_code, 403)
 
+    def test_workspace_uses_only_configured_context_and_preserves_scoped_rights(self):
+        team = self.prepare_product()
+        product_id = self.post().json()["resolved"]["productId"]
+        other = self.client.post("/organizations", json={"name": "Other"}).json()["id"]
+        agent = self.client.post(
+            f"/organizations/{self.org}/agents", json={"name": "Workspace reader"}
+        ).json()["id"]
+        for principal in ("user:viewer", agent):
+            membership = self.client.post(
+                f"/teams/{team}/members",
+                json={"principalId": principal, "role": "viewer"},
+            )
+            self.assertEqual(membership.status_code, 201, membership.text)
+            app.dependency_overrides[get_current_principal] = lambda: principal
+            context = self.client.get("/workspace", params={"organization": other})
+            self.assertEqual(context.status_code, 200, context.text)
+            self.assertEqual(context.json()["organizationId"], self.org)
+            self.assertEqual(
+                self.client.get(f"/products/{product_id}").status_code, 200
+            )
+            self.assertEqual(self.post().status_code, 403)
+            app.dependency_overrides[get_current_principal] = lambda: "user:owner"
+        app.dependency_overrides[get_current_principal] = lambda: "user:unrelated"
+        self.assertEqual(self.client.get("/workspace").status_code, 403)
+        self.workspace_path.write_text("{}", encoding="utf-8")
+        self.assertEqual(self.client.get("/workspace").status_code, 503)
+
     def test_existing_product_is_explicitly_unassigned_and_never_guessed(self):
         team = self.prepare_product()
         old = self.client.post(

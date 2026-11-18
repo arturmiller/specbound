@@ -4,7 +4,7 @@ import React from 'react';
 export function ManifestSourceFields({ path, onPath, refType, onRefType, defaultPath }) {
   return <>
     <label className="field">Ref-Typ<select aria-label="Ref-Typ" value={refType} onChange={(event) => onRefType(event.target.value)}><option value="tag">Release-Tag</option><option value="branch">Branch</option><option value="commit">Commit</option></select></label>
-    <label className="field">Manifestpfad<input value={path} onChange={(event) => onPath(event.target.value)} maxLength={500} placeholder={defaultPath} /><small>Relativ zur Repository-Wurzel. Ohne Eingabe: {defaultPath}.</small></label>
+    <label className="field">Manifestpfad<input aria-label="Manifestpfad" value={path} onChange={(event) => onPath(event.target.value)} maxLength={500} placeholder={defaultPath} /><small>Relativ zur Repository-Wurzel. Ohne Eingabe: {defaultPath}.</small></label>
   </>;
 }
 

@@ -69,11 +69,14 @@ services:
       GITHUB_INSTALLATION_ID: ${GITHUB_INSTALLATION_ID:-}
       GITHUB_ORGANIZATION_ID: ${GITHUB_ORGANIZATION_ID:-}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      SPECBOUND_WORKSPACE_CONFIG: /etc/specbound/workspace.json
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
       BLOBSTORE_ENDPOINT: http://minio:9000
       BLOBSTORE_BUCKET: ${BLOBSTORE_BUCKET:-specbound}
       BLOBSTORE_ACCESS_KEY: ${MINIO_ROOT_USER:-specbound}
       BLOBSTORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-dev-only}
+    volumes:
+      - ${SPECBOUND_WORKSPACE_CONFIG_DIR:-./.local/workspace}:/etc/specbound:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

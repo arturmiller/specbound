@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('signs in with PKCE and sends a verified access token to the API', async ({ page, request }) => {
   await page.goto('/');
-  const authorizedRequest = page.waitForRequest((request) => request.url().endsWith('/api/organizations') && Boolean(request.headers().authorization));
+  const authorizedRequest = page.waitForRequest((request) => request.url().endsWith('/api/workspace') && Boolean(request.headers().authorization));
   await page.getByRole('button', { name: 'Anmelden' }).click();
   await expect(page.getByText('Angemeldet.', { exact: false })).toBeVisible();
   const apiRequest = await authorizedRequest;
@@ -10,12 +10,7 @@ test('signs in with PKCE and sends a verified access token to the API', async ({
   const me = await request.get('http://127.0.0.1:18765/auth/me', { headers: { authorization } });
   expect(me.status()).toBe(200);
   expect((await me.json()).kind).toBe('user');
-  const org = await request.post('http://127.0.0.1:18765/organizations', {
-    headers: { authorization }, data: { name: 'OIDC organization' },
-  });
-  expect(org.status()).toBe(201);
-  await page.reload();
-  await expect(page.getByLabel('Organisation')).toContainText('OIDC organization');
+  await expect(page.getByRole('heading', { name: 'Produkte', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Lokal abmelden' }).click();
   await expect(page.getByRole('button', { name: 'Anmelden' })).toBeVisible();
 });
@@ -29,13 +24,13 @@ test('rejects an unsolicited authorization callback', async ({ page }) => {
 test('returns to the requested assessment after signing in', async ({ page }) => {
   await page.goto('/assessments/example-report');
   await page.getByRole('button', { name: 'Anmelden' }).click();
-  await expect(page).toHaveURL(/\/assessments\/example-report$/);
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/assessments/example-report');
   await expect(page.getByRole('alert')).toContainText('Assessment nicht gefunden');
 });
 
 test('returns to a portal route and its document anchor after signing in', async ({ page }) => {
   await page.goto('/docs#docs/security');
   await page.getByRole('button', { name: 'Anmelden' }).click();
-  await expect(page).toHaveURL(/\/docs#docs\/security$/);
+  await expect.poll(() => ({ pathname: new URL(page.url()).pathname, hash: new URL(page.url()).hash })).toEqual({ pathname: '/docs', hash: '#docs/security' });
   await expect(page.getByRole('article', { name: 'Dokumentationsinhalt' }).getByRole('heading', { name: 'Security', exact: true })).toBeVisible();
 });

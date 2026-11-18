@@ -99,7 +99,7 @@ test('team admins can manage members without creating organization teams', async
 
 test('explains that sign-in is required when the API denies access', async ({ page }) => {
   await page.route('**/api/organizations', (route) => route.fulfill({ status: 401, body: '{}' }));
-  await page.goto('/');
+  await page.goto('/settings');
   await expect(page.getByText(/Anmeldung erforderlich/)).toBeVisible();
 });
 

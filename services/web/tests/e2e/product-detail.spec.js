@@ -10,7 +10,7 @@ test('discovery and product details show scoped facts and unknown assessment res
   const report = await (await request.get(`http://127.0.0.1:18762/assessments/${item.id}`)).json();
   expect(scans).toHaveLength(1);
   expect(scans[0].files).toContain('openapi.json');
-  await page.goto(`/products?organization=${item.organizationId}&product=${item.productId}&view=discovery`);
+  await page.goto(`/legacy-products?organization=${item.organizationId}&product=${item.productId}&view=discovery`);
   await expect(page.getByRole('heading', { name: 'Discovery prüfen' })).toBeVisible();
   await expect(page.getByText(/Dateien: openapi.json/)).toBeVisible();
   await expect(page.getByText(`Revision: ${scans[0].sourceRevision}`)).toBeVisible();
@@ -34,7 +34,7 @@ test('missing scans and assessments remain unknown; forbidden scans are not empt
   const product = await request.post(`http://127.0.0.1:18762/organizations/${org}/products`, { data: { name: 'No scan product', ownerTeamId: (await team.json()).id } });
   const item = await product.json();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/products?organization=${org}&product=${item.id}&view=discovery`);
+  await page.goto(`/legacy-products?organization=${org}&product=${item.id}&view=discovery`);
   await expect(page.getByText('Keine Scanbeobachtungen vorhanden. Discovery-Zustand: UNKNOWN.')).toBeVisible();
   await expect(page.getByText('Kein Assessment vorhanden. Bewertung: UNKNOWN.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

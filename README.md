@@ -79,8 +79,12 @@ docker compose -p specbound-local -f compose.yaml -f compose.local-auth.yaml up 
    als Redirect registriert; `localhost:5173` funktioniert dafür nicht.
 2. Beim lokalen Testanbieter Benutzer `local-developer` und Passwort
    `local-only` eingeben und die Berechtigung mit **Continue** bestätigen.
-3. Unter Teams einen Organisationsnamen eingeben und **Organisation erstellen**
-   wählen. Anschließend stehen Teams, Produkte und Packs zur Verfügung.
+3. Für eine neue Installation unter `/settings` eine Organisation und unter
+   `/teams` ein Eigentümerteam erstellen. Deren IDs in
+   `.local/workspace/workspace.json` eintragen; siehe [Arbeitsbereich einrichten](docs/resource-portal.md).
+4. `/products` öffnen. Die vier Hauptbereiche sind Produkte, Kataloge, Profile
+   und Evidence Packs. Ein Produkt führt zu Anforderungen mit Prüfstandauswahl,
+   Prüfungen und Geltungsbereich. Die Produktauswahl steht über diesen Tabs.
 
 Der Testanbieter akzeptiert beliebige Zugangsdaten und nutzt öffentlich bekannte
 Entwicklungsschlüssel. Er ist keine echte Benutzerverwaltung und darf nur auf
