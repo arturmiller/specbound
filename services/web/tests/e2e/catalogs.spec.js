@@ -53,3 +53,37 @@ test('wrong native identity stays an explicit error and does not create a revisi
   expect((ownCatalogs(await (await page.request.get(root)).json())).length).toBe(before.length);
   await expect(page).toHaveURL(/view=connect/);
 });
+
+test('a slow source can be cancelled or times out and a later retry remains usable', async ({ page }) => {
+  await page.clock.install();
+  await page.goto(`/catalogs?organization=${org}&view=connect`);
+  await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
+  await page.getByLabel('Erwartete Katalog-ID').fill('application-controls');
+  const data = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: 'preview', version: '1.0.0', name: 'Preview' }, spec: { resourceType: 'Catalog', provider: 'github', repository: 'fixture/oscal', ref: 'main', refType: 'branch', manifestPath: 'catalogs/application.json', expected: { id: 'application-controls', version: '1.0.0' } } };
+  const fixture = await (await page.request.post(`${root}?preview=true`, { data })).json();
+  const release = [];
+  let requests = 0;
+  await page.route(`**${root}?preview=true`, async (route) => {
+    requests += 1;
+    if (requests <= 2) await new Promise((resolve) => release.push(resolve));
+    await route.fulfill({ json: fixture });
+  });
+  const check = page.getByRole('button', { name: 'Vorschau prüfen', exact: true });
+  await check.click();
+  await expect(page.getByRole('button', { name: 'Abbrechen', exact: true })).toBeVisible();
+  await expect.poll(() => release.length).toBe(1);
+  await page.getByRole('button', { name: 'Abbrechen', exact: true }).click();
+  await expect(check).toBeEnabled();
+  release[0]();
+  await expect(page.getByRole('region', { name: 'Katalogvorschau' })).toHaveCount(0);
+  await check.click();
+  await expect.poll(() => release.length).toBe(2);
+  await page.clock.fastForward(45001);
+  await expect(page.getByRole('alert')).toContainText('Zeitlimit');
+  await expect(check).toBeEnabled();
+  await expect(page.getByText('Quelle wird gelesen und geprüft …')).toHaveCount(0);
+  release[1]();
+  await check.click();
+  await expect(page.getByRole('region', { name: 'Katalogvorschau' })).toContainText('Application Controls');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});

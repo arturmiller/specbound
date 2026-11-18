@@ -21,6 +21,8 @@ Bei direktem API-Start verweist `SPECBOUND_WORKSPACE_CONFIG` auf den **Dateipfad
 
 ## As Code und bestehende Links
 
+Die Vorschau kann über **Abbrechen** beendet werden. Bei einer nicht rechtzeitig antwortenden Quelle wird der Ladezustand spätestens nach 45 Sekunden beendet und ein verständlicher Zeitlimitfehler angezeigt. Während der Registrierung wird kein Abbruch versprochen: Falls dort die Browseranfrage ihr Zeitlimit überschreitet, zuerst in der Ressourcenliste prüfen, ob die Registrierung bereits abgeschlossen wurde.
+
 Im Ressourcendetail beziehungsweise im Produkt-Geltungsbereich können Organisationseigentümer **Neue Revision prüfen** wählen. Der gespeicherte gewünschte Ref wird erneut gelesen; optional kann ein neuer Ref mit ausdrücklichem Typ angegeben werden. Repository und Manifestpfad bleiben an die bisherige Quelle gebunden, ebenso die logische Ressourcen-ID. Die neue Version stammt aus dem Manifest.
 
 Die Prüfung speichert nichts: Sie zeigt bisherigen und vorgeschlagenen Commit, Struktur-/Referenzprüfung, Control-Auswahl, Parameter-/Vertragsänderungen und tatsächlich gespeicherte Referenzen. Erst **Revision übernehmen** registriert den erneut validierten Stand. Commit und ein Digest der vollständigen geprüften Quellen-/Referenzkonfiguration müssen weiterhin übereinstimmen. Verschobene Release-Tags und geänderte Inhalte unter derselben ID/Version werden abgewiesen. Für inhaltliche Änderungen ist eine neue Manifestversion erforderlich.

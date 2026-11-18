@@ -1,6 +1,9 @@
 """GitHub adapter contract with a deterministic GitHub API transport."""
 
+import asyncio
 import base64
+import socket
+import time
 import unittest
 
 import httpx
@@ -54,7 +57,10 @@ class GitHubSourceTest(unittest.TestCase):
                 return httpx.Response(
                     200, json={"object": {"type": "commit", "sha": COMMIT}}
                 )
-            if path == "/repos/example/repo/commits/main":
+            if path in (
+                "/repos/example/repo/commits/main",
+                "/repos/example/repo/commits/heads/main",
+            ):
                 return httpx.Response(
                     200, json={"sha": COMMIT, "commit": {"tree": {"sha": COMMIT}}}
                 )
@@ -92,6 +98,9 @@ class GitHubSourceTest(unittest.TestCase):
             installation_id=123,
             private_key=self.pem,
             client=self.client,
+            resource_client_factory=lambda: httpx.AsyncClient(
+                transport=httpx.MockTransport(self.handler)
+            ),
         )
 
     def tearDown(self):
@@ -109,11 +118,19 @@ class GitHubSourceTest(unittest.TestCase):
 
         def handle(request):
             if request.url.path == "/repos/example/repo/commits/heads/" + branch:
-                return httpx.Response(200, json={"sha": COMMIT, "commit": {"tree": {"sha": COMMIT}}})
+                return httpx.Response(
+                    200, json={"sha": COMMIT, "commit": {"tree": {"sha": COMMIT}}}
+                )
             return self.handler(request)
 
         with httpx.Client(transport=httpx.MockTransport(handle)) as client:
-            source = GitHubSource("example/repo", app_id="1234", installation_id=123, private_key=self.pem, client=client)
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+            )
             self.assertEqual(source.fetch("heads/" + branch).commit, COMMIT)
             with self.assertRaises(InvalidGitReference):
                 source.fetch("heads/" + branch + "x")
@@ -131,20 +148,52 @@ class GitHubSourceTest(unittest.TestCase):
                 self.assertEqual(token_scope["repositories"], ["repo"])
                 self.assertEqual(token_scope["permissions"], {"contents": "read"})
             if "/git/trees/" in request.url.path:
-                return httpx.Response(200, json={"truncated": False, "tree": [
-                    {"type": "blob", "mode": "100644", "path": "private.txt", "sha": BLOB, "size": 5},
-                    {"type": "blob", "mode": "100644", "path": "src/uv.lock", "sha": lock_sha, "size": 5},
-                ]})
+                return httpx.Response(
+                    200,
+                    json={
+                        "truncated": False,
+                        "tree": [
+                            {
+                                "type": "blob",
+                                "mode": "100644",
+                                "path": "private.txt",
+                                "sha": BLOB,
+                                "size": 5,
+                            },
+                            {
+                                "type": "blob",
+                                "mode": "100644",
+                                "path": "src/uv.lock",
+                                "sha": lock_sha,
+                                "size": 5,
+                            },
+                        ],
+                    },
+                )
             if request.url.path.endswith("/git/blobs/" + lock_sha):
-                return httpx.Response(200, json={"encoding": "base64", "content": base64.b64encode(b"hello").decode()})
+                return httpx.Response(
+                    200,
+                    json={
+                        "encoding": "base64",
+                        "content": base64.b64encode(b"hello").decode(),
+                    },
+                )
             return self.handler(request)
 
         with httpx.Client(transport=httpx.MockTransport(handle)) as client:
-            source = GitHubSource("example/repo", app_id="1234", installation_id=123, private_key=self.pem, client=client)
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+            )
             snapshot = source.fetch_python_lockfiles("main")
         self.assertEqual(snapshot.commit, COMMIT)
         self.assertEqual(dict(snapshot.files), {"src/uv.lock": b"hello"})
-        self.assertFalse(any(request.url.path.endswith("/git/blobs/" + BLOB) for request in requests))
+        self.assertFalse(
+            any(request.url.path.endswith("/git/blobs/" + BLOB) for request in requests)
+        )
 
     def test_python_lockfile_fetch_rejects_incomplete_tree(self):
         def handle(request):
@@ -153,9 +202,264 @@ class GitHubSourceTest(unittest.TestCase):
             return self.handler(request)
 
         with httpx.Client(transport=httpx.MockTransport(handle)) as client:
-            source = GitHubSource("example/repo", app_id="1234", installation_id=123, private_key=self.pem, client=client)
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+            )
             with self.assertRaises(SourceUnavailable):
                 source.fetch_python_lockfiles("main")
+
+    def test_scoped_read_rejects_referenced_symlink_without_downloading_it(self):
+        def handle(request):
+            if "/git/trees/" in request.url.path:
+                return httpx.Response(
+                    200,
+                    json={
+                        "truncated": False,
+                        "tree": [
+                            {
+                                "type": "blob",
+                                "mode": "120000",
+                                "path": "README.md",
+                                "sha": BLOB,
+                                "size": 5,
+                            }
+                        ],
+                    },
+                )
+            return self.handler(request)
+
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
+            )
+            with self.assertRaisesRegex(SourceUnavailable, "Symlinks"):
+                source.load_resource(
+                    "main", "README.md", lambda snapshot, path: snapshot.files[path]
+                )
+        self.assertFalse(any("/git/blobs/" in path for path in self.paths))
+
+    def test_scoped_read_keeps_cumulative_byte_limit(self):
+        from unittest.mock import patch
+
+        def handle(request):
+            if "/git/trees/" in request.url.path:
+                return httpx.Response(
+                    200,
+                    json={
+                        "truncated": False,
+                        "tree": [
+                            {
+                                "type": "blob",
+                                "mode": "100644",
+                                "path": "README.md",
+                                "sha": BLOB,
+                                "size": 5,
+                            },
+                            {
+                                "type": "blob",
+                                "mode": "100644",
+                                "path": "other.json",
+                                "sha": "d" * 40,
+                                "size": 6,
+                            },
+                        ],
+                    },
+                )
+            return self.handler(request)
+
+        with (
+            httpx.Client(transport=httpx.MockTransport(handle)) as client,
+            patch("app.github_source.MAX_BYTES", 10),
+        ):
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
+            )
+            with self.assertRaisesRegex(SourceUnavailable, "size limit"):
+                source.load_resource(
+                    "main",
+                    "README.md",
+                    lambda snapshot, path: (
+                        snapshot.files[path],
+                        snapshot.files["other.json"],
+                    ),
+                )
+        self.assertEqual(sum("/git/blobs/" in path for path in self.paths), 1)
+
+    def test_scoped_read_deadline_also_bounds_tag_resolution(self):
+        from unittest.mock import patch
+
+        from app.git_source import SourceReadTimeout
+
+        now = [0.0]
+
+        def handle(request):
+            if "/git/ref/tags/" in request.url.path:
+                now[0] = 31.0
+            return self.handler(request)
+
+        with (
+            httpx.Client(transport=httpx.MockTransport(handle)) as client,
+            patch("app.github_source.time.monotonic", side_effect=lambda: now[0]),
+        ):
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
+            )
+            with self.assertRaises(SourceReadTimeout):
+                source.load_resource(
+                    "v1",
+                    "README.md",
+                    lambda snapshot, path: snapshot.files[path],
+                    ref_kind="tag",
+                )
+            self.assertIsNone(source._resource_deadline)
+        self.assertFalse(any("/git/tags/" in path for path in self.paths))
+
+    def test_scoped_read_checks_reviewed_commit_before_fetching_any_blob(self):
+        from app.git_source import SourceRevisionChanged
+        from app.manifest_source import load_resource_for_ref
+
+        with self.assertRaises(SourceRevisionChanged):
+            load_resource_for_ref(
+                self.source,
+                "example/repo",
+                "main",
+                "branch",
+                "catalog.json",
+                lambda snapshot, path: snapshot.files[path],
+                expected_commit="d" * 40,
+            )
+        self.assertFalse(any("/git/blobs/" in path for path in self.paths))
+
+    def test_scoped_read_interrupts_a_continuously_trickling_response(self):
+        from unittest.mock import patch
+
+        from app.git_source import SourceReadTimeout
+
+        class SlowBody(httpx.SyncByteStream, httpx.AsyncByteStream):
+            chunks = 0
+            closed = False
+
+            def __iter__(self):
+                for _ in range(50):
+                    time.sleep(0.05)
+                    self.chunks += 1
+                    yield b" "
+                yield b'{"encoding":"base64","content":"aGVsbG8="}'
+
+            async def __aiter__(self):
+                for _ in range(50):
+                    await asyncio.sleep(0.05)
+                    self.chunks += 1
+                    yield b" "
+                yield b'{"encoding":"base64","content":"aGVsbG8="}'
+
+            def close(self):
+                self.closed = True
+
+            async def aclose(self):
+                self.closed = True
+
+        stream = SlowBody()
+
+        def handle(request):
+            if "/git/blobs/" in request.url.path:
+                return httpx.Response(200, stream=stream)
+            return self.handler(request)
+
+        with (
+            httpx.Client(transport=httpx.MockTransport(handle)) as client,
+            patch("app.github_source.RESOURCE_READ_SECONDS", 0.5),
+            patch.object(GitHubSource, "_token", return_value="fixture-token"),
+        ):
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
+            )
+            started = time.monotonic()
+            with self.assertRaises(SourceReadTimeout):
+                source.load_resource(
+                    "main", "README.md", lambda snapshot, path: snapshot.files[path]
+                )
+            self.assertLess(time.monotonic() - started, 1.5)
+        self.assertLess(stream.chunks, 50)
+        self.assertTrue(stream.closed)
+        self.assertIsNone(source._resource_deadline)
+
+    def test_slow_dns_does_not_delay_the_resource_timeout(self):
+        from threading import Event
+        from unittest.mock import patch
+
+        from app.git_source import SourceReadTimeout
+
+        resolver_started, resolver_finished, release_resolver = (
+            Event(),
+            Event(),
+            Event(),
+        )
+        resource_client = httpx.AsyncClient(trust_env=False)
+
+        def slow_resolver(*_args, **_kwargs):
+            resolver_started.set()
+            try:
+                release_resolver.wait(3)
+                raise socket.gaierror("Test resolver unavailable")
+            finally:
+                resolver_finished.set()
+
+        with (
+            patch("app.github_source.RESOURCE_READ_SECONDS", 0.5),
+            patch("socket.getaddrinfo", side_effect=slow_resolver),
+            patch.object(self.source, "_token", return_value="fixture-token"),
+            patch.object(
+                self.source,
+                "_resource_client_factory",
+                return_value=resource_client,
+            ),
+        ):
+            try:
+                started = time.monotonic()
+                with self.assertRaises(SourceReadTimeout):
+                    self.source.load_resource(
+                        "main", "README.md", lambda snapshot, path: snapshot.files[path]
+                    )
+                self.assertLess(time.monotonic() - started, 1.5)
+                self.assertTrue(resolver_started.is_set())
+                self.assertFalse(resolver_finished.is_set())
+                self.assertIsNone(self.source._resource_runner)
+            finally:
+                release_resolver.set()
+                self.assertTrue(resolver_finished.wait(3))
 
     def test_missing_refs_and_wrong_installation_are_rejected(self):
         with self.assertRaises(SourceNotFound):

@@ -13,7 +13,13 @@ class PublicGitHubRateLimit(SourceUnavailable):
 class PublicGitHubSource(GitHubSource):
     """An explicit unauthenticated source, never an auth-failure fallback."""
 
-    def __init__(self, repository: str, *, client: httpx.Client | None = None):
+    def __init__(
+        self,
+        repository: str,
+        *,
+        client: httpx.Client | None = None,
+        resource_client_factory=None,
+    ):
         if (
             not isinstance(repository, str)
             or not REPOSITORY.fullmatch(repository)
@@ -27,6 +33,9 @@ class PublicGitHubSource(GitHubSource):
         self.client = client or httpx.Client(
             timeout=15, follow_redirects=False, trust_env=False
         )
+        self._resource_client_factory = resource_client_factory or (
+            lambda: httpx.AsyncClient(trust_env=False)
+        )
 
     def _token(self, *, permissions=None):
         if permissions is not None:
@@ -37,7 +46,8 @@ class PublicGitHubSource(GitHubSource):
         if method != "GET" or token is not None:
             raise SourceUnavailable("Public GitHub source is read-only")
         try:
-            response = self.client.request(
+            kwargs = self._bounded_request_options(kwargs)
+            response = self._send_request(
                 "GET",
                 API + path,
                 headers={
