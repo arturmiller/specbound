@@ -5,7 +5,7 @@ const root = `/api/organizations/${org}/resources`;
 
 test('removes a catalog with confirmation, retains its profile and restores the pinned revision', async ({ page }) => {
   const saved = {};
-  for (const [kind, path, id] of [['Catalog', 'catalogs/application.json', 'application-controls'], ['Profile', 'profiles/application-baseline.json', 'application-baseline']]) {
+  for (const [kind, path, id] of [['Catalog', 'catalogs/application.json', 'removal-controls'], ['Profile', 'profiles/application-baseline.json', 'removal-baseline']]) {
     const response = await page.request.post(root, { data: { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id, version: '1.0.0', name: id }, spec: { resourceType: kind, provider: 'github', repository: 'fixture/oscal-removal', ref: 'main', refType: 'branch', manifestPath: path, expected: { id, version: '1.0.0' } } } });
     expect(response.status()).toBe(201);
     saved[kind] = await response.json();
