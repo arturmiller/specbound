@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import socket
 import time
 import unittest
 
@@ -364,15 +365,15 @@ class GitHubSourceTest(unittest.TestCase):
             closed = False
 
             def __iter__(self):
-                for _ in range(20):
-                    time.sleep(0.04)
+                for _ in range(50):
+                    time.sleep(0.05)
                     self.chunks += 1
                     yield b" "
                 yield b'{"encoding":"base64","content":"aGVsbG8="}'
 
             async def __aiter__(self):
-                for _ in range(20):
-                    await asyncio.sleep(0.04)
+                for _ in range(50):
+                    await asyncio.sleep(0.05)
                     self.chunks += 1
                     yield b" "
                 yield b'{"encoding":"base64","content":"aGVsbG8="}'
@@ -392,7 +393,8 @@ class GitHubSourceTest(unittest.TestCase):
 
         with (
             httpx.Client(transport=httpx.MockTransport(handle)) as client,
-            patch("app.github_source.RESOURCE_READ_SECONDS", 0.1),
+            patch("app.github_source.RESOURCE_READ_SECONDS", 0.5),
+            patch.object(GitHubSource, "_token", return_value="fixture-token"),
         ):
             source = GitHubSource(
                 "example/repo",
@@ -409,10 +411,55 @@ class GitHubSourceTest(unittest.TestCase):
                 source.load_resource(
                     "main", "README.md", lambda snapshot, path: snapshot.files[path]
                 )
-            self.assertLess(time.monotonic() - started, 0.5)
-        self.assertLess(stream.chunks, 20)
+            self.assertLess(time.monotonic() - started, 1.5)
+        self.assertLess(stream.chunks, 50)
         self.assertTrue(stream.closed)
         self.assertIsNone(source._resource_deadline)
+
+    def test_slow_dns_does_not_delay_the_resource_timeout(self):
+        from threading import Event
+        from unittest.mock import patch
+
+        from app.git_source import SourceReadTimeout
+
+        resolver_started, resolver_finished, release_resolver = (
+            Event(),
+            Event(),
+            Event(),
+        )
+        resource_client = httpx.AsyncClient(trust_env=False)
+
+        def slow_resolver(*_args, **_kwargs):
+            resolver_started.set()
+            try:
+                release_resolver.wait(3)
+                raise socket.gaierror("Test resolver unavailable")
+            finally:
+                resolver_finished.set()
+
+        with (
+            patch("app.github_source.RESOURCE_READ_SECONDS", 0.5),
+            patch("socket.getaddrinfo", side_effect=slow_resolver),
+            patch.object(self.source, "_token", return_value="fixture-token"),
+            patch.object(
+                self.source,
+                "_resource_client_factory",
+                return_value=resource_client,
+            ),
+        ):
+            try:
+                started = time.monotonic()
+                with self.assertRaises(SourceReadTimeout):
+                    self.source.load_resource(
+                        "main", "README.md", lambda snapshot, path: snapshot.files[path]
+                    )
+                self.assertLess(time.monotonic() - started, 1.5)
+                self.assertTrue(resolver_started.is_set())
+                self.assertFalse(resolver_finished.is_set())
+                self.assertIsNone(self.source._resource_runner)
+            finally:
+                release_resolver.set()
+                self.assertTrue(resolver_finished.wait(3))
 
     def test_missing_refs_and_wrong_installation_are_rejected(self):
         with self.assertRaises(SourceNotFound):

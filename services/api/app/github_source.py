@@ -7,8 +7,11 @@ import hashlib
 import hmac
 import os
 import re
+import socket
 import time
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import quote
@@ -30,6 +33,17 @@ REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 MAX_FILES = 1000
 MAX_BYTES = 20 * 1024 * 1024
 RESOURCE_READ_SECONDS = 30
+_RESOURCE_DNS = ThreadPoolExecutor(max_workers=4, thread_name_prefix="resource-dns")
+
+
+class _ResourceEventLoop(asyncio.SelectorEventLoop):
+    async def getaddrinfo(self, *args, **kwargs):
+        # OS DNS calls cannot be interrupted. Keep them in one bounded pool so
+        # cancelling a request never waits for resolver shutdown or spawns an
+        # unbounded number of resolver threads across subsequent imports.
+        return await self.run_in_executor(
+            _RESOURCE_DNS, partial(socket.getaddrinfo, *args, **kwargs)
+        )
 
 
 def verify_github_signature(secret: bytes, payload: bytes, signature: str) -> bool:
@@ -259,7 +273,7 @@ class GitHubSource:
         """One pinned tree; materialize only files requested by the resource parser."""
         # The parsers remain synchronous; one loop/client spans all their lazy
         # reads so connections are reused and every request shares one deadline.
-        with asyncio.Runner() as runner:
+        with asyncio.Runner(loop_factory=_ResourceEventLoop) as runner:
             return self._load_resource(runner, ref, manifest_path, loader, ref_kind)
 
     def _load_resource(self, runner, ref, manifest_path, loader, ref_kind):

@@ -47,6 +47,8 @@ Dies ist ein zugesicherter erster Verarbeitungsumfang, kein vollständiger OSCAL
 
 Beim GitHub-Ressourcenimport werden nur die vom Parser benötigten Manifest-, Import-, Binding-, Schema- und Testdateien aus einem gepinnten Baum gelesen. Fremde Repositorydateien werden nicht heruntergeladen. Der resultierende unveränderliche Snapshot enthält genau die gelesenen Dateien; bestehende Ref-/Versionsfences sowie Pfad-, Symlink- und Größenprüfungen gelten weiterhin. Ein gemeinsames Netzwerkzeitbudget von 30 Sekunden umfasst auch die Tagauflösung und bricht laufende HTTP-Antworten ab, selbst wenn weiterhin einzelne Datenblöcke eintreffen. Quellzeitüberschreitungen ergeben HTTP 504.
 
+Eine bereits laufende DNS-Auflösung des Betriebssystems kann nicht abgebrochen werden. Sie läuft in einem gemeinsam auf vier Threads begrenzten Resolver-Pool zu Ende, ohne die Zeitlimitantwort oder den Organisationslock aufzuhalten; nach dem Abbruch wird keine HTTP-Anfrage mehr daraus gestartet.
+
 ## Prüflogik und Parameter
 
 Der native Katalog benennt die Bindungsdatei über `metadata.links` mit `rel: specbound-control-bindings` und einem relativen `href`. Die Datei liegt im selben Snapshot. Es wird keine Prüflogik aus dem Internet nachgeladen und kein Quellcode ausgeführt. Fehlt eine Bindungsdatei, bleibt der Katalog als Anforderungskatalog verwendbar.
