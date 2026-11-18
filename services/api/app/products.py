@@ -268,7 +268,10 @@ def list_repositories(product_id: str, principal: Principal, db: Db):
         _binding(row)
         for row in db.execute(
             select(repo_bindings)
-            .where(repo_bindings.c.product_id == product_id)
+            .where(
+                repo_bindings.c.product_id == product_id,
+                repo_bindings.c.active.is_(True),
+            )
             .order_by(repo_bindings.c.id)
         ).mappings()
     ]

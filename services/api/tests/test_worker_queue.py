@@ -328,6 +328,24 @@ class WorkerQueueTest(unittest.TestCase):
 
     def test_comment_delivery_retries_without_reexecuting_assessment(self):
         with get_engine().begin() as db:
+            retired_product = str(uuid4())
+            retired_binding = str(uuid4())
+            db.execute(
+                insert(products).values(
+                    id=retired_product,
+                    owner_team_id=self.f.team,
+                    name="Previous source owner",
+                )
+            )
+            db.execute(
+                insert(repo_bindings).values(
+                    id=retired_binding,
+                    product_id=retired_product,
+                    provider="github",
+                    repository=f"org/repo-{self.f.org}",
+                    active=False,
+                )
+            )
             db.execute(
                 update(repo_bindings)
                 .where(repo_bindings.c.id == self.f.binding)
@@ -380,6 +398,39 @@ class WorkerQueueTest(unittest.TestCase):
             )
             self.assertEqual(self.state()["result_snapshot_id"], snapshot_id)
             self.assertEqual(send.call_count, 2)
+
+        # Two queued historical product results must never overwrite one PR comment,
+        # even after both sources have been retired from their current products.
+        with get_engine().begin() as db:
+            db.execute(
+                update(repo_bindings)
+                .where(repo_bindings.c.id == self.f.binding)
+                .values(active=False)
+            )
+            db.execute(
+                update(assessment_jobs)
+                .where(assessment_jobs.c.id == self.job)
+                .values(comment_processed_at=None, comment_retry_at=None)
+            )
+            db.execute(
+                insert(assessment_jobs).values(
+                    id=str(uuid4()),
+                    organization_id=self.f.org,
+                    product_id=retired_product,
+                    binding_id=retired_binding,
+                    delivery_id=self.delivery,
+                    pull_request_id=123456,
+                    pull_request_number=17,
+                    head_sha=fixtures.COMMIT,
+                    status="pending",
+                )
+            )
+        with patch("app.pr_comment_delivery.upsert_comment") as send:
+            self.assertTrue(
+                publish_once(*args, clock=lambda: NOW + timedelta(seconds=32))
+            )
+            send.assert_not_called()
+        self.assertIsNone(self.state()["comment_processed_at"])
 
     def test_changed_repository_does_not_receive_old_assessment(self):
         lease = self.claim()

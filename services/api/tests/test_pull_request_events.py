@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from app.database import get_engine
 from app.main import app
+from app.pack_revisions import _lock_org
+from app.product_governance import synchronize_repositories
 from app.tables import assessment_jobs, organizations, products, repo_bindings, teams
 from fastapi.testclient import TestClient
 from sqlalchemy import insert, select
@@ -135,6 +137,32 @@ class PullRequestEventsTest(unittest.TestCase):
         )
         self.assertEqual(self.send(changed).status_code, 202)
         self.assertEqual({job["head_sha"] for job in self.jobs()}, {"a" * 40, "b" * 40})
+
+    def test_retired_product_source_cannot_enqueue_new_signed_pr_events(self):
+        self.assertEqual(self.send(self.payload).status_code, 202)
+        with get_engine().begin() as db:
+            _lock_org(db, self.org)
+            synchronize_repositories(
+                db,
+                self.product,
+                [{"provider": "github", "repository": "example/replacement"}],
+            )
+        changed = copy.deepcopy(self.payload)
+        changed["action"] = "synchronize"
+        changed["pull_request"]["head"]["sha"] = "b" * 40
+        self.assertEqual(self.send(changed).status_code, 202)
+        self.assertEqual(len(self.jobs()), 1)
+        self.assertEqual(self.jobs()[0]["binding_id"], self.binding)
+        self.assertEqual(self.jobs()[0]["status"], "pending")
+        changed["repository"]["full_name"] = "example/replacement"
+        self.assertEqual(self.send(changed).status_code, 202)
+        self.assertEqual(len(self.jobs()), 2)
+        self.assertNotEqual(
+            next(row for row in self.jobs() if row["head_sha"] == "b" * 40)[
+                "binding_id"
+            ],
+            self.binding,
+        )
 
     def test_other_repositories_actions_and_invalid_payloads_cannot_enqueue(self):
         unrelated = copy.deepcopy(self.payload)

@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Connection
 
+from app.pack_revisions import _lock_org
 from app.tables import products, repo_bindings, teams
 
 
@@ -44,6 +45,8 @@ def parse_pr_event(payload):
 
 
 def enqueue_pr_event(db: Connection, organization_id, delivery_id, event):
+    # The adoption transaction uses the same lock before retiring product sources.
+    _lock_org(db, organization_id)
     bindings = db.execute(
         select(repo_bindings.c.id, repo_bindings.c.product_id)
         .select_from(
@@ -53,6 +56,7 @@ def enqueue_pr_event(db: Connection, organization_id, delivery_id, event):
         )
         .where(
             teams.c.organization_id == organization_id,
+            repo_bindings.c.active.is_(True),
             func.lower(repo_bindings.c.provider) == "github",
             func.lower(repo_bindings.c.repository) == event["repository"].lower(),
         )

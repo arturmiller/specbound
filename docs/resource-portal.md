@@ -21,6 +21,18 @@ Bei direktem API-Start verweist `SPECBOUND_WORKSPACE_CONFIG` auf den **Dateipfad
 
 ## As Code und bestehende Links
 
+Im Ressourcendetail beziehungsweise im Produkt-Geltungsbereich können Organisationseigentümer **Neue Revision prüfen** wählen. Der gespeicherte gewünschte Ref wird erneut gelesen; optional kann ein neuer Ref mit ausdrücklichem Typ angegeben werden. Repository und Manifestpfad bleiben an die bisherige Quelle gebunden, ebenso die logische Ressourcen-ID. Die neue Version stammt aus dem Manifest.
+
+Die Prüfung speichert nichts: Sie zeigt bisherigen und vorgeschlagenen Commit, Struktur-/Referenzprüfung, Control-Auswahl, Parameter-/Vertragsänderungen und tatsächlich gespeicherte Referenzen. Erst **Revision übernehmen** registriert den erneut validierten Stand. Commit und ein Digest der vollständigen geprüften Quellen-/Referenzkonfiguration müssen weiterhin übereinstimmen. Verschobene Release-Tags und geänderte Inhalte unter derselben ID/Version werden abgewiesen. Für inhaltliche Änderungen ist eine neue Manifestversion erforderlich.
+
+Eine Katalog-/Profil-/Evidence-Pack-Übernahme registriert eine neue feste Revision. Sie schreibt keine bestehenden Produkt- oder Profilreferenzen um und erteilt keine Ausführungsrechte. Ein Produktmanifest muss eine neue Profilversion ausdrücklich referenzieren und anschließend selbst übernommen werden. Diese Produktübernahme aktualisiert Namen, Profil und aktuelle Repositoryauswahl atomar; künftig gestartete Prüfungen frieren den neuen Stand ein. Bereits eingereihte Prüfungen und gespeicherte Assessments behalten die alte Konfiguration.
+
+Entfernte Produktquellen werden intern stillgelegt. Ihre IDs bleiben für alte Scan-/Nachweislinks erhalten, sie erscheinen jedoch nicht mehr als aktuelle Quellen und können keine neuen Scans erhalten. Migration `0027_repository_retirement` blockiert ein Downgrade, solange stillgelegte Quellen existieren, damit ein älterer Stand sie nicht versehentlich wieder aktiviert.
+
+Jede erfolgreiche ausdrückliche Übernahme schreibt Akteur, Zeitpunkt, vorherige/neue Revision, Commits und Prüfdigest in das berechtigungsgefilterte Übernahmeprotokoll. Fehler lassen bisherigen Stand und Protokoll unverändert. Die API stellt dafür `POST .../resources/{revisionId}/check`, `POST .../resources/{revisionId}/adopt` und `GET .../resources/{revisionId}/adoptions` bereit. Prüfung und Übernahme verlangen Eigentümerrechte; leseberechtigte Benutzer und Agenten können das Protokoll ihrer sichtbaren Ressourcen lesen.
+
+Eine Strukturänderung ist keine berechnete Bewertungsfolge. Regeländerungssimulation (#67), Deployment-Identität/Baseline (#65–#66) und Aktivierung/Reassessment (#68) bleiben gesonderte Vorhaben.
+
 Ressourcen werden über Repository, Ref-Typ, gewünschten Ref, Manifestpfad und erwartete Identität/Version registriert. Die Vorschau validiert die Struktur und Referenzen. Die Registrierung speichert eine feste Revision mit Manifest-, Commit- und Schemalinks. Mehrere Manifestpfade in einem Repository sind unabhängig registrierbar. Die Produktquellen bleiben von diesem Konfigurationsrepository getrennt. Eine Registrierung gibt keine Ausführung frei.
 
 Bestehende `/assessments/{id}`-, `/findings?...`-, `/pr-checks?...`- und `/docs#docs/...`-Links bleiben erhalten und unterliegen ihren bisherigen API-Rechten. Im aufklappbaren Bereich **Weitere Funktionen** sind Findings, PR Checks und Administration erreichbar. Die frühere manuelle Produktverwaltung liegt unter `/legacy-products`; vorhandene explizite Produktansichten wie `/products?...&view=repository` bleiben im konfigurierten Arbeitsbereich erreichbar. Die Verwaltungsnavigation kann weiterhin Organisationen auswählen; diese Auswahl konfiguriert das Ressourcenportal nicht.

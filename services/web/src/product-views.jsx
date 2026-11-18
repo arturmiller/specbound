@@ -91,8 +91,8 @@ function ControlDetails({ control, data, organizationId, productId }) {
   </>;
 }
 
-/** @param {{product: Product, organizationId: string, accessToken: string, view: string, canEdit: boolean}} props */
-export function ProductViews({ product, organizationId, accessToken, view, canEdit }) {
+/** @param {{product: Product, organizationId: string, accessToken: string, view: string, canEdit: boolean, canManage?: boolean}} props */
+export function ProductViews({ product, organizationId, accessToken, view, canEdit, canManage = false }) {
   const query = new URLSearchParams(location.search);
   const [selection, setSelection] = useState(query.get('assessment') || (view === 'scans' ? 'current' : ''));
   const [status, setStatus] = useState(['FAIL', 'UNKNOWN', 'PASS', 'NOT_APPLICABLE'].includes(query.get('status') || '') ? query.get('status') || 'all' : 'all');
@@ -144,7 +144,7 @@ export function ProductViews({ product, organizationId, accessToken, view, canEd
   return <section className="product-views" aria-labelledby="products-heading">
     <h1 id="products-heading">{product.name}</h1>
     <nav className="product-detail-nav" aria-label="Produktansichten">{[['requirements', 'Anforderungen'], ['scans', 'Prüfungen'], ['scope', 'Geltungsbereich']].map(([id, label]) => <a key={id} href={productViewUrl(organizationId, product.id, id)} aria-current={view === id ? 'page' : undefined}>{label}</a>)}</nav>
-    {view === 'scope' ? <ProductGovernance key={product.id} productId={product.id} organizationId={organizationId} accessToken={accessToken} /> : view === 'scans' ? <>
+    {view === 'scope' ? <ProductGovernance canManage={canManage} key={product.id} productId={product.id} organizationId={organizationId} accessToken={accessToken} /> : view === 'scans' ? <>
       <h2>Prüfungen</h2><p>Ergebnisse und Nachweise öffnen in Anforderungen den gespeicherten Prüfstand.</p>
       {sources.identity !== identity ? <p role="status">Produktquellen werden geladen …</p> : sources.error ? <p role="alert">{sources.error}</p> : sources.items.filter((item) => item.provider.toLowerCase() === 'github').map((binding) => <PublicLicenseScans organizationId={organizationId} key={binding.id} productId={product.id} bindingId={binding.id} repository={binding.repository} accessToken={accessToken} canEdit={canEdit} profileManaged={product.configurationStatus === 'manifest_managed'} />)}
       {state.scope !== scope ? <p role="status">Prüfungen werden geladen …</p> : state.error ? <p role="alert">{state.error}</p> : options.length ? <ul>{options.map((option) => <li key={option.id}><a href={productViewUrl(organizationId, product.id, 'requirements', option.id)}>{dateLabel(option.createdAt)} · {option.repository || contextLabels[option.context] || option.context} · {option.ref.slice(0, 12)} · {runLabels[option.status] || option.status} · {option.profileName || 'Historischer Stand ohne Profilangabe'}</a></li>)}</ul> : <p>Noch keine gespeicherten Prüfungen.</p>}

@@ -36,6 +36,12 @@ Ein Produkt öffnet Anforderungen. Die Produktauswahl liegt über den Tabs Anfor
 
 Der Arbeitsbereich wird nicht aus Browserparametern oder der ersten Organisation abgeleitet. Bei ungültiger Konfiguration zeigt das Portal einen Einrichtungsfehler. Die bisherigen Verwaltungs- und Detailseiten bleiben über Weitere Funktionen und ihre direkten URLs erreichbar.
 
+## Änderungen übernehmen
+
+Nach einem Commit im Konfigurationsrepository wählt der Eigentümer im Ressourcendetail oder Produkt-Geltungsbereich Neue Revision prüfen. Der Vergleich zeigt alte/neue Quellen, Control-Auswahl, Parameter und Verträge. Erst Revision übernehmen registriert den erneut geprüften Stand und protokolliert die Entscheidung. Ungültige oder inzwischen veränderte Quellen lassen den bisherigen Stand erhalten.
+
+Eine neue Profilrevision ändert kein bestehendes Produkt. Das Produktmanifest muss die genaue neue Profilversion ausdrücklich referenzieren und selbst übernommen werden. Bereits gestartete Prüfungen und historische Assessments behalten ihre Konfiguration und Nachweise. Bewertungsfolgen werden durch diesen Strukturvergleich nicht berechnet.
+
 ## Einschränkungen
 
 - Der Test ruft die API im Prozess auf und bestätigt nicht, dass Docker oder die Datenbank erreichbar sind.

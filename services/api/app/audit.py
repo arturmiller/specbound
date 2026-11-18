@@ -6,7 +6,7 @@ from sqlalchemy.engine import Connection
 from app.tables import audit_events
 
 
-def record_agent_event(
+def record_event(
     db: Connection,
     *,
     organization_id: str,
@@ -27,3 +27,7 @@ def record_agent_event(
             details=details or {},
         )
     )
+
+
+# Compatibility for existing agent lifecycle callers.
+record_agent_event = record_event

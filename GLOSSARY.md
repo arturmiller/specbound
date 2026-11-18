@@ -31,6 +31,12 @@ Ein gespeicherter Bewertungsstand mit konkreter Produkt-, Profil- und Quellenkon
 **Ressourcenquelle / ResourceSource**:
 Die Konfiguration von Repository, Manifestpfad, Ref-Typ, gewünschtem Ref und erwarteter Ressourcenidentität. Eine registrierte Revision fixiert den gelesenen Commit und die validierten Inhalte.
 
+**Revisionsprüfung**:
+Das erneute Lesen einer Ressourcenquelle und der Vergleich mit einem vorgeschlagenen Stand. Struktur und konkrete Referenzen werden validiert, ohne etwas zu registrieren oder geltende Produktanforderungen zu ändern.
+
+**Übernahme**:
+Die ausdrückliche, autorisierte und protokollierte Registrierung einer geprüften Ressourcenrevision. Nur eine Produktübernahme ersetzt dessen aktuellen Konfigurationsstand; bereits gespeicherte Prüfungen und andere feste Referenzen bleiben erhalten. Eine Übernahme ist keine Ausführungsfreigabe und keine simulierte Bewertung.
+
 **Agenten-Principal**:
 Eine nichtmenschliche Identität, die einem oder mehreren Teams lesend zugeordnet werden kann.
 

@@ -1,12 +1,14 @@
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     Integer,
     MetaData,
     String,
     Table,
+    true,
 )
 
 metadata = MetaData()
@@ -84,6 +86,7 @@ repo_bindings = Table(
     Column("product_id", String),
     Column("provider", String),
     Column("repository", String),
+    Column("active", Boolean, nullable=False, server_default=true()),
 )
 scanner_coverage = Table(
     "scanner_coverage",

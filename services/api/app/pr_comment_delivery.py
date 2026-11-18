@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 
-from sqlalchemy import func, or_, select, text, update
+from sqlalchemy import exists, func, or_, select, text, update
 
 from app.pr_comment import upsert_comment
 from app.pull_request_events import parse_pr_event
@@ -161,6 +161,19 @@ def deliver_once(
                 .select_from(repo_bindings)
                 .where(
                     func.lower(repo_bindings.c.provider) == "github",
+                    # Ignore unrelated retired sources, while preserving ambiguity
+                    # between historical jobs competing for the same PR and head.
+                    or_(
+                        repo_bindings.c.active.is_(True),
+                        exists(
+                            select(assessment_jobs.c.id).where(
+                                assessment_jobs.c.binding_id == repo_bindings.c.id,
+                                assessment_jobs.c.pull_request_number
+                                == job["pull_request_number"],
+                                assessment_jobs.c.head_sha == job["head_sha"],
+                            )
+                        ),
+                    ),
                     func.lower(repo_bindings.c.repository)
                     == binding["repository"].lower(),
                 )
