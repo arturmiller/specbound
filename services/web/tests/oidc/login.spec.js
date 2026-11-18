@@ -24,13 +24,13 @@ test('rejects an unsolicited authorization callback', async ({ page }) => {
 test('returns to the requested assessment after signing in', async ({ page }) => {
   await page.goto('/assessments/example-report');
   await page.getByRole('button', { name: 'Anmelden' }).click();
-  await expect(page).toHaveURL(/\/assessments\/example-report$/);
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/assessments/example-report');
   await expect(page.getByRole('alert')).toContainText('Assessment nicht gefunden');
 });
 
 test('returns to a portal route and its document anchor after signing in', async ({ page }) => {
   await page.goto('/docs#docs/security');
   await page.getByRole('button', { name: 'Anmelden' }).click();
-  await expect(page).toHaveURL(/\/docs#docs\/security$/);
+  await expect.poll(() => ({ pathname: new URL(page.url()).pathname, hash: new URL(page.url()).hash })).toEqual({ pathname: '/docs', hash: '#docs/security' });
   await expect(page.getByRole('article', { name: 'Dokumentationsinhalt' }).getByRole('heading', { name: 'Security', exact: true })).toBeVisible();
 });
