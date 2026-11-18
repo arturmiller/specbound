@@ -62,5 +62,5 @@ test('reviews and adopts valid profile/product revisions, rejects invalid update
   await page.locator('.requirements-control summary').filter({ hasText: 'PY-LIC-001' }).click();
   await expect(page.locator('.requirements-control[open]')).toContainText('FAIL');
   await expect(page.locator('.requirements-control[open]')).toContainText('GPL-3.0-only');
-  expect(consoleErrors.filter((message) => !message.includes('422 (Unprocessable Entity)'))).toEqual([]);
+  expect(consoleErrors.filter((message) => !/Failed to load resource:.*status of 422/.test(message))).toEqual([]);
 });
