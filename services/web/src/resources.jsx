@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CapabilityUsage } from './capability-usage.jsx';
+import { ResourceRevisions } from './resource-revisions.jsx';
 import { ManifestProvenance, ManifestSourceFields } from './manifest-source.jsx';
 
 /** @typedef {{prose?: string, parts?: NativePart[]}} NativePart */
@@ -138,6 +139,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
     </> : selected ? resource ? <>
       <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · Registriert · Struktur geprüft</p></div><a href={listUrl}>Alle {plural}</a></div>
       <ManifestProvenance source={resource.source} defaultPath={resource.source.manifestPath} />
+      <ResourceRevisions key={`revision-${resource.id}`} organizationId={organizationId} revisionId={resource.id || ''} accessToken={accessToken} isOwner={isOwner} />
       {resource.resolved.catalog && <p>Katalogdefinition: <a href={`/catalogs?${new URLSearchParams({ organization: organizationId, resource: resource.resolved.catalog.revisionId })}`}>{resource.resolved.catalog.name} · {resource.resolved.catalog.version}</a>{' · '}<a href={resource.source.files.find((file) => file.path === resource.resolved.catalog?.manifestPath)?.url}>Eingebundene Katalogdatei</a></p>}
       <p>{resource.resolved.controls.length} Controls · Produktgeltung durch ausdrückliche Profilauswahl.</p>
       <CatalogControls key={resource.id} resource={resource} />

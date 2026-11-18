@@ -4,7 +4,7 @@ import copy
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 
 from app.authorization import team_access
 from app.manifest_io import read_yaml
@@ -78,7 +78,7 @@ def resolve_product(db, organization_id, loaded, principal):
         team_access(db, team, principal, "edit")
     loaded["resolved"].update(
         productId=current["product_id"] if current else str(uuid4()),
-        ownerTeamId=workspace["defaultOwnerTeamId"],
+        ownerTeamId=team if current else workspace["defaultOwnerTeamId"],
         profile={
             "resourceId": profile["resource_id"],
             "version": profile["resource_version"],
@@ -100,13 +100,36 @@ def resolve_product(db, organization_id, loaded, principal):
     return current
 
 
-def attach_product(db, organization_id, revision_id, loaded, current):
+def attach_product(
+    db, organization_id, revision_id, loaded, current, *, adopt_from=None
+):
     if current:
-        if current["revision_id"] != revision_id:
+        if current["revision_id"] == revision_id:
+            return
+        if adopt_from is None or current["revision_id"] != adopt_from["revision_id"]:
             raise HTTPException(
                 status_code=409,
                 detail="Product already has a manifest; adopting a new revision requires explicit review",
             )
+        product_id = current["product_id"]
+        # Shares the enqueue lock: every scan sees one complete configuration.
+        db.execute(
+            select(products.c.id).where(products.c.id == product_id).with_for_update()
+        ).one()
+        db.execute(
+            update(product_governance)
+            .where(product_governance.c.product_id == product_id)
+            .values(
+                revision_id=revision_id,
+                profile_revision_id=loaded["resolved"]["profile"]["revisionId"],
+            )
+        )
+        db.execute(
+            update(products)
+            .where(products.c.id == product_id)
+            .values(name=loaded["name"])
+        )
+        synchronize_repositories(db, product_id, loaded["resolved"]["repositories"])
         return
     product_id = loaded["resolved"]["productId"]
     db.execute(
@@ -131,6 +154,44 @@ def attach_product(db, organization_id, revision_id, loaded, current):
                 id=str(uuid4()), product_id=product_id, **repository
             )
         )
+
+
+def synchronize_repositories(db, product_id, repositories):
+    """Retire removed sources without deleting IDs used by historical scans."""
+    existing = (
+        db.execute(
+            select(repo_bindings).where(repo_bindings.c.product_id == product_id)
+        )
+        .mappings()
+        .all()
+    )
+    db.execute(
+        update(repo_bindings)
+        .where(repo_bindings.c.product_id == product_id)
+        .values(active=False)
+    )
+    for repository in repositories:
+        previous = next(
+            (
+                row
+                for row in existing
+                if row["provider"] == repository["provider"]
+                and row["repository"] == repository["repository"]
+            ),
+            None,
+        )
+        if previous:
+            db.execute(
+                update(repo_bindings)
+                .where(repo_bindings.c.id == previous["id"])
+                .values(active=True)
+            )
+        else:
+            db.execute(
+                insert(repo_bindings).values(
+                    id=str(uuid4()), product_id=product_id, active=True, **repository
+                )
+            )
 
 
 def require_unmanaged_product(db, product_id):

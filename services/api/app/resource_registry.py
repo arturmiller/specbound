@@ -1,5 +1,6 @@
 """Authorized, revision-pinned resource registration and read-only previews."""
 
+import copy
 import re
 from typing import Annotated, Callable
 
@@ -24,8 +25,13 @@ from app.pack_catalog import (
 from app.pack_revisions import TagMoved, _lock_org, pin_release
 from app.product_governance import attach_product, load_product, resolve_product
 from app.resource_contracts import HERE, validate
-from app.resource_store import resource_source, resources_query, serialize_resource
-from app.tables import product_governance, products, resource_documents
+from app.resource_store import (
+    resource_source,
+    resources_query,
+    review_digest,
+    serialize_resource,
+)
+from app.tables import pack_revisions, products, resource_documents
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
 
@@ -38,10 +44,8 @@ def list_resources(
 ):
     organization_access(db, organization_id, principal, write=False)
     team_ids = [team["id"] for team in visible_teams(db, organization_id, principal)]
-    visible_products = (
-        select(product_governance.c.revision_id)
-        .join(products, products.c.id == product_governance.c.product_id)
-        .where(products.c.owner_team_id.in_(team_ids))
+    visible_products = select(products.c.id).where(
+        products.c.owner_team_id.in_(team_ids)
     )
     return [
         serialize_resource(row)
@@ -49,7 +53,9 @@ def list_resources(
             resources_query(organization_id)
             .where(
                 (resource_documents.c.kind != "Product")
-                | resource_documents.c.revision_id.in_(visible_products)
+                | resource_documents.c.resolved["productId"]
+                .as_string()
+                .in_(visible_products)
             )
             .order_by(
                 resource_documents.c.name,
@@ -82,11 +88,9 @@ def get_resource(
     if row["kind"] == "Product":
         product = (
             db.execute(
-                select(products)
-                .join(
-                    product_governance, products.c.id == product_governance.c.product_id
+                select(products).where(
+                    products.c.id == row["resolved"].get("productId")
                 )
-                .where(product_governance.c.revision_id == revision_id)
             )
             .mappings()
             .one_or_none()
@@ -110,6 +114,33 @@ def register_resource(
     expected_commit: Annotated[str | None, Header(alias="X-Expected-Commit")] = None,
     preview: bool = False,
 ):
+    return import_resource(
+        organization_id,
+        data,
+        response,
+        principal,
+        db,
+        factory,
+        expected_commit=expected_commit,
+        preview=preview,
+    )
+
+
+def import_resource(
+    organization_id,
+    data,
+    response,
+    principal,
+    db,
+    factory,
+    *,
+    expected_commit=None,
+    preview=False,
+    adopt_from=None,
+    discover_version=False,
+    expected_review_digest=None,
+):
+    data = copy.deepcopy(data)
     organization_access(db, organization_id, principal, write=True)
     require_github_organization(organization_id)
     if expected_commit is not None and not re.fullmatch(
@@ -144,11 +175,13 @@ def register_resource(
             loaded = loaders[kind](snapshot, config["manifestPath"])
         finally:
             source.close()
+        if discover_version:
+            config["expected"]["version"] = loaded["version"]
         if config["expected"] != {"id": loaded["id"], "version": loaded["version"]}:
             raise ValueError(
                 "Manifest identity/version differs from the registered reference"
             )
-        if kind == "Product" and not preview:
+        if not preview:
             _lock_org(db, organization_id)
         current_product = (
             resolve_product(db, organization_id, loaded, principal)
@@ -185,40 +218,6 @@ def register_resource(
                 )
             )
             catalog["revisionId"] = matches[0]["revision_id"]
-        if preview:
-            response.status_code = 200
-            return {
-                "id": None,
-                "organizationId": organization_id,
-                "resourceType": kind,
-                "resourceId": loaded["id"],
-                "version": loaded["version"],
-                "name": loaded["name"],
-                "state": "preview",
-                "validationStatus": "structure_validated",
-                "source": resource_source(
-                    config["repository"],
-                    config["ref"],
-                    ref_kind,
-                    snapshot.commit,
-                    config["manifestPath"],
-                    loaded["dependencies"],
-                    kind,
-                ),
-                "manifest": loaded["document"],
-                "resolved": loaded["resolved"],
-                "contentDigest": loaded["contentDigest"],
-            }
-        revision = pin_release(
-            db,
-            organization_id,
-            config["repository"],
-            config["ref"],
-            source,
-            manifest_path=config["manifestPath"],
-            ref_kind=ref_kind,
-            resolved_commit=snapshot.commit,
-        )
         previous = (
             db.execute(
                 select(resource_documents).where(
@@ -236,6 +235,61 @@ def register_resource(
                 status_code=409,
                 detail="Resource ID/version already identifies different content; publish a new version",
             )
+        if ref_kind == "tag":
+            pinned = db.execute(
+                select(pack_revisions.c.commit_sha).where(
+                    pack_revisions.c.organization_id == organization_id,
+                    pack_revisions.c.repository == config["repository"],
+                    pack_revisions.c.tag == config["ref"],
+                    pack_revisions.c.ref_kind == ref_kind,
+                    pack_revisions.c.manifest_path == config["manifestPath"],
+                )
+            ).scalar_one_or_none()
+            if pinned is not None and pinned != snapshot.commit:
+                raise TagMoved(pinned, snapshot.commit)
+        candidate = {
+            "id": None,
+            "organizationId": organization_id,
+            "resourceType": kind,
+            "resourceId": loaded["id"],
+            "version": loaded["version"],
+            "name": loaded["name"],
+            "state": "preview",
+            "validationStatus": "structure_validated",
+            "source": resource_source(
+                config["repository"],
+                config["ref"],
+                ref_kind,
+                snapshot.commit,
+                config["manifestPath"],
+                loaded["dependencies"],
+                kind,
+            ),
+            "manifest": loaded["document"],
+            "resolved": loaded["resolved"],
+            "contentDigest": loaded["contentDigest"],
+        }
+        if (
+            expected_review_digest is not None
+            and review_digest(candidate) != expected_review_digest
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Reviewed configuration or references changed; check again",
+            )
+        if preview:
+            response.status_code = 200
+            return candidate
+        revision = pin_release(
+            db,
+            organization_id,
+            config["repository"],
+            config["ref"],
+            source,
+            manifest_path=config["manifestPath"],
+            ref_kind=ref_kind,
+            resolved_commit=snapshot.commit,
+        )
         existing = (
             db.execute(
                 select(resource_documents).where(
@@ -274,7 +328,14 @@ def register_resource(
                 db, organization_id, revision, "provider", loaded["providerPack"]
             )
         if kind == "Product":
-            attach_product(db, organization_id, revision["id"], loaded, current_product)
+            attach_product(
+                db,
+                organization_id,
+                revision["id"],
+                loaded,
+                current_product,
+                adopt_from=adopt_from,
+            )
         return get_resource(organization_id, revision["id"], principal, db)
     except TagMoved as exc:
         raise HTTPException(

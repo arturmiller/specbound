@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { CatalogControls } from './resources.jsx';
 import { ManifestProvenance } from './manifest-source.jsx';
+import { ResourceRevisions } from './resource-revisions.jsx';
 
-/** @param {{productId: string, organizationId: string, accessToken: string}} props */
-export function ProductGovernance({ productId, organizationId, accessToken }) {
+/** @param {{productId: string, organizationId: string, accessToken: string, canManage?: boolean}} props */
+export function ProductGovernance({ productId, organizationId, accessToken, canManage = false }) {
   const scope = `${productId}:${accessToken}`;
   const [state, setState] = useState(/** @type {{scope: string, value: {state: string, product: import('./resources.jsx').Resource | null, profile: import('./resources.jsx').Resource | null} | null, error: string}} */ ({ scope: '', value: null, error: '' }));
   useEffect(() => {
@@ -25,6 +26,7 @@ export function ProductGovernance({ productId, organizationId, accessToken }) {
       <p>Geltendes Profil: <a href={`/profiles?${new URLSearchParams({ organization: organizationId, resource: profile.id || '' })}`}>{profile.name} · {profile.version}</a></p>
       <p>Katalog: <a href={`/catalogs?${new URLSearchParams({ organization: organizationId, resource: profile.resolved.catalog?.revisionId || '' })}`}>{profile.resolved.catalog?.name} · {profile.resolved.catalog?.version}</a></p>
       <ManifestProvenance source={product.source} defaultPath={product.source.manifestPath} />
+      <ResourceRevisions key={product.id} organizationId={organizationId} revisionId={product.id || ''} accessToken={accessToken} isOwner={canManage} />
       <p>Produktquellen:</p><ul>{product.resolved.repositories?.map((repository) => <li key={repository.repository}><a href={`https://github.com/${repository.repository}`}>{repository.repository}</a></li>)}</ul>
       <p>Die Profilwahl wird im Produktmanifest geändert. Gemeinsame Anforderungen und Parameter werden in einer neuen Profilversion geändert und anschließend ausdrücklich übernommen.</p>
       <p>{profile.resolved.controls.length} ausdrücklich zugeordnete Controls:</p>

@@ -26,6 +26,7 @@ from app.provider_test_runs import router as provider_test_runs_router
 from app.public_license_scans import router as public_license_scans_router
 from app.readiness import check_readiness
 from app.resource_registry import router as resource_registry_router
+from app.resource_updates import router as resource_updates_router
 from app.teams import router as teams_router
 from app.workspace import router as workspace_router
 
@@ -51,6 +52,7 @@ app.include_router(product_requirements_router)
 app.include_router(provider_test_runs_router)
 app.include_router(teams_router)
 app.include_router(workspace_router)
+app.include_router(resource_updates_router)
 app.include_router(evidence_packs_router)
 
 request_logger = logging.getLogger("specbound.http")

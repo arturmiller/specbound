@@ -18,6 +18,16 @@ from sqlalchemy import text
 FIXTURE_ORGANIZATION = "123e4567-e89b-12d3-a456-426614174000"
 FIXTURE_OWNER_TEAM = "123e4567-e89b-12d3-a456-426614174001"
 WORKSPACE_DIRECTORY = tempfile.TemporaryDirectory(prefix="specbound-e2e-workspace-")
+RESOURCE_REVISION_STAGE = "initial"
+
+
+@app.post("/__e2e/resource-revision")
+def resource_revision_fixture(stage: str):
+    global RESOURCE_REVISION_STAGE
+    if stage not in ("initial", "updated", "invalid"):
+        raise ValueError("Unknown fixture revision")
+    RESOURCE_REVISION_STAGE = stage
+    return {"stage": stage}
 
 
 @app.post("/__e2e/process-public-license-scan")
@@ -193,10 +203,40 @@ class FixtureSource:
             "fixture/oscal-v2",
             "fixture/oscal-requirements",
             "fixture/oscal-profile-scan",
+            "fixture/oscal-updates",
         ):
             from tests.test_resource_registry import ResourceFixtureSource
 
             snapshot = ResourceFixtureSource(self.repository).fetch(ref)
+            if self.repository == "fixture/oscal-updates":
+                files = dict(snapshot.files)
+                product = json.loads(files["products/audio-visualizer.json"])
+                product["metadata"]["id"] += "-updates"
+                if RESOURCE_REVISION_STAGE != "initial":
+                    product["metadata"].update(
+                        version="2.0.0", name="Audio Visualizer Updated"
+                    )
+                    product["spec"]["profile"]["version"] = (
+                        "99.0.0" if RESOURCE_REVISION_STAGE == "invalid" else "2.0.0"
+                    )
+                    product["spec"]["repositories"] = [
+                        {"provider": "github", "repository": "example/updated-source"}
+                    ]
+                    profile = json.loads(files["profiles/application-baseline.json"])
+                    profile["profile"]["metadata"]["version"] = "2.0.0"
+                    profile["profile"]["imports"][0]["include-controls"][0][
+                        "with-ids"
+                    ] = ["PY-LIC-001"]
+                    profile["profile"]["modify"]["set-parameters"][0]["values"] = [
+                        "GPL-3.0-only"
+                    ]
+                    files["profiles/application-baseline.json"] = json.dumps(
+                        profile
+                    ).encode()
+                files["products/audio-visualizer.json"] = json.dumps(product).encode()
+                return GitSnapshot(
+                    ("a" if RESOURCE_REVISION_STAGE == "initial" else "c") * 40, files
+                )
             if self.repository in (
                 "fixture/oscal-requirements",
                 "fixture/oscal-profile-scan",

@@ -97,6 +97,11 @@ def start_scan(
 ):
     _, team = _product(db, product_id, principal, "edit", lock=True)
     binding = _binding(db, product_id, binding_id)
+    if not binding["active"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Repository is retired from the current product configuration",
+        )
     if any(part in (".", "..") for part in binding["repository"].split("/")):
         raise HTTPException(status_code=422, detail="Invalid GitHub repository")
     if "\x00" in data.ref:

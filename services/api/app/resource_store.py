@@ -1,10 +1,25 @@
 """Read immutable resource documents with their exact source links."""
 
+import hashlib
+import json
 from urllib.parse import quote
 
 from sqlalchemy import select
 
 from app.tables import pack_revisions, resource_documents
+
+
+def review_digest(candidate):
+    """Fence exactly the configuration, closure and source shown for adoption."""
+    payload = {
+        key: candidate[key]
+        for key in ("source", "manifest", "resolved", "contentDigest")
+    }
+    return hashlib.sha256(
+        json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode()
+    ).hexdigest()
 
 
 def resources_query(organization_id):
