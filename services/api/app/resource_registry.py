@@ -12,10 +12,15 @@ from sqlalchemy.engine import Connection
 from app.authorization import organization_access, team_access, visible_teams
 from app.database import get_connection
 from app.evidence_packs import load_evidence_pack
-from app.git_source import GitSource, GitSourceError
+from app.git_source import (
+    GitSource,
+    GitSourceError,
+    SourceReadTimeout,
+    SourceRevisionChanged,
+)
 from app.identity import get_current_principal
 from app.manifest_io import ManifestError
-from app.manifest_source import snapshot_for_ref
+from app.manifest_source import load_resource_for_ref
 from app.oscal_resources import load_catalog, load_profile
 from app.pack_catalog import (
     github_source_factory,
@@ -164,15 +169,15 @@ def import_resource(
         source = factory(config["repository"])
         try:
             ref_kind = config.get("refType", "branch")
-            snapshot = snapshot_for_ref(
-                source, config["repository"], config["ref"], ref_kind
+            snapshot, loaded = load_resource_for_ref(
+                source,
+                config["repository"],
+                config["ref"],
+                ref_kind,
+                config["manifestPath"],
+                loaders[kind],
+                expected_commit=expected_commit,
             )
-            if expected_commit is not None and snapshot.commit != expected_commit:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Source changed after preview; check the new revision first",
-                )
-            loaded = loaders[kind](snapshot, config["manifestPath"])
         finally:
             source.close()
         if discover_version:
@@ -351,6 +356,12 @@ def import_resource(
             status_code=422,
             detail="Invalid or unsupported resource manifest, binding or reference: "
             + str(exc)[:200],
+        ) from exc
+    except SourceRevisionChanged as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SourceReadTimeout as exc:
+        raise HTTPException(
+            status_code=504, detail="Git source read timed out; try again"
         ) from exc
     except GitSourceError as exc:
         raise HTTPException(status_code=503, detail="Git source unavailable") from exc

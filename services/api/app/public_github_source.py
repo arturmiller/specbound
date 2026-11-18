@@ -37,6 +37,7 @@ class PublicGitHubSource(GitHubSource):
         if method != "GET" or token is not None:
             raise SourceUnavailable("Public GitHub source is read-only")
         try:
+            kwargs = self._bounded_request_options(kwargs)
             response = self.client.request(
                 "GET",
                 API + path,

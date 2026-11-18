@@ -2,9 +2,11 @@
 
 import hashlib
 import re
+from collections.abc import Mapping
 from pathlib import PurePosixPath
+from types import SimpleNamespace
 
-from app.git_source import GitSnapshot
+from app.git_source import GitSnapshot, SourceRevisionChanged
 from app.governance_pack import load_governance_pack
 from app.manifest_io import ManifestError
 from app.provider_pack import load_provider_pack
@@ -49,6 +51,52 @@ def content_digest(files):
     return digest.hexdigest()
 
 
+def load_resource_for_ref(
+    source, repository, ref, ref_kind, manifest_path, loader, *, expected_commit=None
+):
+    """Read only the parser's declared files when the source supports scoped reads."""
+    checked_manifest_path(manifest_path)
+    if getattr(source, "repository", repository) != repository:
+        raise ValueError("Source repository does not match request")
+
+    def checked_load(snapshot, path):
+        if expected_commit is not None and snapshot.commit != expected_commit:
+            raise SourceRevisionChanged(
+                "Source changed after preview; check the new revision first"
+            )
+        return loader(snapshot, path)
+
+    read = getattr(source, "load_resource", None)
+    if callable(read):
+        return read(ref, manifest_path, checked_load, ref_kind=ref_kind)
+    snapshot = snapshot_for_ref(source, repository, ref, ref_kind)
+    return snapshot, checked_load(snapshot, manifest_path)
+
+
+class _PackFiles(Mapping):
+    """A read-through view, preserving the pack parser's canonical manifest name."""
+
+    def __init__(self, files, prefix, manifest_path, canonical):
+        self.files, self.prefix = files, prefix
+        self.manifest_path, self.canonical = manifest_path, canonical
+
+    def __getitem__(self, path):
+        return self.files[
+            self.manifest_path if path == self.canonical else self.prefix + path
+        ]
+
+    def __iter__(self):
+        names = {
+            name[len(self.prefix) :]
+            for name in self.files
+            if name.startswith(self.prefix)
+        }
+        return iter(sorted(names | {self.canonical}))
+
+    def __len__(self):
+        return sum(1 for _ in self)
+
+
 def load_pack_at(snapshot: GitSnapshot, manifest_path, kind):
     checked_manifest_path(manifest_path)
     if manifest_path not in snapshot.files:
@@ -57,15 +105,10 @@ def load_pack_at(snapshot: GitSnapshot, manifest_path, kind):
         raise ManifestError("Unsupported pack kind")
     directory = str(PurePosixPath(manifest_path).parent)
     prefix = "" if directory == "." else directory + "/"
-    local = {
-        name[len(prefix) :]: content
-        for name, content in snapshot.files.items()
-        if name.startswith(prefix)
-    }
     canonical = "pack.yaml" if kind == "governance" else "provider.yaml"
-    local[canonical] = snapshot.files[manifest_path]
+    local = _PackFiles(snapshot.files, prefix, manifest_path, canonical)
     loaded = (load_governance_pack if kind == "governance" else load_provider_pack)(
-        GitSnapshot(snapshot.commit, local)
+        SimpleNamespace(commit=snapshot.commit, files=local)
     )
     manifest = loaded["manifest"]
     paths = {canonical}

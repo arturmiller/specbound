@@ -93,6 +93,118 @@ class ResourceRegistryTest(unittest.TestCase):
             headers=headers or {},
         )
 
+    def test_catalog_preview_fetches_only_its_declared_files_in_a_large_repository(
+        self,
+    ):
+        import base64
+        import hashlib
+
+        import httpx
+        from app.github_source import GitHubSource
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        files = {
+            **self.source.files,
+            **{
+                f"unrelated/module-{index}.py": f"unused code {index}".encode()
+                for index in range(500)
+            },
+        }
+        blobs, entries, requested = {}, [], []
+        for path, content in files.items():
+            sha = hashlib.sha1(f"blob {len(content)}\0".encode() + content).hexdigest()
+            blobs[sha] = content
+            entries.append(
+                {
+                    "type": "blob",
+                    "mode": "100644",
+                    "path": path,
+                    "sha": sha,
+                    "size": len(content),
+                }
+            )
+
+        def handle(request):
+            path = request.url.path
+            if path.endswith("/installation"):
+                return httpx.Response(200, json={"id": 123})
+            if path.endswith("/access_tokens"):
+                self.assertEqual(
+                    json.loads(request.content)["permissions"], {"contents": "read"}
+                )
+                return httpx.Response(201, json={"token": "test-only-token"})
+            if "/commits/" in path:
+                self.assertTrue(path.endswith("/commits/heads/main"))
+                return httpx.Response(
+                    200, json={"sha": "a" * 40, "commit": {"tree": {"sha": "b" * 40}}}
+                )
+            if "/git/trees/" in path:
+                return httpx.Response(200, json={"truncated": False, "tree": entries})
+            if "/git/blobs/" in path:
+                sha = path.rsplit("/", 1)[1]
+                requested.append(sha)
+                return httpx.Response(
+                    200,
+                    json={
+                        "encoding": "base64",
+                        "content": base64.b64encode(blobs[sha]).decode(),
+                    },
+                )
+            return httpx.Response(404)
+
+        key = rsa.generate_private_key(
+            public_exponent=65537, key_size=2048
+        ).private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            app.dependency_overrides[github_source_factory] = lambda: (
+                lambda repository: GitHubSource(
+                    repository,
+                    app_id="1234",
+                    installation_id=123,
+                    private_key=key,
+                    client=client,
+                )
+            )
+            response = self.post(preview=True)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(
+                len(requested),
+                2,
+                "Preview must not download unrelated repository blobs",
+            )
+            requested.clear()
+            self.config = self.evidence_config("second")
+            provider = self.post(preview=True)
+            self.assertEqual(provider.status_code, 200, provider.text)
+            self.assertEqual(
+                len(requested),
+                4,
+                "Provider import must only read manifest and declared schemas",
+            )
+        self.assertEqual(response.json()["source"]["commit"], "a" * 40)
+        self.assertEqual(len(response.json()["resolved"]["controls"]), 2)
+        self.assertEqual(self.client.get(self.url).json(), [])
+
+    def test_timed_out_source_returns_504_without_persisting_preview_or_registration(
+        self,
+    ):
+        from app.git_source import SourceReadTimeout
+
+        class TimedSource(ResourceFixtureSource):
+            def load_resource(self, *_args, **_kwargs):
+                raise SourceReadTimeout("Fixture timeout")
+
+        app.dependency_overrides[github_source_factory] = lambda: TimedSource
+        for preview in (True, False):
+            response = self.post(preview=preview)
+            self.assertEqual(response.status_code, 504, response.text)
+        self.assertEqual(self.client.get(self.url).json(), [])
+
     def test_preview_and_registration_keep_controls_groups_and_exact_sources(self):
         preview = self.post(preview=True)
         self.assertEqual(preview.status_code, 200, preview.text)

@@ -22,6 +22,14 @@ class SourceUnavailable(GitSourceError):
     """The source could not be reached or its contents could not be read."""
 
 
+class SourceReadTimeout(SourceUnavailable):
+    """A bounded resource read exceeded its network time budget."""
+
+
+class SourceRevisionChanged(GitSourceError):
+    """The observed source differs from the explicitly reviewed commit."""
+
+
 @dataclass(frozen=True)
 class GitSnapshot:
     """Files observed at a resolved Git commit, never a mutable tag or branch."""
@@ -46,7 +54,9 @@ class GitSnapshot:
                 or not isinstance(content, bytes)
             ):
                 raise ValueError("files require safe relative paths and byte contents")
-        object.__setattr__(self, "files", MappingProxyType(dict(sorted(self.files.items()))))
+        object.__setattr__(
+            self, "files", MappingProxyType(dict(sorted(self.files.items())))
+        )
 
 
 class GitSource(Protocol):

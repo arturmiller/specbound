@@ -70,6 +70,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   const [expectedId, setExpectedId] = useState('');
   const [version, setVersion] = useState('1.0.0');
   const [busy, setBusy] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const [previewState, setPreviewState] = useState(/** @type {{key: string, value: Resource} | null} */ (null));
   const controller = useRef(/** @type {AbortController | null} */ (null));
@@ -85,7 +86,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   /** @type {Record<string, string>} */ const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 
   useEffect(() => { onBusyChange(busy); return () => onBusyChange(false); }, [busy, onBusyChange]);
-  useEffect(() => () => { controller.current?.abort(); setBusy(false); }, [scope]);
+  useEffect(() => () => { controller.current?.abort(); controller.current = null; setBusy(false); }, [scope]);
   useEffect(() => {
     const readController = new AbortController();
     /** @type {RequestInit} */ const options = { signal: readController.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} };
@@ -102,22 +103,37 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
     if (!isOwner) return;
     controller.current?.abort();
     const current = new AbortController(); controller.current = current;
-    setBusy(true); setFailure('');
+    setBusy(true); setPreviewBusy(previewOnly); setFailure('');
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; current.abort(); }, 45000);
     const config = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: isEvidence ? 'evidence-source' : expectedId.trim(), version: isEvidence ? '1.0.0' : version.trim(), name: expectedId.trim() }, spec: { resourceType, provider: 'github', repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || defaultPath, expected: { id: expectedId.trim(), version: version.trim() } } };
     try {
       const response = await fetch(`${root}?preview=${previewOnly}`, { method: 'POST', signal: current.signal, headers: { ...headers, 'Content-Type': 'application/json', ...(!previewOnly && preview ? { 'X-Expected-Commit': preview.source.commit } : {}) }, body: JSON.stringify(config) });
       if (!response.ok) {
-        const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: 'Manifest, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt. Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.' };
+        const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: 'Manifest, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt. Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.', 504: 'Zeitlimit beim Lesen der Git-Quelle erreicht. Bitte erneut versuchen.' };
         const body = await response.json().catch(() => ({}));
         const detail = typeof body.detail === 'string' ? ` ${body.detail}` : '';
-        throw new Error((messages[/** @type {403 | 409 | 422 | 503} */ (response.status)] || 'Die Quelle konnte nicht verarbeitet werden.') + detail);
+        throw new Error((messages[/** @type {403 | 409 | 422 | 503 | 504} */ (response.status)] || 'Die Quelle konnte nicht verarbeitet werden.') + detail);
       }
       /** @type {Resource} */ const saved = await response.json();
       if (current.signal.aborted) return;
       if (previewOnly) setPreviewState({ key: configKey, value: saved });
       else window.location.assign(isEvidence ? `${listUrl}&pack=${encodeURIComponent(saved.id || '')}` : isProduct ? `${listUrl}&product=${encodeURIComponent(saved.resolved.productId || '')}&view=scope` : `${listUrl}&resource=${encodeURIComponent(saved.id || '')}`);
-    } catch (error) { if (!current.signal.aborted) setFailure(error instanceof Error ? error.message : 'Die Quelle konnte nicht verarbeitet werden.'); }
-    finally { if (!current.signal.aborted) setBusy(false); }
+    } catch (error) {
+      if (controller.current === current) {
+        if (timedOut) setFailure(previewOnly ? 'Zeitlimit beim Lesen der Quelle erreicht. Bitte erneut versuchen.' : 'Zeitlimit der Registrierung erreicht. Bitte zuerst in der Ressourcenliste prüfen, ob die Registrierung bereits abgeschlossen wurde.');
+        else if (!current.signal.aborted) setFailure(error instanceof Error ? error.message : 'Die Quelle konnte nicht verarbeitet werden.');
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (controller.current === current) setBusy(false);
+    }
+  }
+
+  function cancel() {
+    if (!previewBusy) return;
+    controller.current?.abort(); controller.current = null;
+    setBusy(false); setFailure('');
   }
 
   return <section className="resource-workspace" aria-labelledby="resources-heading">
@@ -130,7 +146,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
         <ManifestSourceFields path={path} onPath={setPath} refType={refType} onRefType={setRefType} defaultPath={defaultPath} />
         <label className="field">Erwartete {noun}-ID<input required maxLength={isEvidence ? 200 : 128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isEvidence ? 'org.example.provider' : isProduct ? 'audio-visualizer' : isProfile ? 'application-baseline' : 'application-controls'} /></label>
         <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={isEvidence ? undefined : 128} /></label>
-        <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy}>{noun} registrieren</button></div>
+        <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy}>{noun} registrieren</button>{busy && previewBusy && <button type="button" onClick={cancel}>Abbrechen</button>}</div>
         {busy && <p role="status">Quelle wird gelesen und geprüft …</p>}
         <p>Der Import prüft die Struktur und speichert eine feste Revision. Ein Produktprofil legt die geltenden Controls fest.</p>
       </form> : <p>Nur Organisationseigentümer können neue Quellen registrieren.</p>}

@@ -45,6 +45,8 @@ Vor einem Profil wird seine Katalogversion registriert. Der Profilimport liest K
 
 Dies ist ein zugesicherter erster Verarbeitungsumfang, kein vollständiger OSCAL-Resolver. Der Beispielchecker liefert eine interne Auswahlprojektion, kein als OSCAL ausgegebenes vollständig aufgelöstes Katalogdokument. Eine spätere Erweiterung benötigt weitere Semantiktests.
 
+Beim GitHub-Ressourcenimport werden nur die vom Parser benötigten Manifest-, Import-, Binding-, Schema- und Testdateien aus einem gepinnten Baum gelesen. Fremde Repositorydateien werden nicht heruntergeladen. Der resultierende unveränderliche Snapshot enthält genau die gelesenen Dateien; bestehende Ref-/Versionsfences sowie Pfad-, Symlink- und Größenprüfungen gelten weiterhin. Ein gemeinsames Netzwerkzeitbudget beendet weitere Abrufe nach 30 Sekunden; Quellzeitüberschreitungen ergeben HTTP 504.
+
 ## Prüflogik und Parameter
 
 Der native Katalog benennt die Bindungsdatei über `metadata.links` mit `rel: specbound-control-bindings` und einem relativen `href`. Die Datei liegt im selben Snapshot. Es wird keine Prüflogik aus dem Internet nachgeladen und kein Quellcode ausgeführt. Fehlt eine Bindungsdatei, bleibt der Katalog als Anforderungskatalog verwendbar.

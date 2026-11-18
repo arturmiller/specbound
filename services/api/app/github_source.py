@@ -7,7 +7,9 @@ import hmac
 import os
 import re
 import time
+from collections.abc import Mapping
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import quote
 
 import httpx
@@ -17,6 +19,7 @@ from app.git_source import (
     GitSnapshot,
     InvalidGitReference,
     SourceNotFound,
+    SourceReadTimeout,
     SourceUnavailable,
 )
 
@@ -25,6 +28,7 @@ OBJECT_ID = re.compile(r"[0-9a-f]{40}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 MAX_FILES = 1000
 MAX_BYTES = 20 * 1024 * 1024
+RESOURCE_READ_SECONDS = 30
 
 
 def verify_github_signature(secret: bytes, payload: bytes, signature: str) -> bool:
@@ -76,6 +80,7 @@ class GitHubSource:
 
     def _request(self, method, path, token, *, response_type=dict, **kwargs):
         try:
+            kwargs = self._bounded_request_options(kwargs)
             response = self.client.request(
                 method,
                 API + path,
@@ -95,10 +100,23 @@ class GitHubSource:
             if not isinstance(payload, response_type):
                 raise SourceUnavailable("Unexpected GitHub API response")
             return payload
+        except httpx.TimeoutException as exc:
+            if getattr(self, "_resource_deadline", None) is not None:
+                raise SourceReadTimeout("Git resource read timed out") from exc
+            raise SourceUnavailable("GitHub API unavailable") from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise SourceUnavailable(
                 "GitHub API unavailable or returned invalid JSON"
             ) from exc
+
+    def _bounded_request_options(self, kwargs):
+        deadline = getattr(self, "_resource_deadline", None)
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SourceReadTimeout("Git resource read timed out")
+            kwargs["timeout"] = min(15, remaining)
+        return kwargs
 
     def _token(self, *, permissions=None):
         now = int(time.time())
@@ -193,8 +211,12 @@ class GitHubSource:
         """Read only lockfile blobs from a single immutable GitHub revision."""
         return self._fetch_snapshot(ref, lockfiles_only=True)
 
-    def _fetch_snapshot(self, ref: str, *, lockfiles_only: bool) -> GitSnapshot:
-        ref = "heads%2F" + self._ref(ref[6:]) if isinstance(ref, str) and ref.startswith("heads/") else self._ref(ref)
+    def _read_tree(self, ref):
+        ref = (
+            "heads%2F" + self._ref(ref[6:])
+            if isinstance(ref, str) and ref.startswith("heads/")
+            else self._ref(ref)
+        )
         token = self._token()
         details = self._request("GET", f"/repos/{self.repository}/commits/{ref}", token)
         commit = self._sha(details.get("sha"))
@@ -212,6 +234,33 @@ class GitHubSource:
             or len(entries) > MAX_FILES
         ):
             raise SourceUnavailable("GitHub tree is incomplete or too large")
+        return token, commit, entries
+
+    def load_resource(self, ref, manifest_path, loader, *, ref_kind="branch"):
+        """One pinned tree; materialize only files requested by the resource parser."""
+        self._resource_deadline = time.monotonic() + RESOURCE_READ_SECONDS
+        try:
+            if ref_kind not in ("branch", "tag", "commit"):
+                raise InvalidGitReference("Unsupported Git ref kind")
+            resolved = self.resolve_tag(ref) if ref_kind == "tag" else ref
+            if ref_kind != "branch" and not re.fullmatch(
+                r"(?:[0-9a-f]{40}|[0-9a-f]{64})", resolved
+            ):
+                raise InvalidGitReference("A full commit is required")
+            token, commit, entries = self._read_tree(
+                "heads/" + ref if ref_kind == "branch" else resolved
+            )
+            if ref_kind != "branch" and commit != resolved:
+                raise SourceUnavailable("Snapshot did not match resolved commit")
+            files = _ReferencedFiles(self, token, commit, entries)
+            loaded = loader(SimpleNamespace(commit=commit, files=files), manifest_path)
+            self._bounded_request_options({})
+            return GitSnapshot(commit, files.loaded), loaded
+        finally:
+            self._resource_deadline = None
+
+    def _fetch_snapshot(self, ref: str, *, lockfiles_only: bool) -> GitSnapshot:
+        token, commit, entries = self._read_tree(ref)
         files = {}
         total = 0
         for item in entries:
@@ -235,40 +284,80 @@ class GitHubSource:
                     or name.endswith(".py.uv.lock")
                 ):
                     continue
-            size = item.get("size")
-            if (
-                not isinstance(size, int)
-                or size < 0
-                or size > MAX_BYTES
-                or total + size > MAX_BYTES
-            ):
-                raise SourceUnavailable("GitHub snapshot exceeds size limit")
-            blob = self._request(
-                "GET",
-                f"/repos/{self.repository}/git/blobs/{self._sha(item.get('sha'))}",
-                token,
-            )
-            try:
-                if blob.get("encoding") != "base64" or not isinstance(
-                    blob.get("content"), str
-                ):
-                    raise ValueError("invalid blob")
-                content = base64.b64decode(
-                    "".join(blob["content"].split()), validate=True
-                )
-                if len(content) != size:
-                    raise ValueError("blob size mismatch")
-                path = item["path"]
-                if path in files:
-                    raise ValueError("duplicate path")
-                files[path] = content
-                total += size
-            except (KeyError, ValueError, TypeError, binascii.Error) as exc:
-                raise SourceUnavailable("GitHub blob is invalid") from exc
+            content = self._read_blob(item, token, total)
+            if path in files:
+                raise SourceUnavailable("Duplicate GitHub snapshot path")
+            files[path] = content
+            total += len(content)
         try:
             return GitSnapshot(commit, files)
         except ValueError as exc:
             raise SourceUnavailable("GitHub snapshot contains unsafe paths") from exc
+
+    def _read_blob(self, item, token, total):
+        if item.get("type") != "blob" or item.get("mode") not in ("100644", "100755"):
+            raise SourceUnavailable("Symlinks and submodules are unsupported")
+        size = item.get("size")
+        if (
+            type(size) is not int
+            or size < 0
+            or size > MAX_BYTES
+            or total + size > MAX_BYTES
+        ):
+            raise SourceUnavailable("GitHub snapshot exceeds size limit")
+        blob = self._request(
+            "GET",
+            f"/repos/{self.repository}/git/blobs/{self._sha(item.get('sha'))}",
+            token,
+        )
+        try:
+            if blob.get("encoding") != "base64" or not isinstance(
+                blob.get("content"), str
+            ):
+                raise ValueError("invalid blob")
+            content = base64.b64decode("".join(blob["content"].split()), validate=True)
+            if len(content) != size:
+                raise ValueError("blob size mismatch")
+            return content
+        except (KeyError, ValueError, TypeError, binascii.Error) as exc:
+            raise SourceUnavailable("GitHub blob is invalid") from exc
+
+
+class _ReferencedFiles(Mapping):
+    """Read-through files from a validated, immutable tree with a shared byte limit."""
+
+    def __init__(self, source, token, commit, entries):
+        self.source, self.token = source, token
+        self.entries, self.loaded, self.total = {}, {}, 0
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise SourceUnavailable("Invalid GitHub tree entry")
+            if entry.get("type") == "tree":
+                continue
+            path = entry.get("path")
+            try:
+                GitSnapshot(commit, {path: b""})
+            except (TypeError, ValueError) as exc:
+                raise SourceUnavailable("GitHub tree contains unsafe paths") from exc
+            if path in self.entries:
+                raise SourceUnavailable("Duplicate GitHub tree path")
+            self.entries[path] = entry
+
+    def __getitem__(self, path):
+        if path not in self.loaded:
+            content = self.source._read_blob(self.entries[path], self.token, self.total)
+            self.loaded[path] = content
+            self.total += len(content)
+        return self.loaded[path]
+
+    def __contains__(self, path):
+        return path in self.entries
+
+    def __iter__(self):
+        return iter(self.entries)
+
+    def __len__(self):
+        return len(self.entries)
 
 
 def configured_github_source(repository: str) -> GitHubSource:
