@@ -5,7 +5,7 @@ test('creates a product, verifies its repository and reopens details after reloa
   const team = await request.post(`http://127.0.0.1:18762/organizations/${org}/teams`, { data: { name: 'Produktteam' } });
   expect(team.status()).toBe(201);
   const { id: teamId } = await team.json();
-  await page.goto(`/products?organization=${org}`);
+  await page.goto(`/legacy-products?organization=${org}`);
   await page.getByRole('link', { name: 'Produkt registrieren' }).click();
   await page.getByLabel('Produktname').fill('Catalog Service');
   await page.getByLabel('Owner-Team').selectOption(teamId);
@@ -29,7 +29,7 @@ test('keeps the product and repository when GitHub verification fails', async ({
   expect(team.status()).toBe(201);
   const { id: teamId } = await team.json();
   await page.route('**/products/*/repositories/*/github', (route) => route.fulfill({ status: 503, body: '{}' }));
-  await page.goto(`/products?organization=${org}`);
+  await page.goto(`/legacy-products?organization=${org}`);
   await page.getByRole('link', { name: 'Produkt registrieren' }).click();
   await page.getByLabel('Produktname').fill('Unverified Service');
   await page.getByLabel('Owner-Team').selectOption(teamId);
@@ -51,7 +51,7 @@ test('waits for the selected product repositories before allowing a connection',
   const team = await request.post(`http://127.0.0.1:18762/organizations/${org}/teams`, { data: { name: 'Ladeteam' } });
   expect(team.status()).toBe(201);
   const { id: teamId } = await team.json();
-  await page.goto(`/products?organization=${org}`);
+  await page.goto(`/legacy-products?organization=${org}`);
   await page.getByRole('link', { name: 'Produkt registrieren' }).click();
   await page.getByLabel('Produktname').fill('Loading Service');
   await page.getByLabel('Owner-Team').selectOption(teamId);
@@ -90,7 +90,7 @@ test('viewers can browse product sources but cannot create or connect', async ({
     if (path === '/api/products/product/repositories') return route.fulfill({ json: [{ id: 'repo', provider: 'github', repository: 'owner/service' }] });
     return route.fulfill({ json: {} });
   });
-  await page.goto('/products?organization=org');
+  await page.goto('/legacy-products?organization=org');
   await expect(page.getByRole('link', { name: 'Service' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Produkt registrieren' })).toHaveCount(0);
   await page.getByLabel('Produkte suchen').fill('other');
@@ -116,7 +116,7 @@ test('product loading and forbidden errors do not look like an empty inventory',
   let release;
   const waiting = new Promise((resolve) => { release = resolve; });
   await page.route('**/api/organizations/org/products', async (route) => { await waiting; await route.fulfill({ status: 403, body: '{}' }); });
-  await page.goto('/products?organization=org');
+  await page.goto('/legacy-products?organization=org');
   await expect(page.getByText('Produkte werden geladen …')).toBeVisible();
   release();
   await expect(page.getByRole('alert')).toContainText('fehlen die erforderlichen Rechte');
@@ -135,7 +135,7 @@ test('maintainers can only choose teams where they may edit', async ({ page }) =
     if (path === '/api/organizations/org/products') return route.fulfill({ json: [] });
     return route.fulfill({ json: {} });
   });
-  await page.goto('/products?organization=org');
+  await page.goto('/legacy-products?organization=org');
   await page.getByRole('link', { name: 'Produkt registrieren' }).click();
   const owners = page.getByLabel('Owner-Team');
   await expect(owners.locator('option', { hasText: 'Editable' })).toHaveCount(1);

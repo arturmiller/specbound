@@ -4,7 +4,7 @@ import { ProductViews } from './product-views.jsx';
 import { ProductDetail } from './product-detail.jsx';
 import { PublicLicenseScans } from './public-license-scans.jsx';
 
-/** @typedef {{id: string, name: string, ownerTeamId: string, configurationStatus?: string}} Product */
+/** @typedef {{id: string, name: string, ownerTeamId: string, configurationStatus?: string, resourceRevisionId?: string}} Product */
 /** @typedef {{id: string, repository: string, provider: string}} Binding */
 /** @typedef {{id: string, name: string}} Team */
 /** @typedef {{principalId: string, role: string}} Member */
@@ -25,14 +25,14 @@ function productUrl(organization, product = '', view = '') {
   const params = new URLSearchParams({ organization });
   if (product) params.set('product', product);
   if (view) params.set('view', view);
-  return `/products?${params}`;
+  return `${location.pathname === '/legacy-products' ? '/legacy-products' : '/products'}?${params}`;
 }
 
-/** @param {{organizationId: string, organization?: Organization, teams: Team[], teamsLoading: boolean, accessToken?: string, onBusyChange: (busy: boolean) => void}} props */
-export function ProductWorkspace({ organizationId, organization, teams, teamsLoading, accessToken = '', onBusyChange }) {
+/** @param {{organizationId: string, organization?: Organization, teams: Team[], teamsLoading: boolean, accessToken?: string, onBusyChange: (busy: boolean) => void, portalMode?: boolean}} props */
+export function ProductWorkspace({ organizationId, organization, teams, teamsLoading, accessToken = '', onBusyChange, portalMode = false }) {
   const params = new URLSearchParams(window.location.search);
   const productId = params.get('product') || '';
-  const view = params.get('view') || (productId ? 'detail' : 'list');
+  const view = params.get('view') || (productId ? portalMode ? 'requirements' : 'detail' : 'list');
   const [products, setProducts] = useState(/** @type {Product[]} */ ([]));
   const [ready, setReady] = useState(false);
   const [productError, setProductError] = useState('');

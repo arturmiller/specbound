@@ -20,7 +20,7 @@ async function read(path, token, signal) {
 function url(org, product, view = '') {
   const params = new URLSearchParams({ organization: org, product });
   if (view) params.set('view', view);
-  return `/products?${params}`;
+  return `/legacy-products?${params}`;
 }
 
 /** @param {{product: Product, organizationId: string, teamName: string, accessToken: string, view: string}} props */
@@ -49,7 +49,7 @@ export function ProductDetail({ product, organizationId, teamName, accessToken, 
   const detailUrl = url(organizationId, product.id);
   const discoveryUrl = url(organizationId, product.id, 'discovery');
   const sourcesUrl = url(organizationId, product.id, 'repository');
-  const listUrl = `/products?${new URLSearchParams({ organization: organizationId })}`;
+  const listUrl = `/legacy-products?${new URLSearchParams({ organization: organizationId })}`;
   const subjects = report ? Array.from(new Map(report.evaluations.map((evaluation) => [evaluation.subject.id, evaluation.subject])).values()) : [];
   return view === 'discovery' ? <>
     <p className="eyebrow">PRODUKTE / DISCOVERY</p><div className="page-heading"><div><h1 id="products-heading">Discovery prüfen</h1><p>Gespeicherte Scanabdeckung und Datenlücken für {product.name}.</p></div></div>

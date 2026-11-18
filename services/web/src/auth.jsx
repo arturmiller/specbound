@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
 import { TeamWorkspace } from './teams.jsx';
+import { ResourcePortal } from './resource-portal.jsx';
 import { Documentation } from './docs.jsx';
 
 /** @typedef {{enabled: boolean, issuer: string, clientId: string, audience: string}} AuthConfig */
@@ -51,7 +52,7 @@ export function AuthWorkspace({ apiStatus }) {
               const requested = state.returnTo;
               if (requested.startsWith('/') && !requested.startsWith('//')) {
                 const url = new URL(requested, window.location.origin);
-                if (url.origin === window.location.origin && /^(?:\/(?:settings|teams|products|packs|overview|agents|findings|pr-checks|evidence|providers|docs)?\/?|\/assessments\/[A-Za-z0-9_-]{1,100}\/?)$/.test(url.pathname)) {
+                if (url.origin === window.location.origin && /^(?:\/(?:settings|teams|products|legacy-products|catalogs|profiles|evidence-packs|packs|overview|agents|findings|pr-checks|evidence|providers|docs)?\/?|\/assessments\/[A-Za-z0-9_-]{1,100}\/?)$/.test(url.pathname)) {
                   target = `${url.pathname}${url.search}${url.hash}`;
                 }
               }
@@ -73,11 +74,12 @@ export function AuthWorkspace({ apiStatus }) {
 
   if (!ready) return <main className="login-screen"><p>Authentifizierung wird vorbereitet …</p></main>;
   if (error) return <main className="login-screen"><p role="alert">{error}</p></main>;
-  if (!configured) return <TeamWorkspace apiStatus={apiStatus} />;
+  const Workspace = ['/', '/products', '/catalogs', '/profiles', '/evidence-packs'].includes(window.location.pathname.replace(/\/$/, '') || '/') ? ResourcePortal : TeamWorkspace;
+  if (!configured) return <Workspace apiStatus={apiStatus} />;
   if (!user) return <main className="login-screen"><div className="login-card"><span className="brand-mark" aria-hidden="true">◇</span><h1>Specbound</h1>
     <p>Bitte anmelden, um fortzufahren.</p><button onClick={() => { void manager?.signinRedirect({ nonce: crypto.randomUUID(), state: { returnTo: `${window.location.pathname}${window.location.search}${window.location.hash}` } }).catch(() => setError('Anmeldung konnte nicht gestartet werden.')); }}>Anmelden</button>
     <a className="public-doc-link" href="/docs">Dokumentation öffnen</a>
     {window.location.pathname === '/docs' && <Documentation />}</div></main>;
-  return <TeamWorkspace key={user.profile.sub} accessToken={user.access_token} apiStatus={apiStatus} authConfigured
+  return <Workspace key={user.profile.sub} accessToken={user.access_token} apiStatus={apiStatus} authConfigured
     onSignOut={() => { void manager?.removeUser().then(() => setUser(null)).catch(() => setError('Lokale Abmeldung fehlgeschlagen.')); }} />;
 }

@@ -13,7 +13,7 @@ test('starts a public license scan and reopens its stored result', async ({ page
   const bindingResponse = await request.post(`${api}/products/${product}/repositories`, { data: { provider: 'github', repository: 'fixture/license' } });
   expect(bindingResponse.status()).toBe(201);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/products?organization=${org}&product=${product}&view=repository`);
+  await page.goto(`/legacy-products?organization=${org}&product=${product}&view=repository`);
   const scan = page.getByRole('region', { name: 'Lizenzscan für fixture/license' });
   await expect(scan.getByText('Noch kein Lizenzscan gestartet.')).toBeVisible();
   const scanStarted = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/public-license-scans'));

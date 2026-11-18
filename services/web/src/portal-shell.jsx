@@ -2,7 +2,7 @@ import React from 'react';
 
 export const navigation = [
   { id: 'overview', label: 'Übersicht', icon: '◫', href: '/overview' },
-  { id: 'products', label: 'Produkte', icon: '▦', href: '/products' },
+  { id: 'products', label: 'Produkte', icon: '▦', href: '/legacy-products' },
   { id: 'teams', label: 'Teams', icon: '♧', href: '/teams' },
   { id: 'agents', label: 'Agenten', icon: '✦', href: '/agents' },
   { id: 'packs', label: 'Packs', icon: '▧', href: '/packs' },

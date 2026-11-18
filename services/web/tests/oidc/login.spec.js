@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('signs in with PKCE and sends a verified access token to the API', async ({ page, request }) => {
   await page.goto('/');
-  const authorizedRequest = page.waitForRequest((request) => request.url().endsWith('/api/organizations') && Boolean(request.headers().authorization));
+  const authorizedRequest = page.waitForRequest((request) => request.url().endsWith('/api/workspace') && Boolean(request.headers().authorization));
   await page.getByRole('button', { name: 'Anmelden' }).click();
   await expect(page.getByText('Angemeldet.', { exact: false })).toBeVisible();
   const apiRequest = await authorizedRequest;
@@ -10,12 +10,7 @@ test('signs in with PKCE and sends a verified access token to the API', async ({
   const me = await request.get('http://127.0.0.1:18765/auth/me', { headers: { authorization } });
   expect(me.status()).toBe(200);
   expect((await me.json()).kind).toBe('user');
-  const org = await request.post('http://127.0.0.1:18765/organizations', {
-    headers: { authorization }, data: { name: 'OIDC organization' },
-  });
-  expect(org.status()).toBe(201);
-  await page.reload();
-  await expect(page.getByLabel('Organisation')).toContainText('OIDC organization');
+  await expect(page.getByRole('heading', { name: 'Produkte', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Lokal abmelden' }).click();
   await expect(page.getByRole('button', { name: 'Anmelden' })).toBeVisible();
 });

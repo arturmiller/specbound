@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const login = process.env.SPECBOUND_LOCAL_TEST_USER || 'local-e2e';
 
 async function signIn(page) {
-  await page.goto('/');
+  await page.goto('/settings');
   await page.getByRole('button', { name: 'Anmelden' }).click();
   await page.locator('input[name="login"]').fill(login);
   await page.locator('input[name="password"]').fill('local-only');
