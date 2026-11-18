@@ -34,6 +34,9 @@ Die Konfiguration von Repository, Manifestpfad, Ref-Typ, gewünschtem Ref und er
 **Revisionsprüfung**:
 Das erneute Lesen einer Ressourcenquelle und der Vergleich mit einem vorgeschlagenen Stand. Struktur und konkrete Referenzen werden validiert, ohne etwas zu registrieren oder geltende Produktanforderungen zu ändern.
 
+**Katalogarchivierung**:
+Das Entfernen einer registrierten Katalogrevision aus der aktiven Auswahl. Ihre Inhalte und bestehenden festen Referenzen bleiben erhalten; die Revision kann wiederhergestellt werden.
+
 **Übernahme**:
 Die ausdrückliche, autorisierte und protokollierte Registrierung einer geprüften Ressourcenrevision. Nur eine Produktübernahme ersetzt dessen aktuellen Konfigurationsstand; bereits gespeicherte Prüfungen und andere feste Referenzen bleiben erhalten. Eine Übernahme ist keine Ausführungsfreigabe und keine simulierte Bewertung.
 

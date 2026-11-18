@@ -8,6 +8,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    false,
     true,
 )
 
@@ -157,6 +158,7 @@ resource_documents = Table(
     Column("resource_id", String), Column("resource_version", String), Column("name", String),
     Column("source_config", JSON), Column("document", JSON), Column("resolved", JSON),
     Column("dependencies", JSON), Column("content_digest", String),
+    Column("archived", Boolean, nullable=False, server_default=false()),
 )
 evidence_records = Table(
     "evidence_records", metadata,

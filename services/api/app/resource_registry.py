@@ -46,23 +46,25 @@ def list_resources(
     organization_id: str,
     principal: Annotated[str, Depends(get_current_principal)],
     db: Annotated[Connection, Depends(get_connection, scope="function")],
+    include_archived: bool = False,
 ):
     organization_access(db, organization_id, principal, write=False)
     team_ids = [team["id"] for team in visible_teams(db, organization_id, principal)]
     visible_products = select(products.c.id).where(
         products.c.owner_team_id.in_(team_ids)
     )
+    query = resources_query(organization_id)
+    if not include_archived:
+        query = query.where(resource_documents.c.archived.is_(False))
     return [
         serialize_resource(row)
         for row in db.execute(
-            resources_query(organization_id)
-            .where(
+            query.where(
                 (resource_documents.c.kind != "Product")
                 | resource_documents.c.resolved["productId"]
                 .as_string()
                 .in_(visible_products)
-            )
-            .order_by(
+            ).order_by(
                 resource_documents.c.name,
                 resource_documents.c.resource_version,
                 resource_documents.c.revision_id,
@@ -199,6 +201,7 @@ def import_resource(
                 db.execute(
                     resources_query(organization_id).where(
                         resource_documents.c.kind == "Catalog",
+                        resource_documents.c.archived.is_(False),
                         resource_documents.c.resource_id == catalog["resourceId"],
                         resource_documents.c.resource_version == catalog["version"],
                     )
@@ -239,6 +242,11 @@ def import_resource(
             raise HTTPException(
                 status_code=409,
                 detail="Resource ID/version already identifies different content; publish a new version",
+            )
+        if kind == "Catalog" and previous and all(row["archived"] for row in previous):
+            raise HTTPException(
+                status_code=409,
+                detail="Catalog is archived; restore its registered revision first",
             )
         if ref_kind == "tag":
             pinned = db.execute(
@@ -327,6 +335,11 @@ def import_resource(
             raise HTTPException(
                 status_code=409,
                 detail="Source revision already identifies another resource",
+            )
+        if existing is not None and existing["archived"]:
+            raise HTTPException(
+                status_code=409,
+                detail="Catalog is archived; restore its registered revision first",
             )
         if kind == "EvidenceProviderPack":
             persist_loaded_pack(

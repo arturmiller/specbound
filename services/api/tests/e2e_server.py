@@ -199,6 +199,7 @@ class FixtureSource:
     def fetch(self, ref):
         if self.repository in (
             "fixture/oscal",
+            "fixture/oscal-removal",
             "fixture/oscal-invalid",
             "fixture/oscal-v2",
             "fixture/oscal-requirements",
@@ -208,6 +209,33 @@ class FixtureSource:
             from tests.test_resource_registry import ResourceFixtureSource
 
             snapshot = ResourceFixtureSource(self.repository).fetch(ref)
+            if self.repository == "fixture/oscal-removal":
+                files = dict(snapshot.files)
+                for path, kind, resource_id, title, uuid in (
+                    (
+                        "catalogs/application.json",
+                        "catalog",
+                        "removal-controls",
+                        "Removal Controls",
+                        "a2beac83-e38d-45e4-a44d-6696aef75c36",
+                    ),
+                    (
+                        "profiles/application-baseline.json",
+                        "profile",
+                        "removal-baseline",
+                        "Removal Baseline",
+                        "f263a64f-47ed-44f1-ad2f-d545d193c518",
+                    ),
+                ):
+                    document = json.loads(files[path])
+                    document[kind]["uuid"] = uuid
+                    document[kind]["metadata"]["title"] = title
+                    document[kind]["metadata"]["props"][0]["value"] = resource_id
+                    files[path] = json.dumps(document).encode()
+                bindings = json.loads(files["checks/application.json"])
+                bindings["spec"]["catalog"]["id"] = "removal-controls"
+                files["checks/application.json"] = json.dumps(bindings).encode()
+                return GitSnapshot(snapshot.commit, files)
             if self.repository == "fixture/oscal-updates":
                 files = dict(snapshot.files)
                 product = json.loads(files["products/audio-visualizer.json"])
