@@ -328,6 +328,23 @@ class WorkerQueueTest(unittest.TestCase):
 
     def test_comment_delivery_retries_without_reexecuting_assessment(self):
         with get_engine().begin() as db:
+            retired_product = str(uuid4())
+            db.execute(
+                insert(products).values(
+                    id=retired_product,
+                    owner_team_id=self.f.team,
+                    name="Previous source owner",
+                )
+            )
+            db.execute(
+                insert(repo_bindings).values(
+                    id=str(uuid4()),
+                    product_id=retired_product,
+                    provider="github",
+                    repository=f"org/repo-{self.f.org}",
+                    active=False,
+                )
+            )
             db.execute(
                 update(repo_bindings)
                 .where(repo_bindings.c.id == self.f.binding)

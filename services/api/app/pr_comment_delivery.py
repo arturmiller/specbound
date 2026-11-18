@@ -161,6 +161,12 @@ def deliver_once(
                 .select_from(repo_bindings)
                 .where(
                     func.lower(repo_bindings.c.provider) == "github",
+                    # Retired sources do not make a current binding ambiguous.
+                    # A previously queued job still counts its own historical binding.
+                    or_(
+                        repo_bindings.c.active.is_(True),
+                        repo_bindings.c.id == binding["id"],
+                    ),
                     func.lower(repo_bindings.c.repository)
                     == binding["repository"].lower(),
                 )

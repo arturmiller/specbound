@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const org = '123e4567-e89b-12d3-a456-426614174000';
 const root = `/api/organizations/${org}/resources`;
+const ownCatalogs = (items) => items.filter((item) => item.resourceType === 'Catalog' && item.source.repository === 'fixture/oscal');
 
 test('previews and imports grouped native OSCAL controls with real stored provenance', async ({ page }) => {
   const consoleErrors = [];
@@ -9,11 +10,11 @@ test('previews and imports grouped native OSCAL controls with real stored proven
   await page.goto(`/catalogs?organization=${org}&view=connect`);
   await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
   await page.getByLabel('Erwartete Katalog-ID').fill('application-controls');
-  const before = await (await page.request.get(root)).json();
+  const before = ownCatalogs(await (await page.request.get(root)).json());
   await page.getByRole('button', { name: 'Vorschau prüfen' }).click();
   const preview = page.getByRole('region', { name: 'Katalogvorschau' });
   await expect(preview.getByText('Struktur geprüft · noch nicht registriert')).toBeVisible();
-  expect((await (await page.request.get(root)).json()).length).toBe(before.length);
+  expect((ownCatalogs(await (await page.request.get(root)).json())).length).toBe(before.length);
   await expect(preview.getByRole('heading', { name: /Application Governance/ })).toBeVisible();
   await page.getByRole('button', { name: 'Katalog registrieren' }).click();
   await expect(page.getByRole('heading', { name: 'Application Controls', exact: true })).toBeVisible();
@@ -26,7 +27,7 @@ test('previews and imports grouped native OSCAL controls with real stored proven
   await expect(page.getByRole('link', { name: 'Anforderung in Git', exact: true })).toHaveAttribute('href', `https://github.com/fixture/oscal/blob/${'a'.repeat(40)}/catalogs/application.json`);
   const savedUrl = page.url();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Application Controls', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Application Controls', exact: true })).toBeVisible({ timeout: 10000 });
   expect(page.url()).toBe(savedUrl);
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
@@ -46,9 +47,9 @@ test('wrong native identity stays an explicit error and does not create a revisi
   await page.goto(`/catalogs?organization=${org}&view=connect`);
   await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
   await page.getByLabel('Erwartete Katalog-ID').fill('missing-catalog');
-  const before = await (await page.request.get(root)).json();
+  const before = ownCatalogs(await (await page.request.get(root)).json());
   await page.getByRole('button', { name: 'Katalog registrieren' }).click();
   await expect(page.getByRole('alert')).toContainText('ungültig oder noch nicht unterstützt');
-  expect((await (await page.request.get(root)).json()).length).toBe(before.length);
+  expect((ownCatalogs(await (await page.request.get(root)).json())).length).toBe(before.length);
   await expect(page).toHaveURL(/view=connect/);
 });

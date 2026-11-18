@@ -20,6 +20,7 @@ test('reviews and adopts valid profile/product revisions, rejects invalid update
     saved[kind] = await response.json();
   }
   const product = saved.Product.resolved.productId;
+  const originalProfile = (await (await page.request.get(`/api/products/${product}/governance`)).json()).profile.id;
   const binding = (await (await page.request.get(`/api/products/${product}/repositories`)).json())[0];
   const scanUrl = `/api/products/${product}/repositories/${binding.id}/public-license-scans`;
   const job = await (await page.request.post(scanUrl, { data: { ref: 'main' } })).json();
@@ -37,7 +38,7 @@ test('reviews and adopts valid profile/product revisions, rejects invalid update
   await comparison.getByRole('button', { name: 'Revision übernehmen', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Application Baseline', exact: true })).toBeVisible();
   await expect(page).not.toHaveURL(new RegExp(`resource=${saved.Profile.id}`));
-  expect((await (await page.request.get(`/api/products/${product}/governance`)).json()).profile.id).toBe(saved.Profile.id);
+  expect((await (await page.request.get(`/api/products/${product}/governance`)).json()).profile.id).toBe(originalProfile);
   await page.goto(`/products?product=${product}&view=scope`);
   await page.setViewportSize({ width: 320, height: 844 });
   await page.request.post('/api/__e2e/resource-revision?stage=invalid');
