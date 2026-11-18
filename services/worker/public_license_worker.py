@@ -23,7 +23,7 @@ def _clock():
     return datetime.now(timezone.utc)
 
 
-def claim(db, *, now):
+def claim(db, *, now, job_id=None):
     row = (
         db.execute(
             select(public_license_scans)
@@ -34,7 +34,8 @@ def claim(db, *, now):
                         public_license_scans.c.status == "running",
                         public_license_scans.c.lease_until <= now,
                     ),
-                )
+                ),
+                public_license_scans.c.id == job_id if job_id is not None else True,
             )
             .order_by(public_license_scans.c.created_at, public_license_scans.c.id)
             .with_for_update(skip_locked=True)
@@ -204,9 +205,9 @@ def finish(db, lease, response, *, now, clock=_clock):
     return True
 
 
-def poll_once(engine, *, execute=_run, clock=_clock, processing=None):
+def poll_once(engine, *, execute=_run, clock=_clock, processing=None, job_id=None):
     with engine.begin() as db:
-        lease = claim(db, now=clock())
+        lease = claim(db, now=clock(), job_id=job_id)
     if lease is None:
         return False
     if processing is not None:

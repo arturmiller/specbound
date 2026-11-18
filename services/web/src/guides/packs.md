@@ -42,6 +42,10 @@ Bestehende Produkte bleiben **Ohne Profilzuordnung**. Gleiche Namen oder Reposit
 
 ## Einschränkungen
 
+Unter **Produkt → Anforderungen** wählst du eine gespeicherte Prüfung oder den aktuellen Konfigurationsstand ohne Prüfung. Controls sind gruppiert und nach Status durchsuchbar. Ein geöffnetes Control zeigt alle Einzelbewertungen mit den dafür ausgewählten Nachweisen; Paketanzahl und Control-Anzahl werden getrennt angezeigt. Prüfungen verlinken genau diese Ansicht und setzen den gespeicherten Stand voraus.
+
+Dateien und Commits besitzen feste Gitlinks. Nachweise zeigen Wert, Erhebungs-/Ablaufzeit, tatsächlichen Erzeuger und vorhandene Artefakt-/Metadaten-Hashes. Die Gültigkeitsanzeige gilt zum angegebenen Abrufzeitpunkt; ein inzwischen abgelaufener Nachweis schreibt eine frühere Bewertung nicht um. Historische fehlende Profil- oder Quellenangaben bleiben unbekannt. Prüfungs-/Statusauswahl und Control-Direktlinks bleiben in der URL erhalten.
+
 Eine neue öffentliche Lizenzprüfung fixiert beim Start den Produkt-, Profil-, Katalog- und Bindungsstand aus der Registrierung. Profilparameter bestimmen die spätere Bewertung; die feste Beispielrichtlinie ersetzt keine ausdrückliche Produktkonfiguration. Der Worker liest die Regeln nicht erneut von einem beweglichen Branch.
 
 Im Assessment bleiben alle ausgewählten Controls sichtbar. Der Python-Scanner liefert `python.package-license/v1` für beobachtete Python-Pakete. Andere Bindungen sind für diesen Lauf **Nicht unterstützt**, Controls ohne Methode oder Beobachtungen **Nicht bewertet**; ihr Ergebnis ist UNKNOWN. NOT_APPLICABLE entsteht nur aus einer tatsächlichen Einzelbewertung im passenden beobachteten Scope. Control-Anzahl und Paket-Einzelbewertungen sind getrennt.

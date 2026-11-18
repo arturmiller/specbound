@@ -5,8 +5,8 @@ import React, { useEffect, useState } from 'react';
 /** @typedef {{sourceRevision: string, coverage: string, reason: string, files: string[], unsupportedFiles: string[], packages: PackageResult[], assessmentError?: string}} Result */
 /** @typedef {{id: string, status: string, ref: string, createdAt: string, errorCode: string | null, assessmentId: string | null, governanceContext?: import('./assessment-governance.jsx').FrozenContext | null, result: Result | null}} Scan */
 
-/** @param {{productId: string, bindingId: string, repository: string, accessToken: string, canEdit: boolean, profileManaged?: boolean}} props */
-export function PublicLicenseScans({ productId, bindingId, repository, accessToken, canEdit, profileManaged = false }) {
+/** @param {{organizationId: string, productId: string, bindingId: string, repository: string, accessToken: string, canEdit: boolean, profileManaged?: boolean}} props */
+export function PublicLicenseScans({ organizationId, productId, bindingId, repository, accessToken, canEdit, profileManaged = false }) {
   const [runs, setRuns] = useState(/** @type {Scan[] | null} */ (null));
   const [ref, setRef] = useState('main');
   const [error, setError] = useState('');
@@ -57,7 +57,7 @@ export function PublicLicenseScans({ productId, bindingId, repository, accessTok
     {runs === null ? !error && <p role="status">Scans werden geladen …</p> : !latest ? <p>Noch kein Lizenzscan gestartet.</p> : <div aria-live="polite"><h3>Letzter Scan</h3><p>Status: <strong>{states[latest.status] || latest.status}</strong> · Ref: {latest.ref}</p>
       {profile && <p>Fixiertes Profil: <strong>{profile.name} · {profile.version}</strong></p>}{latest.governanceContext?.mode === 'legacy-example' && <p>Dieser Lauf verwendet die fixierte Beispielrichtlinie.</p>}
       {latest.errorCode && <p>{errors[latest.errorCode] || 'Scan nicht verfügbar.'}</p>}
-      {latest.assessmentId ? <p><a href={`/assessments/${encodeURIComponent(latest.assessmentId)}`}>Assessment und Findings ansehen →</a></p> : latest.status === 'completed' && <p>Für diesen Scan ist kein Assessment verfügbar.</p>}
+      {latest.assessmentId ? <p><a href={`/products?${new URLSearchParams({ organization: organizationId, product: productId, view: 'requirements', assessment: latest.assessmentId })}`}>Assessment und Findings ansehen →</a></p> : latest.status === 'completed' && <p>Für diesen Scan ist kein Assessment verfügbar.</p>}
       {latest.result?.assessmentError && <p role="alert" className="alert">Das Assessment konnte nicht erstellt werden; die Scanvorschau bleibt erhalten.</p>}
       {latest.result && <><p className="break-value">Git-Commit: {latest.result.sourceRevision}</p><p>Abdeckung: {latest.result.coverage} · Lockfiles: {latest.result.files.join(', ') || 'Keine'}</p><p>{latest.result.reason}</p>{latest.result.unsupportedFiles.length > 0 && <p>Nicht unterstützte Lockfiles: {latest.result.unsupportedFiles.join(', ')}</p>}
         <div className="team-table-scroll"><table className="team-table"><thead><tr><th>PAKET</th><th>LIZENZ</th><th>{profile ? 'METADATEN' : 'ERGEBNIS'}</th><th>QUELLE</th></tr></thead><tbody>{latest.result.packages.map((pkg, index) => <tr key={`${pkg.path}-${pkg.name}-${pkg.version}-${index}`}><td>{pkg.name} · {pkg.version}<small>{pkg.path}</small></td><td>{pkg.licenseExpression || 'UNKNOWN'}</td><td>{profile ? pkg.metadata?.status || 'UNKNOWN' : pkg.status}</td><td className="break-value">{pkg.metadata?.artifacts?.map((a) => a.sourceUrl).filter(Boolean).join(', ') || pkg.metadata?.reason || 'UNKNOWN'}</td></tr>)}</tbody></table></div>

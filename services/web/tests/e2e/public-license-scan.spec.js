@@ -16,9 +16,11 @@ test('starts a public license scan and reopens its stored result', async ({ page
   await page.goto(`/products?organization=${org}&product=${product}&view=repository`);
   const scan = page.getByRole('region', { name: 'Lizenzscan für fixture/license' });
   await expect(scan.getByText('Noch kein Lizenzscan gestartet.')).toBeVisible();
+  const scanStarted = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/public-license-scans'));
   await scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' }).click();
+  const startedJob = await (await scanStarted).json();
   await expect(scan.getByText('Wartet auf den lokalen Worker')).toBeVisible();
-  const processed = await request.post(`${api}/__e2e/process-public-license-scan`);
+  const processed = await request.post(`${api}/__e2e/process-public-license-scan?scan_id=${startedJob.id}`);
   expect((await processed.json()).processed).toBe(true);
   await expect(scan.getByText('Abgeschlossen')).toBeVisible({ timeout: 8000 });
   await expect(scan.getByText('sample-gpl · 1.0')).toBeVisible();
@@ -30,11 +32,11 @@ test('starts a public license scan and reopens its stored result', async ({ page
   await expect(scan.getByText('sample-gpl · 1.0')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await assessment.click();
-  await expect(page.getByRole('heading', { name: 'Assessment-Bericht' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Anforderungen', exact: true })).toBeVisible();
+  await page.locator('.requirements-control').filter({ has: page.locator('summary').filter({ hasText: 'PY-LIC-001' }) }).locator('summary').first().click();
   await expect(page.getByText('GPL-3.0-only').first()).toBeVisible();
-  await expect(page.getByText('Subject: sample-gpl · 1.0')).toBeVisible();
-  await expect(page.getByText(/FAIL: open/)).toBeVisible();
-  await expect(page.getByText('repository · repository')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'sample-gpl · 1.0 FAIL' })).toBeVisible();
+  await expect(page.getByText(/Finding beim Prüfstand: open/)).toBeVisible();
   await page.goto(`/findings?organization=${org}&view=repository`);
   await expect(page.getByRole('heading', { name: 'Findings aus Repository-Scans' })).toBeVisible();
   const findingRow = page.getByRole('row').filter({ hasText: productName });

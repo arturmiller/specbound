@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ResourceWorkspace } from './resources.jsx';
+import { ProductViews } from './product-views.jsx';
 import { ProductDetail } from './product-detail.jsx';
 import { PublicLicenseScans } from './public-license-scans.jsx';
 
@@ -135,6 +136,7 @@ export function ProductWorkspace({ organizationId, organization, teams, teamsLoa
 
   const visibleProducts = products.filter((item) => item.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()) && (!teamFilter || item.ownerTeamId === teamFilter));
   const listUrl = productUrl(organizationId);
+  if (product && ['requirements', 'scans', 'scope'].includes(view)) return <ProductViews key={`${product.id}:${accessToken}`} product={product} organizationId={organizationId} accessToken={accessToken} view={view} canEdit={canEditProduct} />;
   if (view === 'manifest') return <ResourceWorkspace organizationId={organizationId} organization={organization} accessToken={accessToken} resourceType="Product" onBusyChange={onBusyChange} />;
   return <section className="products-screen" aria-labelledby="products-heading">
     {error && <p role="alert" className="alert">{error}</p>}
@@ -156,7 +158,7 @@ export function ProductWorkspace({ organizationId, organization, teams, teamsLoa
       <ProductSteps active={2} /><div className="team-columns"><div className="panel"><h2>Produktdetails</h2><p><strong>{product.name}</strong> · Team: {teams.find((team) => team.id === product.ownerTeamId)?.name || product.ownerTeamId}</p><h2>Git-Repositories</h2>
         {bindingsLoading ? <p role="status">Repositories werden geladen …</p> : bindingsError ? <p role="alert" className="alert">{bindingsError}</p> : bindings.length === 0 ? <p>Noch kein Repository verbunden.</p> : <ul className="product-bindings">{bindings.map((binding) => <li key={binding.id}><span className="break-value"><span>{binding.repository}</span> <small>({binding.provider})</small></span>{binding.provider.toLowerCase() === 'github' ? <button type="button" disabled={busy} onClick={() => { setBusy(true); void verify(binding).finally(() => setBusy(false)); }}>Zugriff prüfen</button> : <span>Prüfung nicht verfügbar</span>}</li>)}</ul>}
         {verification && <p role="status">{verification}</p>}
-        {bindings.filter((binding) => binding.provider.toLowerCase() === 'github').map((binding) => <PublicLicenseScans key={binding.id} productId={productId} bindingId={binding.id} repository={binding.repository} accessToken={accessToken} canEdit={canEditProduct} profileManaged={product.configurationStatus === 'manifest_managed'} />)}
+        {bindings.filter((binding) => binding.provider.toLowerCase() === 'github').map((binding) => <PublicLicenseScans organizationId={organizationId} key={binding.id} productId={productId} bindingId={binding.id} repository={binding.repository} accessToken={accessToken} canEdit={canEditProduct} profileManaged={product.configurationStatus === 'manifest_managed'} />)}
         {canEditProduct && product.configurationStatus !== 'manifest_managed' && <form onSubmit={connect}><label className="field">Git-Repository<input required maxLength={200} placeholder="owner/repository" value={repository} onChange={(event) => setRepository(event.target.value)} /></label><button type="submit" disabled={busy || bindingsLoading || Boolean(bindingsError)}>Repository verbinden</button></form>}
         {!permissionsLoading && !canEditProduct && <p>Du kannst dieses Produkt nur lesen.</p>}
         {product.configurationStatus === 'manifest_managed' && <p>Produktquellen und Profil werden im Produktmanifest geändert. <a href={productUrl(organizationId, product.id, 'scope')}>Geltungsbereich ansehen</a></p>}<h2 className="product-source-heading">Cloud-Quellen</h2><p>Nicht verfügbar.</p>
