@@ -39,6 +39,12 @@ test('authenticated resource portal keeps product context above tabs and exposes
       await page.keyboard.press('Enter');
       await expect(page.getByRole('heading', { name: label, exact: true, level: 1 })).toBeVisible();
       await expect(page.getByRole('combobox', { name: 'Produkt auswählen' })).toHaveCount(0);
+      if (label === 'Kataloge' || label === 'Profile') {
+        const card = page.locator('.resource-product-grid article').first();
+        await expect(card.getByRole('link', { name: 'Schema ansehen' })).toBeVisible();
+        const manifest = card.getByRole('link', { name: /\.json$/ });
+        expect(await manifest.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(150);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
     await nav.getByRole('link', { name: 'Kataloge', exact: true }).click();
