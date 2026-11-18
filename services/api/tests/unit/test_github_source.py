@@ -1,6 +1,8 @@
 """GitHub adapter contract with a deterministic GitHub API transport."""
 
+import asyncio
 import base64
+import time
 import unittest
 
 import httpx
@@ -95,6 +97,9 @@ class GitHubSourceTest(unittest.TestCase):
             installation_id=123,
             private_key=self.pem,
             client=self.client,
+            resource_client_factory=lambda: httpx.AsyncClient(
+                transport=httpx.MockTransport(self.handler)
+            ),
         )
 
     def tearDown(self):
@@ -233,6 +238,9 @@ class GitHubSourceTest(unittest.TestCase):
                 installation_id=123,
                 private_key=self.pem,
                 client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
             )
             with self.assertRaisesRegex(SourceUnavailable, "Symlinks"):
                 source.load_resource(
@@ -279,6 +287,9 @@ class GitHubSourceTest(unittest.TestCase):
                 installation_id=123,
                 private_key=self.pem,
                 client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
             )
             with self.assertRaisesRegex(SourceUnavailable, "size limit"):
                 source.load_resource(
@@ -313,6 +324,9 @@ class GitHubSourceTest(unittest.TestCase):
                 installation_id=123,
                 private_key=self.pem,
                 client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
             )
             with self.assertRaises(SourceReadTimeout):
                 source.load_resource(
@@ -339,6 +353,66 @@ class GitHubSourceTest(unittest.TestCase):
                 expected_commit="d" * 40,
             )
         self.assertFalse(any("/git/blobs/" in path for path in self.paths))
+
+    def test_scoped_read_interrupts_a_continuously_trickling_response(self):
+        from unittest.mock import patch
+
+        from app.git_source import SourceReadTimeout
+
+        class SlowBody(httpx.SyncByteStream, httpx.AsyncByteStream):
+            chunks = 0
+            closed = False
+
+            def __iter__(self):
+                for _ in range(20):
+                    time.sleep(0.04)
+                    self.chunks += 1
+                    yield b" "
+                yield b'{"encoding":"base64","content":"aGVsbG8="}'
+
+            async def __aiter__(self):
+                for _ in range(20):
+                    await asyncio.sleep(0.04)
+                    self.chunks += 1
+                    yield b" "
+                yield b'{"encoding":"base64","content":"aGVsbG8="}'
+
+            def close(self):
+                self.closed = True
+
+            async def aclose(self):
+                self.closed = True
+
+        stream = SlowBody()
+
+        def handle(request):
+            if "/git/blobs/" in request.url.path:
+                return httpx.Response(200, stream=stream)
+            return self.handler(request)
+
+        with (
+            httpx.Client(transport=httpx.MockTransport(handle)) as client,
+            patch("app.github_source.RESOURCE_READ_SECONDS", 0.1),
+        ):
+            source = GitHubSource(
+                "example/repo",
+                app_id="1234",
+                installation_id=123,
+                private_key=self.pem,
+                client=client,
+                resource_client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(handle)
+                ),
+            )
+            started = time.monotonic()
+            with self.assertRaises(SourceReadTimeout):
+                source.load_resource(
+                    "main", "README.md", lambda snapshot, path: snapshot.files[path]
+                )
+            self.assertLess(time.monotonic() - started, 0.5)
+        self.assertLess(stream.chunks, 20)
+        self.assertTrue(stream.closed)
+        self.assertIsNone(source._resource_deadline)
 
     def test_missing_refs_and_wrong_installation_are_rejected(self):
         with self.assertRaises(SourceNotFound):

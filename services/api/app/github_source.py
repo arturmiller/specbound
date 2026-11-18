@@ -1,5 +1,6 @@
 """Read a GitHub repository through a scoped GitHub App installation."""
 
+import asyncio
 import base64
 import binascii
 import hashlib
@@ -52,6 +53,7 @@ class GitHubSource:
         private_key: bytes,
         webhook_secret: bytes = b"",
         client: httpx.Client | None = None,
+        resource_client_factory=None,
     ):
         if (
             not isinstance(repository, str)
@@ -73,6 +75,7 @@ class GitHubSource:
         self.webhook_secret = webhook_secret
         self._owns_client = client is None
         self.client = client or httpx.Client(timeout=15, follow_redirects=False)
+        self._resource_client_factory = resource_client_factory or httpx.AsyncClient
 
     def close(self):
         if self._owns_client:
@@ -81,7 +84,7 @@ class GitHubSource:
     def _request(self, method, path, token, *, response_type=dict, **kwargs):
         try:
             kwargs = self._bounded_request_options(kwargs)
-            response = self.client.request(
+            response = self._send_request(
                 method,
                 API + path,
                 headers={
@@ -117,6 +120,22 @@ class GitHubSource:
                 raise SourceReadTimeout("Git resource read timed out")
             kwargs["timeout"] = min(15, remaining)
         return kwargs
+
+    def _send_request(self, method, url, **kwargs):
+        runner = getattr(self, "_resource_runner", None)
+        if runner is None:
+            return self.client.request(method, url, **kwargs)
+
+        async def read_response():
+            # HTTPX's phase timeouts do not bound a trickling response. Cancelling
+            # this async request interrupts I/O and closes its response stream.
+            async with asyncio.timeout(self._resource_deadline - time.monotonic()):
+                return await self._resource_client.request(method, url, **kwargs)
+
+        try:
+            return runner.run(read_response())
+        except (TimeoutError, httpx.TimeoutException) as exc:
+            raise SourceReadTimeout("Git resource read timed out") from exc
 
     def _token(self, *, permissions=None):
         now = int(time.time())
@@ -238,8 +257,17 @@ class GitHubSource:
 
     def load_resource(self, ref, manifest_path, loader, *, ref_kind="branch"):
         """One pinned tree; materialize only files requested by the resource parser."""
+        # The parsers remain synchronous; one loop/client spans all their lazy
+        # reads so connections are reused and every request shares one deadline.
+        with asyncio.Runner() as runner:
+            return self._load_resource(runner, ref, manifest_path, loader, ref_kind)
+
+    def _load_resource(self, runner, ref, manifest_path, loader, ref_kind):
         self._resource_deadline = time.monotonic() + RESOURCE_READ_SECONDS
+        self._resource_runner = runner
+        self._resource_client = None
         try:
+            self._resource_client = self._resource_client_factory()
             if ref_kind not in ("branch", "tag", "commit"):
                 raise InvalidGitReference("Unsupported Git ref kind")
             resolved = self.resolve_tag(ref) if ref_kind == "tag" else ref
@@ -257,7 +285,13 @@ class GitHubSource:
             self._bounded_request_options({})
             return GitSnapshot(commit, files.loaded), loaded
         finally:
-            self._resource_deadline = None
+            try:
+                if self._resource_client is not None:
+                    runner.run(self._resource_client.aclose())
+            finally:
+                self._resource_client = None
+                self._resource_runner = None
+                self._resource_deadline = None
 
     def _fetch_snapshot(self, ref: str, *, lockfiles_only: bool) -> GitSnapshot:
         token, commit, entries = self._read_tree(ref)

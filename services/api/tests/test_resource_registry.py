@@ -168,6 +168,9 @@ class ResourceRegistryTest(unittest.TestCase):
                     installation_id=123,
                     private_key=key,
                     client=client,
+                    resource_client_factory=lambda: httpx.AsyncClient(
+                        transport=httpx.MockTransport(handle)
+                    ),
                 )
             )
             response = self.post(preview=True)
