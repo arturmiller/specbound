@@ -2,27 +2,34 @@ import { expect, test } from '@playwright/test';
 
 const org = '123e4567-e89b-12d3-a456-426614174000';
 
-test('shows all fourteen package evaluations and evidence on controls with stable selection and focus', async ({ page }) => {
+async function registerProduct(page) {
   await page.goto(`/products?organization=${org}`);
   let productId;
   for (const [resourceType, manifestPath, id] of [
     ['Catalog', 'catalogs/application.json', 'application-controls'],
     ['Profile', 'profiles/application-baseline.json', 'application-baseline'],
-    ['Product', 'products/audio-visualizer.json', 'audio-visualizer'],
+    ['Product', 'products/audio-visualizer.json', 'audio-visualizer-requirements'],
   ]) {
     const response = await page.request.post(`/api/organizations/${org}/resources`, { data: {
       apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: 'source', version: '1.0.0', name: 'Source' },
-      spec: { resourceType, provider: 'github', repository: 'fixture/oscal', ref: 'main', manifestPath, expected: { id, version: '1.0.0' } },
+      spec: { resourceType, provider: 'github', repository: resourceType === 'Product' ? 'fixture/oscal-requirements' : 'fixture/oscal', ref: 'main', manifestPath, expected: { id, version: '1.0.0' } },
     } });
     expect(response.status()).toBe(201);
     if (resourceType === 'Product') productId = (await response.json()).resolved.productId;
   }
+  return productId;
+}
+
+test('shows all fourteen package evaluations and evidence on controls with stable selection and focus', async ({ page }) => {
+  const productId = await registerProduct(page);
   await page.goto(`/products?organization=${org}&product=${productId}&view=scans`);
   const scan = page.getByRole('region', { name: 'Lizenzscan für djfun/audio-visualizer-python' });
   await expect(scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' })).toBeEnabled();
+  const scanStarted = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/public-license-scans'));
   await scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' }).click();
+  const startedJob = await (await scanStarted).json();
   await expect(scan.getByText('Wartet auf den lokalen Worker')).toBeVisible();
-  const processed = await page.request.post('/api/__e2e/process-public-license-scan?package_count=14');
+  const processed = await page.request.post(`/api/__e2e/process-public-license-scan?package_count=14&scan_id=${startedJob.id}`);
   expect((await processed.json()).processed).toBe(true);
   await expect(scan.getByText('Abgeschlossen')).toBeVisible({ timeout: 8000 });
   await scan.getByRole('link', { name: /Assessment und Findings/ }).click();
@@ -81,4 +88,35 @@ test('rejects foreign assessment links and labels historical expired evidence', 
   await expect(control.getByText(/Beim Abruf abgelaufen/)).toBeVisible();
   await page.setViewportSize({ width: 320, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('keeps partial PASS coverage and unsupported lockfile causes visible on the selected stand', async ({ page }) => {
+  const productId = await registerProduct(page);
+  const bindings = await (await page.request.get(`/api/products/${productId}/repositories`)).json();
+  const root = `/api/products/${productId}/repositories/${bindings[0].id}/public-license-scans`;
+  const baseline = await page.request.post(root, { data: { ref: 'main' } });
+  expect(baseline.status()).toBe(201);
+  const baselineJob = await baseline.json();
+  await page.request.post(`/api/__e2e/process-public-license-scan?scan_id=${baselineJob.id}`);
+  const start = await page.request.post(root, { data: { ref: 'main' } });
+  expect(start.status()).toBe(201);
+  const partialJob = await start.json();
+  await page.request.post(`/api/__e2e/process-public-license-scan?partial=true&license_expression=MIT&scan_id=${partialJob.id}`);
+  const partial = (await (await page.request.get(root)).json())[0];
+  await page.goto(`/products?organization=${org}&product=${productId}&view=requirements&assessment=${partial.assessmentId}&control=PY-LIC-001`);
+  const coverage = page.getByRole('region', { name: 'Quellabdeckung' });
+  await expect(coverage).toContainText('Quellabdeckung: partial');
+  await expect(coverage).toContainText('other/poetry.lock');
+  const licensing = page.locator('.requirements-control').filter({ has: page.locator('summary').filter({ hasText: 'PY-LIC-001' }) });
+  await expect(licensing).toContainText('Historische Quellabdeckung: partial');
+  await expect(licensing).toContainText('Ein partieller PASS schließt vorhandene Findings nicht.');
+  const emptyStart = await page.request.post(root, { data: { ref: 'main' } });
+  expect(emptyStart.status()).toBe(201);
+  const emptyJob = await emptyStart.json();
+  await page.request.post(`/api/__e2e/process-public-license-scan?no_observations=true&scan_id=${emptyJob.id}`);
+  const empty = (await (await page.request.get(root)).json())[0];
+  await page.goto(`/products?organization=${org}&product=${productId}&view=requirements&assessment=${empty.assessmentId}`);
+  await expect(coverage).toContainText('no supported lockfile');
+  await expect(coverage).toContainText('poetry.lock');
+  await expect(page.getByText('2 Controls · 0 Einzelbewertungen · 0 ausgewählte Nachweise')).toBeVisible();
 });

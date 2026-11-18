@@ -16,9 +16,11 @@ test('starts a public license scan and reopens its stored result', async ({ page
   await page.goto(`/products?organization=${org}&product=${product}&view=repository`);
   const scan = page.getByRole('region', { name: 'Lizenzscan für fixture/license' });
   await expect(scan.getByText('Noch kein Lizenzscan gestartet.')).toBeVisible();
+  const scanStarted = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/public-license-scans'));
   await scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' }).click();
+  const startedJob = await (await scanStarted).json();
   await expect(scan.getByText('Wartet auf den lokalen Worker')).toBeVisible();
-  const processed = await request.post(`${api}/__e2e/process-public-license-scan`);
+  const processed = await request.post(`${api}/__e2e/process-public-license-scan?scan_id=${startedJob.id}`);
   expect((await processed.json()).processed).toBe(true);
   await expect(scan.getByText('Abgeschlossen')).toBeVisible({ timeout: 8000 });
   await expect(scan.getByText('sample-gpl · 1.0')).toBeVisible();

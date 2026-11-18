@@ -179,3 +179,39 @@ class ProductRequirementsTest(unittest.TestCase):
             "Aktuelle Nachweise sind mehrdeutig",
         )
         self.assertEqual(value["evidence"], [])
+
+    def test_partial_and_observationless_scan_causes_remain_in_the_projection(self):
+        self.configure_native_product()
+        self.finish_profile_scan(self.observed_result("GPL-3.0-only"))
+        partial = self.finish_profile_scan(self.observed_result("MIT", partial=True))
+        response = self.client.get(
+            f"/products/{self.product}/requirements",
+            params={"assessment": partial["assessment"]["id"]},
+        ).json()
+        control = next(
+            item for item in response["controls"] if item["id"] == "PY-LIC-001"
+        )
+        self.assertEqual(control["evaluations"][0]["status"], "PASS")
+        self.assertEqual(control["evaluations"][0]["coverage"]["status"], "partial")
+        self.assertEqual(
+            response["sourceScan"]["unsupportedFiles"], ["other/poetry.lock"]
+        )
+        self.assertEqual(response["findings"][0]["state"], "open")
+        empty = self.finish_profile_scan(
+            {
+                "sourceRevision": "b" * 40,
+                "sourceCoverage": "UNKNOWN",
+                "coverage": "UNKNOWN",
+                "packages": [],
+                "files": [],
+                "unsupportedFiles": ["poetry.lock"],
+                "reason": "no supported lockfile",
+            }
+        )
+        value = self.client.get(
+            f"/products/{self.product}/requirements",
+            params={"assessment": empty["assessment"]["id"]},
+        ).json()
+        self.assertTrue(all(not item["evaluations"] for item in value["controls"]))
+        self.assertEqual(value["sourceScan"]["reason"], "no supported lockfile")
+        self.assertEqual(value["sourceScan"]["coverage"], "UNKNOWN")

@@ -13,6 +13,7 @@ from app.assessment_reports import assessment_report
 from app.database import get_connection
 from app.identity import get_current_principal
 from app.products import _product, get_product_governance
+from app.snapshots import COMMIT
 from app.tables import assessment_snapshots, public_license_scans
 
 router = APIRouter()
@@ -175,7 +176,7 @@ def product_requirements(
     ]
     options.sort(key=lambda item: (item["createdAt"], item["id"]), reverse=True)
     selection = assessment or (options[0]["id"] if options else "current")
-    report, run, context = None, None, None
+    report, run, context, source_scan = None, None, None, None
     if selection.startswith("scan:"):
         row = (
             db.execute(
@@ -192,7 +193,28 @@ def product_requirements(
             raise HTTPException(
                 status_code=404, detail="Scan is not available for this product"
             )
-        run = {"id": row["id"], "status": row["status"], "errorCode": row["error_code"]}
+        result = row["result"] or {}
+        run = {
+            "id": row["id"],
+            "status": row["status"],
+            "errorCode": row["error_code"],
+            "coverage": result.get("sourceCoverage"),
+            "reason": result.get("reason"),
+            "files": result.get("files", []),
+            "unsupportedFiles": result.get("unsupportedFiles", []),
+        }
+        revision = result.get("sourceRevision")
+        if isinstance(revision, str) and COMMIT.fullmatch(revision):
+            source_scan = {
+                "id": row["id"],
+                "repository": row["repository"],
+                "ref": row["ref"],
+                "sourceRevision": revision,
+                "coverage": result.get("sourceCoverage"),
+                "files": result.get("files", []),
+                "unsupportedFiles": result.get("unsupportedFiles", []),
+                "reason": result.get("reason"),
+            }
         context = row["governance_context"]
         if row["assessment_id"]:
             selection = row["assessment_id"]
@@ -203,6 +225,7 @@ def product_requirements(
             )
         report = assessment_report(selection, principal, db)
         context = report["assessment"]["governanceContext"]
+        source_scan = report.get("sourceScan")
     if selection == "current":
         governance = get_product_governance(product_id, principal, db)
         if governance["profile"]:
@@ -244,7 +267,7 @@ def product_requirements(
         "controls": controls,
         "evidence": evidence,
         "findings": (report or {}).get("findings", []),
-        "sourceScan": (report or {}).get("sourceScan"),
+        "sourceScan": source_scan,
         "assessment": (report or {}).get("assessment"),
         "asOf": now,
     }

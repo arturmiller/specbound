@@ -8,11 +8,11 @@ test('starts a profile-bound scan and retains unsupported controls in its histor
   for (const [resourceType, manifestPath, id] of [
     ['Catalog', 'catalogs/application.json', 'application-controls'],
     ['Profile', 'profiles/application-baseline.json', 'application-baseline'],
-    ['Product', 'products/audio-visualizer.json', 'audio-visualizer'],
+    ['Product', 'products/audio-visualizer.json', 'audio-visualizer-profile-scan'],
   ]) {
     const response = await page.request.post(`/api/organizations/${org}/resources`, { data: {
       apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: 'source', version: '1.0.0', name: 'Source' },
-      spec: { resourceType, provider: 'github', repository: 'fixture/oscal', ref: 'main', manifestPath, expected: { id, version: '1.0.0' } },
+      spec: { resourceType, provider: 'github', repository: resourceType === 'Product' ? 'fixture/oscal-profile-scan' : 'fixture/oscal', ref: 'main', manifestPath, expected: { id, version: '1.0.0' } },
     } });
     expect(response.status()).toBe(201);
     if (resourceType === 'Product') productId = (await response.json()).resolved.productId;
@@ -21,9 +21,11 @@ test('starts a profile-bound scan and retains unsupported controls in its histor
   const scan = page.getByRole('region', { name: 'Lizenzscan für djfun/audio-visualizer-python' });
   await expect(scan.getByText(/Scan fixiert das geltende Produktprofil/)).toBeVisible();
   await expect(scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' })).toBeEnabled();
+  const scanStarted = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/public-license-scans'));
   await scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' }).click();
+  const startedJob = await (await scanStarted).json();
   await expect(scan.getByText('Wartet auf den lokalen Worker')).toBeVisible();
-  const processed = await page.request.post('/api/__e2e/process-public-license-scan');
+  const processed = await page.request.post(`/api/__e2e/process-public-license-scan?scan_id=${startedJob.id}`);
   expect((await processed.json()).processed).toBe(true);
   await expect(scan.getByText('Abgeschlossen')).toBeVisible({ timeout: 8000 });
   await expect(scan.getByText('Application Baseline · 1.0.0')).toBeVisible();

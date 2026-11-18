@@ -225,6 +225,7 @@ class PublicLicenseScansTest(unittest.TestCase):
             poll_once(
                 get_engine(),
                 execute=lambda _repository, _ref: {"status": "ok", "result": result},
+                job_id=job.json()["id"],
             )
         )
         stored = self.client.get(self.url).json()[0]

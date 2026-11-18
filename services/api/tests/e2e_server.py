@@ -21,7 +21,13 @@ WORKSPACE_DIRECTORY = tempfile.TemporaryDirectory(prefix="specbound-e2e-workspac
 
 
 @app.post("/__e2e/process-public-license-scan")
-def process_public_license_scan_fixture(package_count: int = 1):
+def process_public_license_scan_fixture(
+    package_count: int = 1,
+    partial: bool = False,
+    no_observations: bool = False,
+    license_expression: str = "GPL-3.0-only",
+    scan_id: str | None = None,
+):
     """Run the real queue processor with a deterministic source in test only."""
     import sys
 
@@ -75,9 +81,31 @@ def process_public_license_scan_fixture(package_count: int = 1):
                 {**copy.deepcopy(package), "name": f"package-{index + 1:02}"}
                 for index in range(package_count)
             ]
+        if license_expression not in ("GPL-3.0-only", "MIT"):
+            raise ValueError("Invalid fixture expression")
+        for package in response["result"]["packages"]:
+            package["licenseExpression"] = license_expression
+            package["status"] = "PASS" if license_expression == "MIT" else "FAIL"
+            for artifact in package["metadata"]["artifacts"]:
+                artifact["licenseExpression"] = license_expression
+        if partial:
+            response["result"].update(
+                coverage="partial",
+                sourceCoverage="partial",
+                unsupportedFiles=["other/poetry.lock"],
+            )
+        if no_observations:
+            response["result"].update(
+                coverage="UNKNOWN",
+                sourceCoverage="UNKNOWN",
+                packages=[],
+                files=[],
+                unsupportedFiles=["poetry.lock"],
+                reason="no supported lockfile",
+            )
         return response
 
-    return {"processed": poll_once(get_engine(), execute=fixture)}
+    return {"processed": poll_once(get_engine(), execute=fixture, job_id=scan_id)}
 
 
 @app.post("/__e2e/assessment")
@@ -163,10 +191,23 @@ class FixtureSource:
             "fixture/oscal",
             "fixture/oscal-invalid",
             "fixture/oscal-v2",
+            "fixture/oscal-requirements",
+            "fixture/oscal-profile-scan",
         ):
             from tests.test_resource_registry import ResourceFixtureSource
 
             snapshot = ResourceFixtureSource(self.repository).fetch(ref)
+            if self.repository in (
+                "fixture/oscal-requirements",
+                "fixture/oscal-profile-scan",
+            ):
+                files = dict(snapshot.files)
+                document = json.loads(files["products/audio-visualizer.json"])
+                document["metadata"]["id"] += "-" + self.repository.removeprefix(
+                    "fixture/oscal-"
+                )
+                files["products/audio-visualizer.json"] = json.dumps(document).encode()
+                return GitSnapshot(snapshot.commit, files)
             if self.repository.endswith("-invalid"):
                 files = dict(snapshot.files)
                 files["evidence/second/contracts/request.json"] = (
