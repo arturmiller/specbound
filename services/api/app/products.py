@@ -226,9 +226,9 @@ def product_discovery(product_id: str, principal: Principal, db: Db):
 @router.patch("/products/{product_id}")
 def update_product(product_id: str, data: ProductUpdate, principal: Principal, db: Db):
     item, team = _product(db, product_id, principal, "edit")
-    require_unmanaged_product(db, product_id)
     _lock_org(db, team["organization_id"])
     item, team = _product(db, product_id, principal, "edit", lock=True)
+    require_unmanaged_product(db, product_id)
     changes = {}
     if data.name is not None:
         changes["name"] = data.name

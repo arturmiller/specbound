@@ -6,11 +6,18 @@ from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy import insert, select, update
 
+from app.audit import record_event
 from app.authorization import team_access
 from app.manifest_io import read_yaml
 from app.manifest_source import checked_manifest_path, content_digest
 from app.resource_contracts import HERE, validate
-from app.tables import product_governance, products, repo_bindings, resource_documents
+from app.tables import (
+    product_governance,
+    products,
+    repo_bindings,
+    resource_documents,
+    teams,
+)
 from app.workspace import configured_workspace
 
 
@@ -34,13 +41,14 @@ def load_product(snapshot, manifest_path):
     }
 
 
-def resolve_product(db, organization_id, loaded, principal):
+def resolve_product(
+    db, organization_id, loaded, principal, *, target_id=None, lock=False
+):
     workspace = configured_workspace(db)
     if workspace["organizationId"] != organization_id:
         raise HTTPException(
             status_code=403, detail="Product source is outside the configured workspace"
         )
-    team_access(db, workspace["defaultOwnerTeamId"], principal, "edit")
     reference = loaded["resolved"]["profile"]
     profiles = (
         db.execute(
@@ -69,16 +77,60 @@ def resolve_product(db, organization_id, loaded, principal):
         .mappings()
         .one_or_none()
     )
-    if current:
+    if target_id is not None:
+        query = (
+            select(products)
+            .join(teams, teams.c.id == products.c.owner_team_id)
+            .where(
+                products.c.id == target_id, teams.c.organization_id == organization_id
+            )
+        )
+        if lock:
+            query = query.with_for_update(of=products)
+        target = db.execute(query).mappings().one_or_none()
+        if target is None:
+            raise HTTPException(
+                status_code=404, detail="Product not found in this workspace"
+            )
+        team = target["owner_team_id"]
+        team_access(db, team, principal, "edit")
+        if current and current["product_id"] != target_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Manifest identity already belongs to another product",
+            )
+        if not current:
+            require_unmanaged_product(db, target_id)
+        existing_sources = set(
+            db.execute(
+                select(repo_bindings.c.provider, repo_bindings.c.repository).where(
+                    repo_bindings.c.product_id == target_id,
+                    repo_bindings.c.active.is_(True),
+                )
+            ).tuples()
+        )
+        manifest_sources = {
+            (item["provider"], item["repository"])
+            for item in loaded["resolved"]["repositories"]
+        }
+        if not existing_sources <= manifest_sources:
+            raise HTTPException(
+                status_code=409,
+                detail="First manifest must include every existing product repository",
+            )
+    elif current:
         team = db.execute(
             select(products.c.owner_team_id).where(
                 products.c.id == current["product_id"]
             )
         ).scalar_one()
         team_access(db, team, principal, "edit")
+    else:
+        team = workspace["defaultOwnerTeamId"]
+        team_access(db, team, principal, "edit")
     loaded["resolved"].update(
-        productId=current["product_id"] if current else str(uuid4()),
-        ownerTeamId=team if current else workspace["defaultOwnerTeamId"],
+        productId=target_id or (current["product_id"] if current else str(uuid4())),
+        ownerTeamId=team,
         profile={
             "resourceId": profile["resource_id"],
             "version": profile["resource_version"],
@@ -101,7 +153,15 @@ def resolve_product(db, organization_id, loaded, principal):
 
 
 def attach_product(
-    db, organization_id, revision_id, loaded, current, *, adopt_from=None
+    db,
+    organization_id,
+    revision_id,
+    loaded,
+    current,
+    *,
+    adopt_from=None,
+    principal,
+    target_id=None,
 ):
     if current:
         if current["revision_id"] == revision_id:
@@ -132,13 +192,20 @@ def attach_product(
         synchronize_repositories(db, product_id, loaded["resolved"]["repositories"])
         return
     product_id = loaded["resolved"]["productId"]
-    db.execute(
-        insert(products).values(
-            id=product_id,
-            name=loaded["name"],
-            owner_team_id=loaded["resolved"]["ownerTeamId"],
+    if target_id is None:
+        db.execute(
+            insert(products).values(
+                id=product_id,
+                name=loaded["name"],
+                owner_team_id=loaded["resolved"]["ownerTeamId"],
+            )
         )
-    )
+    else:
+        db.execute(
+            update(products)
+            .where(products.c.id == product_id)
+            .values(name=loaded["name"])
+        )
     db.execute(
         insert(product_governance).values(
             product_id=product_id,
@@ -148,11 +215,19 @@ def attach_product(
             profile_revision_id=loaded["resolved"]["profile"]["revisionId"],
         )
     )
-    for repository in loaded["resolved"]["repositories"]:
-        db.execute(
-            insert(repo_bindings).values(
-                id=str(uuid4()), product_id=product_id, **repository
-            )
+    synchronize_repositories(db, product_id, loaded["resolved"]["repositories"])
+    if target_id is not None:
+        record_event(
+            db,
+            organization_id=organization_id,
+            actor_id=principal,
+            action="product.manifest.attached",
+            target_id=product_id,
+            team_id=loaded["resolved"]["ownerTeamId"],
+            details={
+                "revisionId": revision_id,
+                "profileRevisionId": loaded["resolved"]["profile"]["revisionId"],
+            },
         )
 
 

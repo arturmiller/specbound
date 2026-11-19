@@ -23,9 +23,10 @@ test('connects a provider pack and shows the real manifest and contract referenc
   await expect(page.getByRole('heading', { name: 'Capability-Vertrag und Testreferenzen' })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Provider-Manifest' })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Packs', exact: true }).click();
-  await page.getByRole('row').filter({ hasText: 'fixture/provider-valid' }).getByRole('link', { name: 'org.acme.aws-network' }).click();
+  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Evidence Packs', exact: true }).click();
+  await page.getByRole('row').filter({ hasText: 'fixture/provider-valid' }).getByRole('link', { name: 'Network Provider' }).click();
   await expect(page.getByRole('heading', { name: 'Provider-Manifest' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Ressourcenrevision' })).toHaveCount(0);
 });
 
 test('invalid provider manifest stays visible as an error without an import', async ({ page }) => {

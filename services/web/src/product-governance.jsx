@@ -21,7 +21,10 @@ export function ProductGovernance({ productId, organizationId, accessToken, canM
   const profile = state.value?.profile;
   return <section aria-label="Geltungsbereich" className="panel">
     <h2>Geltungsbereich</h2>
-    {!product || !profile ? <><p>Ohne Profilzuordnung. Dieses bestehende Produkt hat noch kein Produktmanifest.</p><p>Frühere Prüfungen behalten ihren damaligen Stand. Eine Zuordnung wird nicht aus Repositorynamen oder Subject-Typen abgeleitet.</p></> : <>
+    {!product || !profile ? <>
+      <p>Ohne Profilzuordnung. Dieses bestehende Produkt hat noch kein Produktmanifest.</p>
+      {canManage && <a className="primary-link" href={`/products?${new URLSearchParams({ product: productId, view: 'manifest' })}`}>Produktmanifest zuordnen</a>}
+    </> : <>
       <p>Produkt: {product.resourceId} · {product.version}</p>
       <p>Geltendes Profil: <a href={`/profiles?${new URLSearchParams({ organization: organizationId, resource: profile.id || '' })}`}>{profile.name} · {profile.version}</a></p>
       <p>Katalog: <a href={`/catalogs?${new URLSearchParams({ organization: organizationId, resource: profile.resolved.catalog?.revisionId || '' })}`}>{profile.resolved.catalog?.name} · {profile.resolved.catalog?.version}</a></p>

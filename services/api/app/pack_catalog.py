@@ -3,7 +3,8 @@
 import os
 from typing import Annotated, Callable, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from jsonschema import ValidationError
 from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 from sqlalchemy import JSON, bindparam, delete, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -18,6 +19,7 @@ from app.github_source import configured_github_source
 from app.identity import get_current_principal
 from app.manifest_io import ManifestError, validator
 from app.manifest_source import checked_manifest_path, load_pack_at, snapshot_for_ref
+from app.pack_conversion import export_governance_pack
 from app.pack_revisions import TagMoved, pin_release
 from app.resource_contracts import HERE, ROOT, read
 from app.tables import pack_approvals, pack_catalog, pack_revisions
@@ -270,6 +272,38 @@ def get_pack(
     if row is None:
         raise HTTPException(status_code=404, detail="Pack not found")
     return _serialize(row)
+
+
+@router.get("/organizations/{organization_id}/packs/{revision_id}/manifests")
+def export_pack_manifests(
+    organization_id: str,
+    revision_id: str,
+    principal: Annotated[str, Depends(get_current_principal)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
+    include_bindings: bool = True,
+):
+    pack = get_pack(organization_id, revision_id, principal, db)
+    if pack["kind"] != "governance":
+        raise HTTPException(
+            status_code=422, detail="Only GovernancePacks can be converted"
+        )
+    try:
+        content = export_governance_pack(pack, include_bindings=include_bindings)
+    except (ValidationError, ValueError, RecursionError) as exc:
+        detail = (
+            "Katalog oder Profil passt nicht zum nativen Ressourcenformat."
+            if not include_bindings
+            else "Der Export passt nicht zum nativen Ressourcenformat. Versuche den Export ohne Prüfbindungen."
+        )
+        raise HTTPException(status_code=422, detail=detail) from exc
+    return Response(
+        content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="governance-manifeste.zip"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post(

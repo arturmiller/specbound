@@ -3,6 +3,8 @@ import { ProductWorkspace } from './products.jsx';
 import { ResourceWorkspace } from './resources.jsx';
 import { ProviderPacks } from './provider-packs.jsx';
 import { ManifestProvenance } from './manifest-source.jsx';
+import { PortalSidebar } from './portal-shell.jsx';
+import { GovernancePackArchive } from './governance-pack-archive.jsx';
 
 const navigation = [['products', 'Produkte', '/products'], ['catalogs', 'Kataloge', '/catalogs'], ['profiles', 'Profile', '/profiles'], ['evidence-packs', 'Evidence Packs', '/evidence-packs']];
 
@@ -21,6 +23,8 @@ export function ResourcePortal({ accessToken = '', onSignOut, apiStatus = '' }) 
   const workspace = current?.workspace;
   const products = current?.products || [];
   const product = products.find((item) => item.id === productId);
+  const evidencePackIds = new Set(current?.resources.flatMap((item) =>
+    item.resourceType === 'EvidenceProviderPack' && item.id ? [item.id] : []));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,16 +55,8 @@ export function ResourcePortal({ accessToken = '', onSignOut, apiStatus = '' }) 
     location.assign(`/products?${query}`);
   }
 
-  /** @param {string} path */
-  function workspaceHref(path) {
-    return workspace ? `${path}?${new URLSearchParams({ organization: workspace.organizationId })}` : path;
-  }
-
   return <div className="portal-layout resource-portal">
-    <aside className="portal-sidebar"><a className="portal-brand" href="/products"><span className="brand-mark" aria-hidden="true">◇</span> Specbound</a>
-      <nav className="portal-nav" aria-label="Hauptnavigation">{navigation.map(([id, label, href]) => <a className={`portal-nav-link ${section === id ? 'is-active' : ''}`} aria-current={section === id ? 'page' : undefined} key={id} href={href}>{label}</a>)}</nav>
-      <div className="resource-support"><a href={workspaceHref('/docs')}>Dokumentation</a><details><summary>Weitere Funktionen</summary><a href={workspaceHref('/findings')}>Findings</a><a href={workspaceHref('/pr-checks')}>PR Checks</a><a href={workspaceHref('/legacy-products')}>Manuelle Produktverwaltung</a><a href={workspaceHref('/settings')}>Administration</a></details></div>
-    </aside>
+    <PortalSidebar primarySection={section} organizationId={workspace?.organizationId} />
     <div className="portal-main"><header className="portal-top"><p className="portal-breadcrumb">Arbeitsbereich <strong>{workspace?.organization.name || 'Specbound'}</strong></p><span className="api-status" role="status">{apiStatus}</span>{onSignOut && <><span className="signed-in">Angemeldet.</span><button className="sign-out" onClick={onSignOut}>Lokal abmelden</button></>}</header>
       <main className="portal-content" id="main-content">
         {!current ? <p role="status">Arbeitsbereich wird geladen …</p> : current.error ? <section><h1>Arbeitsbereich nicht verfügbar</h1><p role="alert">{current.error}</p><a href="/docs#docs/getting-started">Einrichtung und Hilfe</a></section> : workspace && <>
@@ -73,7 +69,9 @@ export function ResourcePortal({ accessToken = '', onSignOut, apiStatus = '' }) 
               return <article className="panel" key={item.id}><h2><a href={`/products?${new URLSearchParams({ product: item.id, view: 'requirements' })}`}>{item.name}</a></h2><p>{item.configurationStatus === 'manifest_managed' ? 'Manifest verwaltet' : 'Ohne Profilzuordnung'}</p>{resource ? <><p>Profil: {resource.resolved.profile?.name} · {resource.resolved.profile?.version}</p><ManifestProvenance source={resource.source} defaultPath={resource.source.manifestPath} /></> : <p>Historisches Produkt ohne registrierte Manifestquelle.</p>}<a href={`/products?${new URLSearchParams({ product: item.id, view: 'scope' })}`}>Geltungsbereich ansehen</a></article>;
             })}</div>
             {!products.length ? <p>Noch keine Produkte vorhanden.</p> : !products.some((item) => item.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())) && <p>Keine Produkte für diese Suche. <button onClick={() => setSearch('')}>Suche zurücksetzen</button></p>}
-          </section> : section === 'evidence-packs' ? <ProviderPacks organizationId={workspace.organizationId} organization={workspace.organization} accessToken={accessToken} onBusyChange={setBusy} /> : <ResourceWorkspace organizationId={workspace.organizationId} organization={workspace.organization} resourceType={section === 'profiles' ? 'Profile' : 'Catalog'} accessToken={accessToken} onBusyChange={setBusy} />}
+          </section> : section === 'evidence-packs' ? <ProviderPacks organizationId={workspace.organizationId} organization={workspace.organization} accessToken={accessToken} onBusyChange={setBusy} resourceRevisionIds={evidencePackIds} /> : section === 'catalogs' && params.get('view') === 'archive'
+            ? <GovernancePackArchive organizationId={workspace.organizationId} accessToken={accessToken} />
+            : <ResourceWorkspace organizationId={workspace.organizationId} organization={workspace.organization} resourceType={section === 'profiles' ? 'Profile' : 'Catalog'} accessToken={accessToken} onBusyChange={setBusy} />}
         </>}
       </main>
     </div>

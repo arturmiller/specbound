@@ -205,6 +205,7 @@ class FixtureSource:
             "fixture/oscal-requirements",
             "fixture/oscal-profile-scan",
             "fixture/oscal-updates",
+            "fixture/oscal-adoption",
         ):
             from tests.test_resource_registry import ResourceFixtureSource
 
@@ -268,6 +269,7 @@ class FixtureSource:
             if self.repository in (
                 "fixture/oscal-requirements",
                 "fixture/oscal-profile-scan",
+                "fixture/oscal-adoption",
             ):
                 files = dict(snapshot.files)
                 document = json.loads(files["products/audio-visualizer.json"])

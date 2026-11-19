@@ -137,7 +137,10 @@ export function ProductWorkspace({ organizationId, organization, teams, teamsLoa
   const visibleProducts = products.filter((item) => item.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()) && (!teamFilter || item.ownerTeamId === teamFilter));
   const listUrl = productUrl(organizationId);
   if (product && ['requirements', 'scans', 'scope'].includes(view)) return <ProductViews key={`${product.id}:${accessToken}`} product={product} organizationId={organizationId} accessToken={accessToken} view={view} canEdit={canEditProduct} canManage={isOwner} />;
-  if (view === 'manifest') return <ResourceWorkspace organizationId={organizationId} organization={organization} accessToken={accessToken} resourceType="Product" onBusyChange={onBusyChange} />;
+  if (view === 'manifest' && (!productId || product)) {
+    return <ResourceWorkspace organizationId={organizationId} organization={organization} accessToken={accessToken}
+      resourceType="Product" targetProduct={productId ? product : undefined} onBusyChange={onBusyChange} />;
+  }
   return <section className="products-screen" aria-labelledby="products-heading">
     {error && <p role="alert" className="alert">{error}</p>}
     {productError && <p role="alert" className="alert">{productError}</p>}

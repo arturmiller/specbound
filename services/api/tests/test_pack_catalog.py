@@ -2,18 +2,22 @@
 
 import os
 import unittest
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
+from zipfile import ZipFile
 
 import yaml
 from app.database import get_engine
 from app.git_source import GitSnapshot
 from app.identity import get_current_principal
 from app.main import app
+from app.oscal_resources import load_profile
 from app.pack_catalog import github_source_factory
-from app.tables import pack_catalog
+from app.tables import pack_catalog, principals
 from fastapi.testclient import TestClient
 from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import insert
 
 COMMIT = "a" * 40
 FIXTURES = Path(__file__).parent / "fixtures" / "governance"
@@ -108,6 +112,46 @@ class PackCatalogTest(unittest.TestCase):
             ).status_code,
             403,
         )
+
+    def test_archived_pack_exports_valid_manifests_without_changing_approval(self):
+        with get_engine().begin() as db:
+            db.execute(
+                insert(principals)
+                .values(
+                    id="user:owner", kind="user", issuer="test", subject="catalog-owner"
+                )
+                .on_conflict_do_nothing()
+            )
+        pack = self.client.post(
+            self.url,
+            json={"repository": "example/packs", "tag": "v1", "kind": "governance"},
+        ).json()
+        detail = self.url + "/" + pack["id"]
+        approved = self.client.put(detail + "/approval")
+        self.assertEqual(approved.status_code, 200, approved.text)
+        approval = approved.json()
+        for bindings in (True, False):
+            result = self.client.get(
+                detail + "/manifests", params={"include_bindings": bindings}
+            )
+            self.assertEqual(
+                result.status_code,
+                200,
+                result.text[:300] if result.status_code != 200 else "",
+            )
+            self.assertEqual(result.headers["content-type"], "application/zip")
+            with ZipFile(BytesIO(result.content)) as archive:
+                files = {name: archive.read(name) for name in archive.namelist()}
+            self.assertEqual("bindings.json" in files, bindings)
+            native = load_profile(GitSnapshot(pack["commit"], files), "profile.json")
+            self.assertEqual(native["resolved"]["selectedControlIds"], ["SEC-NET-001"])
+            self.assertEqual(
+                native["resolved"]["controls"][0]["binding"] is not None, bindings
+            )
+        self.assertEqual(self.client.get(detail).json(), pack)
+        self.assertEqual(self.client.get(detail + "/approval").json(), approval)
+        app.dependency_overrides[get_current_principal] = lambda: "user:outsider"
+        self.assertEqual(self.client.get(detail + "/manifests").status_code, 403)
 
     def test_connect_provider_pack_preserves_capability_provenance(self):
         self.source = ProviderFixtureSource("example/provider")
