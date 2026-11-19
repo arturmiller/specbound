@@ -14,7 +14,7 @@ Provider-Schemas werden zusammen mit der validierten Revision gespeichert. Alte 
 
 Im Menü **Kataloge** werden native OSCAL-Kataloge mit Gruppen und Controls aus einer Manifestquelle registriert. Die optionale Vorschau prüft Struktur und lokale Prüfbindungen ohne Speicherung. Der anschließende Import kontrolliert den zuvor gesehenen Commit; ein zwischenzeitlich geänderter Branch wird abgewiesen und muss erneut geprüft werden.
 
-Die Katalogansicht zeigt Anforderungen, Parameter, benötigte Nachweistypen und konfigurierte Regeln. Ein Control ohne automatisierte Prüfmethode bleibt sichtbar. Die konkrete Geltung für ein Produkt entsteht durch dessen Profilzuordnung; ein registrierter Katalog ist keine Bewertung. Bisherige Governance-Packs bleiben über den verlinkten Legacy-Katalog erreichbar.
+Die Katalogansicht zeigt Anforderungen, Parameter, benötigte Nachweistypen und konfigurierte Regeln. Ein Control ohne automatisierte Prüfmethode bleibt sichtbar. Das zugeordnete Profil bestimmt die Geltung für ein Produkt. Sind frühere Governance-Packs vorhanden, zeigt das Katalogarchiv deren Revisionen und Freigaben und bietet einen Export als Katalog, Profil und optionale Prüfbindungen.
 
 Im Menü **Profile** werden native OSCAL-Profile registriert. Sie importieren in der ersten Stufe genau einen Katalog aus demselben Repository-Snapshot und wählen Controls ausdrücklich über ihre IDs aus. Unterstützte Parameteränderungen werden vor dem Speichern in die Prüfbindungen aufgelöst. Zuerst wird die passende Katalogversion registriert; fehlende oder widersprüchliche Referenzen sind ein Fehler. Profil und Katalog sind gegenseitig verlinkt, die tatsächlich eingebundenen Dateien besitzen eigene Commitlinks.
 

@@ -68,7 +68,7 @@ class PublicLicenseScansTest(unittest.TestCase):
         app.dependency_overrides.clear()
 
     def configure_native_product(
-        self, *, allowed=None, unbound=False, license_controls=1
+        self, *, allowed=None, unbound=False, license_controls=1, attach_existing=False
     ):
         self.source = ResourceFixtureSource("example/governance")
         if allowed:
@@ -160,22 +160,51 @@ class PublicLicenseScansTest(unittest.TestCase):
             ("Profile", "profiles/application-baseline.json", "application-baseline"),
             ("Product", "products/audio-visualizer.json", "audio-visualizer"),
         ):
-            response = self.client.post(
-                f"/organizations/{self.org}/resources",
-                json={
-                    "apiVersion": "specbound.example/v1alpha1",
-                    "kind": "ResourceSource",
-                    "metadata": {"id": "source", "version": "1.0.0", "name": "Source"},
-                    "spec": {
-                        "resourceType": kind,
-                        "provider": "github",
-                        "repository": self.source.repository,
-                        "ref": "main",
-                        "manifestPath": path,
-                        "expected": {"id": resource_id, "version": "1.0.0"},
-                    },
+            root = f"/organizations/{self.org}/resources"
+            config = {
+                "apiVersion": "specbound.example/v1alpha1",
+                "kind": "ResourceSource",
+                "metadata": {"id": "source", "version": "1.0.0", "name": "Source"},
+                "spec": {
+                    "resourceType": kind,
+                    "provider": "github",
+                    "repository": self.source.repository,
+                    "ref": "main",
+                    "manifestPath": path,
+                    "expected": {"id": resource_id, "version": "1.0.0"},
                 },
-            )
+            }
+            if attach_existing and kind == "Product":
+                product = json.loads(self.source.files[path])
+                root += f"?product_id={self.product}"
+                self.assertEqual(
+                    self.client.post(root + "&preview=true", json=config).status_code,
+                    409,
+                )
+                product["spec"]["repositories"] = [
+                    {"provider": "github", "repository": "example/public"}
+                ]
+                self.source.files[path] = json.dumps(product).encode()
+                self.assertEqual(self.client.post(root, json=config).status_code, 422)
+                preview = self.client.post(root + "&preview=true", json=config)
+                self.assertEqual(preview.status_code, 200, preview.text)
+                candidate = preview.json()
+                self.assertEqual(candidate["resolved"]["productId"], self.product)
+                headers = {
+                    "X-Expected-Commit": candidate["source"]["commit"],
+                    "X-Review-Digest": candidate["reviewDigest"],
+                }
+                self.assertEqual(
+                    self.client.post(
+                        root,
+                        json=config,
+                        headers={**headers, "X-Review-Digest": "0" * 64},
+                    ).status_code,
+                    409,
+                )
+                response = self.client.post(root, json=config, headers=headers)
+            else:
+                response = self.client.post(root, json=config)
             self.assertEqual(response.status_code, 201, response.text)
         self.product = response.json()["resolved"]["productId"]
         self.binding = self.client.get(f"/products/{self.product}/repositories").json()[
@@ -231,6 +260,31 @@ class PublicLicenseScansTest(unittest.TestCase):
         stored = self.client.get(self.url).json()[0]
         self.assertIsNotNone(stored["assessmentId"], stored)
         return self.client.get("/assessments/" + stored["assessmentId"]).json()
+
+    def test_adopting_a_manifest_keeps_existing_product_repository_and_report(self):
+        before = self.finish_profile_scan(self.observed_result("GPL-3.0-only"))
+        product, binding = self.product, self.binding
+        self.configure_native_product(attach_existing=True)
+        self.assertEqual((self.product, self.binding), (product, binding))
+        self.assertEqual(
+            len(self.client.get(f"/organizations/{self.org}/products").json()), 1
+        )
+        self.assertEqual(
+            self.client.get(f"/assessments/{before['assessment']['id']}").json(), before
+        )
+        following = self.client.post(self.url, json={"ref": "main"})
+        self.assertEqual(following.status_code, 201, following.text)
+        self.assertEqual(following.json()["governanceContext"]["mode"], "profile")
+        self.assertTrue(
+            poll_once(
+                get_engine(),
+                execute=lambda *_: {
+                    "status": "ok",
+                    "result": self.observed_result("MIT"),
+                },
+                job_id=following.json()["id"],
+            )
+        )
 
     def test_native_profile_is_frozen_at_start_and_overrides_the_example_policy(self):
         self.configure_native_product(allowed=["GPL-3.0-only"])

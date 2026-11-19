@@ -8,8 +8,7 @@ test('navigates planned views using a real pinned governance revision without wr
   const pack = await created.json();
   const writes = [];
   page.on('request', (entry) => { if (entry.url().includes('/api/') && !['GET', 'HEAD'].includes(entry.method())) writes.push(entry.method()); });
-  await page.goto(`/packs?organization=${org}`);
-  await page.getByRole('link', { name: 'Governance-Releases' }).click();
+  await page.goto(`/packs?organization=${org}&view=releases`);
   await expect(page.getByRole('heading', { name: 'Governance-Releases', exact: true })).toBeVisible();
   await page.locator('.governance-releases li').filter({ hasText: pack.repository }).getByRole('link', { name: `${pack.manifest.metadata.id} · ${pack.tag}` }).click();
   await expect(page.locator('dl').getByText(pack.repository, { exact: true })).toBeVisible();

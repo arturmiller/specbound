@@ -43,34 +43,60 @@ export function organizationHref(href, organizationId) {
 export function PortalShell({ section, organizationId, organizations, onOrganizationChange, organizationBusy = false, onSignOut, apiStatus, children }) {
   const active = navigation.find((item) => item.id === section);
   const organization = organizations.find((item) => item.id === organizationId);
-  const initials = organization?.name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0].toLocaleUpperCase()).join('') || 'S';
-  return <div className="portal-layout">
-    <aside className="portal-sidebar">
-      <a className="portal-brand" href="/products"><span className="brand-mark" aria-hidden="true">◇</span> Specbound</a>
-      <nav aria-label="Hauptnavigation" className="portal-nav">
-        {navigation.map((item) => <a key={item.id} className={`portal-nav-link ${section === item.id ? 'is-active' : ''}`}
-          aria-current={section === item.id ? 'page' : undefined} href={organizationHref(item.href, organizationId)}>
-          <span className="nav-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>
-        </a>)}
-      </nav>
-      <div className="sidebar-organization">
-        <span className="organization-avatar" aria-hidden="true">{initials}</span>
-        <div className="organization-picker">
-          {organizations.length ? <label>Organisation<select aria-label="Organisation" value={organizationId} disabled={organizationBusy} onChange={(event) => onOrganizationChange(event.target.value)}>
-            {organizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select></label> : <span>Keine Organisation</span>}
-          <small>Organisation und Zugriff</small>
-        </div>
-      </div>
-    </aside>
+  const administration = ['settings', 'teams', 'agents', 'products'].includes(section);
+  const primarySection = ({ packs: 'catalogs', providers: 'evidence-packs' })[section];
+  return <div className="portal-layout resource-portal">
+    <PortalSidebar primarySection={primarySection} organizationId={organizationId} secondarySection={section} />
     <div className="portal-main">
       <header className="portal-top">
         <p className="portal-breadcrumb"><span aria-hidden="true">◈</span> {organization?.name || 'Organisation'} <span aria-hidden="true">/</span> <strong>{active?.label || (section === 'assessment' ? 'Assessment' : 'Seite')}</strong></p>
-        <a className="portal-search" href={organizationHref('/overview', organizationId)}><span aria-hidden="true">⌕</span> Suche öffnen</a>
         <span className="api-status" role="status">{apiStatus}</span>
         {onSignOut && <><span className="signed-in">Angemeldet.</span><button className="sign-out" type="button" onClick={onSignOut}>Lokal abmelden</button></>}
       </header>
-      <main className="portal-content" id="main-content">{children}</main>
+      <main className="portal-content" id="main-content">
+        {administration && organizations.length > 0 && <label className="field">Organisation
+          <select value={organizationId} disabled={organizationBusy} onChange={(event) => onOrganizationChange(event.target.value)}>
+            {organizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>}
+        {children}
+      </main>
     </div>
   </div>;
+}
+
+/** @param {{primarySection?: string, organizationId?: string, secondarySection?: string}} props */
+export function PortalSidebar({ primarySection, organizationId = '', secondarySection }) {
+  const primary = [
+    ['products', 'Produkte', '/products'],
+    ['catalogs', 'Kataloge', '/catalogs'],
+    ['profiles', 'Profile', '/profiles'],
+    ['evidence-packs', 'Evidence Packs', '/evidence-packs'],
+  ];
+  const secondary = [
+    ['findings', 'Findings', '/findings'],
+    ['pr-checks', 'PR Checks', '/pr-checks'],
+    ['evidence', 'Nachweisverzeichnis', '/evidence'],
+    ['settings', 'Administration', '/settings'],
+  ];
+  const inAdministration = ['settings', 'teams', 'agents', 'products'].includes(secondarySection || '');
+  return <aside className="portal-sidebar">
+    <a className="portal-brand" href="/products"><span className="brand-mark" aria-hidden="true">◇</span> Specbound</a>
+    <nav className="portal-nav" aria-label="Hauptnavigation">
+      {primary.map(([id, label, href]) => <a key={id} className={`portal-nav-link ${primarySection === id ? 'is-active' : ''}`}
+        aria-current={primarySection === id ? 'page' : undefined} href={href}>{label}</a>)}
+    </nav>
+    <div className="resource-support">
+      <a href={organizationHref('/docs', organizationId)} aria-current={secondarySection === 'docs' ? 'page' : undefined}>Dokumentation</a>
+      <details open={Boolean(secondarySection && secondarySection !== 'docs')}><summary>Weitere Funktionen</summary>
+        {secondary.map(([id, label, href]) => <a key={id} href={organizationHref(href, organizationId)}
+          aria-current={secondarySection === id ? 'page' : undefined}>{label}</a>)}
+        {inAdministration && <>
+          <a href={organizationHref('/teams', organizationId)} aria-current={secondarySection === 'teams' ? 'page' : undefined}>Teams</a>
+          <a href={organizationHref('/agents', organizationId)} aria-current={secondarySection === 'agents' ? 'page' : undefined}>Agenten</a>
+          <a href={organizationHref('/legacy-products', organizationId)} aria-current={secondarySection === 'products' ? 'page' : undefined}>Manuelle Produktverwaltung</a>
+        </>}
+      </details>
+    </div>
+  </aside>;
 }

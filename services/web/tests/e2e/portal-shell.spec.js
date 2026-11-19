@@ -31,9 +31,11 @@ test('creates an organization and navigates with stable URLs and browser history
   await expect(page.getByRole('combobox', { name: 'Organisation' })).toHaveValue(first.id);
   await expect(page.getByRole('heading', { name: first.name })).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Hauptnavigation' });
-  await nav.getByRole('link', { name: 'Teams', exact: true }).click();
+  await expect(nav.getByRole('link')).toHaveText(['Produkte', 'Kataloge', 'Profile', 'Evidence Packs']);
+  const teams = page.locator('.resource-support').getByRole('link', { name: 'Teams', exact: true });
+  await teams.click();
   await expect(page).toHaveURL(/\/teams\?organization=org-one/);
-  await expect(nav.getByRole('link', { name: 'Teams', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(teams).toHaveAttribute('aria-current', 'page');
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Workspace-Einstellungen' })).toBeVisible();
   await page.reload();
@@ -69,6 +71,6 @@ test('the portal stays usable at mobile width', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Specbound' })).toBeFocused();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
+  await page.locator('.resource-support').getByRole('link', { name: 'Teams', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Teams', exact: true })).toBeVisible();
 });

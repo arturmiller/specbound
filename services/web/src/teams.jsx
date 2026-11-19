@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PackWorkspace } from './packs.jsx';
+import { GovernancePackArchive } from './governance-pack-archive.jsx';
 import { ProductWorkspace } from './products.jsx';
 import { Overview } from './overview.jsx';
 import { Documentation } from './docs.jsx';
@@ -163,7 +163,7 @@ export function TeamWorkspace({ accessToken = '', onSignOut, authConfigured = fa
       <p>Lege zuerst eine Organisation an oder wähle eine zugängliche Organisation aus.</p><a href="/settings">Zu den Einstellungen</a></div>}
     {section === 'teams' && organizationsReady && organizationId && <TeamsScreen key={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} teamsError={teamsError} accessToken={accessToken} request={request} errorMessage={errorMessage} onBusyChange={setBusy} />}
     {section === 'products' && organizationsReady && organizationId && <ProductWorkspace key={`products-${organizationId}`} organizationId={organizationId} organization={currentOrganization} teams={teams} teamsLoading={teamsLoading} accessToken={accessToken} onBusyChange={setBusy} />}
-    {section === 'packs' && organizationsReady && organizationId && <PackWorkspace key={`packs-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
+    {section === 'packs' && organizationsReady && organizationId && <GovernancePackArchive key={`packs-${organizationId}`} organizationId={organizationId} accessToken={accessToken} />}
     {section === 'catalogs' && organizationsReady && organizationId && <ResourceWorkspace key={`resources-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
     {section === 'profiles' && organizationsReady && organizationId && <ResourceWorkspace key={`profiles-${organizationId}`} resourceType="Profile" organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}
     {(section === 'providers' || section === 'evidence-packs') && organizationsReady && organizationId && <ProviderPacks key={`providers-${organizationId}`} organizationId={organizationId} organization={currentOrganization} accessToken={accessToken} onBusyChange={setBusy} />}

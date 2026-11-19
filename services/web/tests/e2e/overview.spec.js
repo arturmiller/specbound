@@ -113,5 +113,5 @@ test('a pack result opens the actual selected pack revision', async ({ page, req
   await overview.getByRole('link', { name: /v1.2.0/ }).click();
   await expect(page).toHaveURL(new RegExp(`pack=${pack.id}`));
   await expect(page.getByRole('heading', { name: 'com.acme.security' })).toBeVisible();
-  await expect(page.getByText('fixture/overview-pack', { exact: true })).toBeVisible();
+  await expect(page.getByText(/fixture\/overview-pack/)).toBeVisible();
 });

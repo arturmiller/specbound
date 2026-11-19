@@ -119,8 +119,16 @@ def register_resource(
     db: Annotated[Connection, Depends(get_connection, scope="function")],
     factory: Annotated[Callable[[str], GitSource], Depends(github_source_factory)],
     expected_commit: Annotated[str | None, Header(alias="X-Expected-Commit")] = None,
+    review: Annotated[
+        str | None, Header(alias="X-Review-Digest", pattern=r"^[0-9a-f]{64}$")
+    ] = None,
+    product_id: str | None = None,
     preview: bool = False,
 ):
+    if product_id and not preview and (not expected_commit or not review):
+        raise HTTPException(
+            status_code=422, detail="Preview the product assignment first"
+        )
     return import_resource(
         organization_id,
         data,
@@ -130,6 +138,8 @@ def register_resource(
         factory,
         expected_commit=expected_commit,
         preview=preview,
+        target_product_id=product_id,
+        expected_review_digest=review if product_id and not preview else None,
     )
 
 
@@ -146,6 +156,7 @@ def import_resource(
     adopt_from=None,
     discover_version=False,
     expected_review_digest=None,
+    target_product_id=None,
 ):
     data = copy.deepcopy(data)
     organization_access(db, organization_id, principal, write=True)
@@ -160,6 +171,12 @@ def import_resource(
         validate(data, HERE / "resource-source.schema.json")
         config = data["spec"]
         kind = config["resourceType"]
+        if target_product_id is not None and (
+            not target_product_id or kind != "Product"
+        ):
+            raise ValueError(
+                "Product assignment requires a product ID and a Product manifest"
+            )
         loaders = {
             "Catalog": load_catalog,
             "Profile": load_profile,
@@ -191,7 +208,14 @@ def import_resource(
         if not preview:
             _lock_org(db, organization_id)
         current_product = (
-            resolve_product(db, organization_id, loaded, principal)
+            resolve_product(
+                db,
+                organization_id,
+                loaded,
+                principal,
+                target_id=target_product_id,
+                lock=not preview,
+            )
             if kind == "Product"
             else None
         )
@@ -292,6 +316,8 @@ def import_resource(
             )
         if preview:
             response.status_code = 200
+            if target_product_id:
+                candidate["reviewDigest"] = review_digest(candidate)
             return candidate
         revision = pin_release(
             db,
@@ -331,6 +357,10 @@ def import_resource(
         elif (
             existing["kind"] != kind
             or existing["content_digest"] != loaded["contentDigest"]
+            or (
+                kind == "Product"
+                and existing["resolved"]["productId"] != loaded["resolved"]["productId"]
+            )
         ):
             raise HTTPException(
                 status_code=409,
@@ -353,6 +383,8 @@ def import_resource(
                 loaded,
                 current_product,
                 adopt_from=adopt_from,
+                principal=principal,
+                target_id=target_product_id,
             )
         return get_resource(organization_id, revision["id"], principal, db)
     except TagMoved as exc:

@@ -35,3 +35,35 @@ test('registers a real product manifest and follows product to profile and catal
   await page.getByRole('link', { name: 'Application Controls · 1.0.0' }).click();
   await expect(page.getByRole('heading', { name: 'Application Controls', exact: true })).toBeVisible();
 });
+
+test('assigns a manifest to an existing product through its scope page', async ({ page }) => {
+  const context = await (await page.request.get('/api/workspace')).json();
+  const root = `/api/organizations/${org}`;
+  for (const [kind, path, id] of [['Catalog', 'catalogs/application.json', 'application-controls'], ['Profile', 'profiles/application-baseline.json', 'application-baseline']]) {
+    const response = await page.request.post(`${root}/resources`, { data: {
+      apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource',
+      metadata: { id, version: '1.0.0', name: id },
+      spec: { resourceType: kind, provider: 'github', repository: 'fixture/oscal', ref: 'main', manifestPath: path, expected: { id, version: '1.0.0' } },
+    } });
+    expect(response.status()).toBe(201);
+  }
+  const product = await (await page.request.post(`${root}/products`, {
+    data: { name: 'Existing Audio Visualizer', ownerTeamId: context.defaultOwnerTeamId },
+  })).json();
+  const repositories = `/api/products/${product.id}/repositories`;
+  const binding = await (await page.request.post(repositories, {
+    data: { provider: 'github', repository: 'djfun/audio-visualizer-python' },
+  })).json();
+  await page.goto(`/products?product=${product.id}&view=scope`);
+  await page.getByRole('link', { name: 'Produktmanifest zuordnen' }).click();
+  await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal-adoption');
+  await page.getByLabel('Erwartete Produkt-ID').fill('audio-visualizer-adoption');
+  const assign = page.getByRole('button', { name: 'Manifest zuordnen', exact: true });
+  await expect(assign).toBeDisabled();
+  await page.getByRole('button', { name: 'Vorschau prüfen' }).click();
+  await expect(assign).toBeEnabled();
+  await assign.click();
+  await expect(page).toHaveURL(new RegExp(`product=${product.id}&view=scope`));
+  await expect(page.getByText('Geltendes Profil:')).toBeVisible();
+  expect((await (await page.request.get(repositories)).json())[0].id).toBe(binding.id);
+});

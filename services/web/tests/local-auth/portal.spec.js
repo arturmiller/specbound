@@ -35,12 +35,12 @@ test('local login uses an API access token and creates the first organization', 
   await page.getByLabel('Organisationsname').fill('Lokale Organisation');
   await page.getByRole('button', { name: 'Organisation erstellen' }).click();
   await expect(page.getByRole('combobox', { name: 'Organisation', exact: true })).toHaveValue(/.+/);
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
+  await page.locator('.resource-support').getByRole('link', { name: 'Teams', exact: true }).click();
   await page.getByRole('link', { name: 'Team erstellen' }).click();
   await page.getByLabel('Teamname').fill('Lokales Team');
   await page.getByRole('button', { name: 'Team erstellen und weiter' }).click();
   await expect(page.getByRole('heading', { name: 'Mitglieder & Rollen' })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Produkte', exact: true }).click();
+  await page.getByRole('link', { name: 'Manuelle Produktverwaltung', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Produkte', level: 1 })).toBeVisible();
   await page.getByRole('link', { name: 'Produkt registrieren' }).click();
   await page.getByLabel('Produktname').fill('Lokales Produkt');
@@ -54,18 +54,19 @@ test('local login uses an API access token and creates the first organization', 
   await expect(page.getByText('Keine Scanbeobachtungen vorhanden. Discovery-Zustand: UNKNOWN.')).toBeVisible();
   await page.getByRole('link', { name: 'Produkt ansehen' }).click();
   await expect(page.getByRole('heading', { name: 'Produktdetails' })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Packs', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pack-Katalog', level: 1 })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Provider', exact: true }).click();
+  await page.goto('/packs');
+  await expect(page.getByRole('heading', { name: 'Archiv der Governance-Packs', level: 1 })).toBeVisible();
+  await page.goto('/providers');
   await expect(page.getByRole('heading', { name: 'Evidence Provider', exact: true })).toBeVisible();
   await expect(page.getByText('Noch keine Provider-Packs verbunden.')).toBeVisible();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Evidence', exact: true }).click();
+  await page.getByRole('link', { name: 'Nachweisverzeichnis', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Evidence-Register' })).toBeVisible();
   await expect(page.getByText('Keine Evidence auf dieser Seite vorhanden. Evidenzlage: UNKNOWN.')).toBeVisible();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Übersicht', exact: true }).click();
+  await page.goto('/overview');
   await expect(page.getByRole('heading', { name: 'Übersicht und Suche' })).toBeVisible();
   await expect(page.getByText('Keine Bewertungen vorhanden. Gesamtzustand: UNKNOWN.')).toBeVisible();
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Agenten', exact: true }).click();
+  await page.getByRole('link', { name: 'Administration', exact: true }).click();
+  await page.locator('.resource-support').getByRole('link', { name: 'Agenten', exact: true }).click();
   await page.getByRole('link', { name: '+ Agent registrieren' }).click();
   await page.getByLabel('Anzeigename').fill('Lokaler Agent');
   await page.getByRole('button', { name: 'Agent anlegen und Teams zuordnen' }).click();
@@ -85,7 +86,7 @@ test('local login uses an API access token and creates the first organization', 
   await page.getByRole('button', { name: 'Widerrufen' }).click();
   await expect(page.getByRole('button', { name: 'Widerrufen' })).toHaveCount(0);
   await expect(page.locator('.agent-credentials li')).toContainText('Widerrufen');
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
+  await page.locator('.resource-support').getByRole('link', { name: 'Teams', exact: true }).click();
 
   await page.reload();
   await expect(page.getByRole('link', { name: 'Lokales Team' })).toBeVisible();
@@ -94,7 +95,7 @@ test('local login uses an API access token and creates the first organization', 
 
 test('existing organization persists after restart', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Teams', exact: true }).click();
+  await page.locator('.resource-support').getByRole('link', { name: 'Teams', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Lokales Team' })).toBeVisible();
   const organization = page.getByRole('combobox', { name: 'Organisation', exact: true });
   await expect(organization.locator('option')).toHaveCount(1);

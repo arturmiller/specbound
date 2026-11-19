@@ -14,34 +14,26 @@ test('retains the selected pack and its approval when the page reloads', async (
     else if (path === '/api/auth/config') data = { enabled: false };
     else if (path === '/api/auth/me') data = { id: 'user:fixture', kind: 'user' };
     else if (path === '/api/organizations') data = [{ id: org, name: 'Fixture Organization', ownerPrincipalId: 'user:fixture' }];
-    else if (path === `/api/organizations/${org}/packs`) {
-      if (route.request().method() === 'POST') { data = pack('third'); packs.push(data); }
-      else data = packs;
-    }
+    else if (path === `/api/organizations/${org}/packs`) data = packs;
     else if (path === `/api/organizations/${org}/packs/first/approval`) data = { revisionId: 'first', approved: false, approvedBy: null };
     else if (path === `/api/organizations/${org}/packs/second/approval`) data = { revisionId: 'second', approved: true, approvedBy: 'user:fixture' };
-    else if (path === `/api/organizations/${org}/packs/third/approval`) data = { revisionId: 'third', approved: false, approvedBy: null };
     else if (path.endsWith('/overview')) data = { products: [], packs: [], findings: [], assessments: [] };
     else data = [];
     await route.fulfill({ json: data });
   });
 
   await page.goto(`/packs?organization=${org}`);
-  await page.getByRole('link', { name: 'second', exact: true }).click();
+  await page.getByRole('link', { name: /^second ·/ }).click();
   await expect(page).toHaveURL(/pack=second/);
-  await expect(page.getByText('Freigabestatus: Freigegeben von user:fixture')).toBeVisible();
+  await expect(page.getByText('Freigegeben von user:fixture')).toBeVisible();
   await page.goto(page.url());
   await expect(page.getByRole('heading', { name: 'second', exact: true })).toBeVisible();
-  await expect(page.getByText('Freigabestatus: Freigegeben von user:fixture')).toBeVisible();
+  await expect(page.getByText('Freigegeben von user:fixture')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Zurück zum Katalog' }).click();
-  await page.getByRole('link', { name: 'Repository verbinden' }).click();
-  await page.getByLabel('Repository', { exact: true }).fill('fixture/third');
-  await page.getByLabel('Release-Tag').fill('v1.0.0');
-  await page.getByRole('button', { name: 'Pack verbinden' }).click();
-  await expect(page.getByRole('heading', { name: 'third', exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/pack=third/);
+  await page.getByRole('link', { name: 'Alle archivierten Governance-Packs' }).click();
+  await page.getByRole('link', { name: /^first ·/ }).click();
+  await expect(page).toHaveURL(/pack=first/);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'third', exact: true })).toBeVisible();
-  await expect(page.getByText('Freigabestatus: Nicht freigegeben')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'first', exact: true })).toBeVisible();
+  await expect(page.getByText('Nicht freigegeben')).toBeVisible();
 });

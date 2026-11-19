@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CapabilityUsage } from './capability-usage.jsx';
 import { ResourceRevisions } from './resource-revisions.jsx';
 import { ManifestProvenance, ManifestSourceFields } from './manifest-source.jsx';
+import { GovernancePackArchive } from './governance-pack-archive.jsx';
 
 /** @typedef {{prose?: string, parts?: NativePart[]}} NativePart */
 /** @typedef {{id: string, title: string, parts: NativePart[], parameters: unknown[], groupKey: string, methodStatus: string, binding: {target: {kind: string}, requiredEvidence: {capability: string}, assertions: unknown[]} | null}} ResourceControl */
@@ -48,8 +49,8 @@ export function CatalogControls({ resource }) {
   </div>;
 }
 
-/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, resourceType?: 'Catalog' | 'Profile' | 'Product' | 'EvidenceProviderPack', onBusyChange: (busy: boolean) => void}} props */
-export function ResourceWorkspace({ organizationId, organization, accessToken = '', resourceType = 'Catalog', onBusyChange }) {
+/** @param {{organizationId: string, organization?: {ownerPrincipalId?: string}, accessToken?: string, resourceType?: 'Catalog' | 'Profile' | 'Product' | 'EvidenceProviderPack', targetProduct?: {id: string, name: string}, onBusyChange: (busy: boolean) => void}} props */
+export function ResourceWorkspace({ organizationId, organization, accessToken = '', resourceType = 'Catalog', targetProduct, onBusyChange }) {
   const isProfile = resourceType === 'Profile';
   const isProduct = resourceType === 'Product';
   const isEvidence = resourceType === 'EvidenceProviderPack';
@@ -59,7 +60,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   const defaultPath = isEvidence ? 'provider.yaml' : isProduct ? 'products/audio-visualizer.json' : isProfile ? 'profiles/application-baseline.json' : 'catalogs/application.json';
   const selected = new URLSearchParams(location.search).get('resource') || '';
   const view = (isProduct || isEvidence) ? 'connect' : new URLSearchParams(location.search).get('view') || (selected ? 'detail' : 'list');
-  const scope = `${organizationId}:${accessToken}:${resourceType}`;
+  const scope = `${organizationId}:${accessToken}:${resourceType}:${targetProduct?.id || ''}`;
   const root = `/api/organizations/${encodeURIComponent(organizationId)}/resources`;
   const listUrl = `${isEvidence ? '/evidence-packs' : isProduct ? '/products' : isProfile ? '/profiles' : '/catalogs'}?${new URLSearchParams({ organization: organizationId })}`;
   const [state, setState] = useState(/** @type {{scope: string, resources: Resource[], principal: {id: string, kind: string} | null, error: string}} */ ({ scope: '', resources: [], principal: null, error: '' }));
@@ -73,7 +74,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   const [previewBusy, setPreviewBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [previewState, setPreviewState] = useState(/** @type {{key: string, value: Resource} | null} */ (null));
+  const [previewState, setPreviewState] = useState(/** @type {{key: string, value: Resource & {reviewDigest?: string}} | null} */ (null));
   const controller = useRef(/** @type {AbortController | null} */ (null));
   const configKey = JSON.stringify([scope, repository, ref, refType, path, expectedId, version]);
   const preview = previewState?.key === configKey ? previewState.value : null;
@@ -124,7 +125,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
 
   /** @param {boolean} previewOnly */
   async function submit(previewOnly) {
-    if (!isOwner) return;
+    if (!isOwner || (!previewOnly && targetProduct && !preview?.reviewDigest)) return;
     controller.current?.abort();
     const current = new AbortController(); controller.current = current;
     setBusy(true); setPreviewBusy(previewOnly); setFailure('');
@@ -132,15 +133,26 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
     const timeout = setTimeout(() => { timedOut = true; current.abort(); }, 45000);
     const config = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: isEvidence ? 'evidence-source' : expectedId.trim(), version: isEvidence ? '1.0.0' : version.trim(), name: expectedId.trim() }, spec: { resourceType, provider: 'github', repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || defaultPath, expected: { id: expectedId.trim(), version: version.trim() } } };
     try {
-      const response = await fetch(`${root}?preview=${previewOnly}`, { method: 'POST', signal: current.signal, headers: { ...headers, 'Content-Type': 'application/json', ...(!previewOnly && preview ? { 'X-Expected-Commit': preview.source.commit } : {}) }, body: JSON.stringify(config) });
+      const query = new URLSearchParams({ preview: String(previewOnly) });
+      if (targetProduct) query.set('product_id', targetProduct.id);
+      /** @type {Record<string, string>} */
+      const submissionHeaders = { ...headers, 'Content-Type': 'application/json' };
+      if (!previewOnly && preview) {
+        submissionHeaders['X-Expected-Commit'] = preview.source.commit;
+        if (preview.reviewDigest) submissionHeaders['X-Review-Digest'] = preview.reviewDigest;
+      }
+      const response = await fetch(`${root}?${query}`, {
+        method: 'POST', signal: current.signal, headers: submissionHeaders, body: JSON.stringify(config),
+      });
       if (!response.ok) {
         const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: 'Manifest, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt. Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.', 504: 'Zeitlimit beim Lesen der Git-Quelle erreicht. Bitte erneut versuchen.' };
         const body = await response.json().catch(() => ({}));
+        if (body.detail === 'First manifest must include every existing product repository') throw new Error('Das erste Produktmanifest muss alle bereits verbundenen Repositories enthalten.');
         if (response.status === 409 && typeof body.detail === 'string' && body.detail.startsWith('Catalog is archived;')) throw new Error('Dieser Katalog ist archiviert. Stelle ihn unter „Entfernte Kataloge“ wieder her.');
         const detail = typeof body.detail === 'string' ? ` ${body.detail}` : '';
         throw new Error((messages[/** @type {403 | 409 | 422 | 503 | 504} */ (response.status)] || 'Die Quelle konnte nicht verarbeitet werden.') + detail);
       }
-      /** @type {Resource} */ const saved = await response.json();
+      /** @type {Resource & {reviewDigest?: string}} */ const saved = await response.json();
       if (current.signal.aborted) return;
       if (previewOnly) setPreviewState({ key: configKey, value: saved });
       else window.location.assign(isEvidence ? `${listUrl}&pack=${encodeURIComponent(saved.id || '')}` : isProduct ? `${listUrl}&product=${encodeURIComponent(saved.resolved.productId || '')}&view=scope` : `${listUrl}&resource=${encodeURIComponent(saved.id || '')}`);
@@ -164,14 +176,15 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   return <section className="resource-workspace" aria-labelledby="resources-heading">
     {(failure || (state.scope === scope && state.error)) && <p role="alert" className="alert">{failure || state.error}</p>}
     {loading ? <p role="status">{plural} werden geladen …</p> : state.error ? null : view === 'connect' ? <>
-      <h1 id="resources-heading">{noun}quelle konfigurieren</h1><p>{description}</p>
+      <h1 id="resources-heading">{targetProduct ? `Manifest für ${targetProduct.name} zuordnen` : `${noun}quelle konfigurieren`}</h1><p>{description}</p>
+      {targetProduct && <p>Das Manifest muss alle verbundenen Repositories enthalten. Die Zuordnung legt das Profil für künftige Prüfungen fest. Bestehende Prüfungen bleiben am selben Produkt.</p>}
       {isOwner ? <form className="panel resource-source-form" onSubmit={(event) => { event.preventDefault(); void submit(false); }}>
         <label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label>
         <label className="field">Git-Ref<input required maxLength={200} value={ref} onChange={(event) => setRef(event.target.value)} /></label>
         <ManifestSourceFields path={path} onPath={setPath} refType={refType} onRefType={setRefType} defaultPath={defaultPath} />
         <label className="field">Erwartete {noun}-ID<input required maxLength={isEvidence ? 200 : 128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isEvidence ? 'org.example.provider' : isProduct ? 'audio-visualizer' : isProfile ? 'application-baseline' : 'application-controls'} /></label>
         <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={isEvidence ? undefined : 128} /></label>
-        <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy}>{noun} registrieren</button>{busy && previewBusy && <button type="button" onClick={cancel}>Abbrechen</button>}</div>
+        <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy || Boolean(targetProduct && !preview?.reviewDigest)}>{targetProduct ? 'Manifest zuordnen' : `${noun} registrieren`}</button>{busy && previewBusy && <button type="button" onClick={cancel}>Abbrechen</button>}</div>
         {busy && <p role="status">Quelle wird gelesen und geprüft …</p>}
         <p>Der Import prüft die Struktur und speichert eine feste Revision. Ein Produktprofil legt die geltenden Controls fest.</p>
       </form> : <p>Nur Organisationseigentümer können neue Quellen registrieren.</p>}
@@ -194,7 +207,7 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
       <div className="page-heading"><div><h1 id="resources-heading">{plural}</h1><p>{description}</p></div>{isOwner && <a className="primary-link" href={`${listUrl}&view=connect`}>{noun} registrieren</a>}</div>
       {resources.length ? <div className="resource-product-grid">{resources.map((item) => <article className="panel" key={item.id}><h2><a href={`${listUrl}&resource=${encodeURIComponent(item.id || '')}`}>{item.name}</a></h2><p className="break-value">{item.resourceId} · Version {item.version}</p><p>{item.resolved.controls.length} Controls · Registriert · Struktur geprüft</p><p className="break-value">Repository: <a href={`https://github.com/${item.source.repository}`}>{item.source.repository}</a></p><ManifestProvenance source={item.source} defaultPath={item.source.manifestPath} /></article>)}</div> : <p>Noch keine nativen {plural} registriert.</p>}
       {resourceType === 'Catalog' && archivedCatalogs.length > 0 && <details className="panel"><summary>Entfernte Kataloge ({archivedCatalogs.length})</summary><ul>{archivedCatalogs.map((item) => <li key={item.id}><a href={`${listUrl}&resource=${encodeURIComponent(item.id || '')}`}>{item.name} · {item.version}</a></li>)}</ul></details>}
-      {!isProfile && <p><a href={`/packs?${new URLSearchParams({ organization: organizationId })}`}>Bestehende Governance-Packs ansehen</a></p>}
+      {resourceType === 'Catalog' && <GovernancePackArchive key={scope} organizationId={organizationId} accessToken={accessToken} entry />}
     </>}
   </section>;
 }
