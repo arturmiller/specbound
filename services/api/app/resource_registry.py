@@ -125,9 +125,12 @@ def register_resource(
     product_id: str | None = None,
     preview: bool = False,
 ):
-    if product_id and not preview and (not expected_commit or not review):
+    if not preview and (
+        (product_id and not review) or (review and not expected_commit)
+    ):
         raise HTTPException(
-            status_code=422, detail="Preview the product assignment first"
+            status_code=422,
+            detail="A reviewed registration requires its commit and review digest",
         )
     return import_resource(
         organization_id,
@@ -139,7 +142,28 @@ def register_resource(
         expected_commit=expected_commit,
         preview=preview,
         target_product_id=product_id,
-        expected_review_digest=review if product_id and not preview else None,
+        expected_review_digest=review if not preview else None,
+    )
+
+
+@router.post("/organizations/{organization_id}/resources/preview")
+def preview_resource_source(
+    organization_id: str,
+    data: dict,
+    response: Response,
+    principal: Annotated[str, Depends(get_current_principal)],
+    db: Annotated[Connection, Depends(get_connection, scope="function")],
+    factory: Annotated[Callable[[str], GitSource], Depends(github_source_factory)],
+):
+    return import_resource(
+        organization_id,
+        data,
+        response,
+        principal,
+        db,
+        factory,
+        preview=True,
+        discover_identity=True,
     )
 
 
@@ -155,6 +179,7 @@ def import_resource(
     preview=False,
     adopt_from=None,
     discover_version=False,
+    discover_identity=False,
     expected_review_digest=None,
     target_product_id=None,
 ):
@@ -168,8 +193,12 @@ def import_resource(
             status_code=422, detail="Expected commit must be a full Git object ID"
         )
     try:
-        validate(data, HERE / "resource-source.schema.json")
-        config = data["spec"]
+        if discover_identity:
+            validate(data, HERE / "resource-preview.schema.json")
+            config = data
+        else:
+            validate(data, HERE / "resource-source.schema.json")
+            config = data["spec"]
         kind = config["resourceType"]
         if target_product_id is not None and (
             not target_product_id or kind != "Product"
@@ -199,12 +228,13 @@ def import_resource(
             )
         finally:
             source.close()
-        if discover_version:
-            config["expected"]["version"] = loaded["version"]
-        if config["expected"] != {"id": loaded["id"], "version": loaded["version"]}:
-            raise ValueError(
-                "Manifest identity/version differs from the registered reference"
-            )
+        if not discover_identity:
+            if discover_version:
+                config["expected"]["version"] = loaded["version"]
+            if config["expected"] != {"id": loaded["id"], "version": loaded["version"]}:
+                raise ValueError(
+                    "Manifest identity/version differs from the registered reference"
+                )
         if not preview:
             _lock_org(db, organization_id)
         current_product = (
@@ -316,7 +346,7 @@ def import_resource(
             )
         if preview:
             response.status_code = 200
-            if target_product_id:
+            if target_product_id or discover_identity:
                 candidate["reviewDigest"] = review_digest(candidate)
             return candidate
         revision = pin_release(
@@ -374,6 +404,16 @@ def import_resource(
         if kind == "EvidenceProviderPack":
             persist_loaded_pack(
                 db, organization_id, revision, "provider", loaded["providerPack"]
+            )
+        if (
+            existing is not None
+            and kind == "Profile"
+            and expected_review_digest is not None
+            and existing["resolved"] != loaded["resolved"]
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="The saved profile revision is bound to a different catalog revision",
             )
         if kind == "Product":
             attach_product(

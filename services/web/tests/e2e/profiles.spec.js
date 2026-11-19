@@ -10,10 +10,15 @@ test('imports a native profile and navigates its selected controls and catalog',
     spec: { resourceType: 'Catalog', provider: 'github', repository: 'fixture/oscal', ref: 'main', refType: 'branch', manifestPath: 'catalogs/application.json', expected: { id: 'application-controls', version: '1.0.0' } },
   } });
   expect(catalog.status()).toBe(201);
+  const savedCatalog = await catalog.json();
   await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
-  await page.getByLabel('Erwartete Profil-ID').fill('application-baseline');
+  await expect(page.getByLabel('Erwartete Profil-ID')).toHaveCount(0);
+  await expect(page.getByLabel('Erwartete Version')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Profil registrieren' })).toBeDisabled();
   await page.getByRole('button', { name: 'Vorschau prüfen' }).click();
-  await expect(page.getByRole('region', { name: 'Profilvorschau' })).toBeVisible();
+  const preview = page.getByRole('region', { name: 'Profilvorschau' });
+  await expect(preview.getByText('application-baseline · Version 1.0.0')).toBeVisible();
+  await expect(preview.getByRole('link', { name: 'Application Controls · 1.0.0' })).toHaveAttribute('href', new RegExp(`resource=${savedCatalog.id}$`));
   await page.getByRole('button', { name: 'Profil registrieren' }).click();
   await expect(page.getByRole('heading', { name: 'Application Baseline', exact: true })).toBeVisible();
   const licensing = page.locator('details.resource-control').filter({ has: page.locator('summary').filter({ hasText: 'PY-LIC-001' }) });
