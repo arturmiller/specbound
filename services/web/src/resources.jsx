@@ -54,6 +54,8 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
   const isProfile = resourceType === 'Profile';
   const isProduct = resourceType === 'Product';
   const isEvidence = resourceType === 'EvidenceProviderPack';
+  const discoverIdentity = resourceType === 'Catalog' || isProfile;
+  const needsReview = discoverIdentity || Boolean(targetProduct);
   const plural = isEvidence ? 'Evidence Packs' : isProduct ? 'Produkte' : isProfile ? 'Profile' : 'Kataloge';
   const noun = isEvidence ? 'Evidence Pack' : isProduct ? 'Produkt' : isProfile ? 'Profil' : 'Katalog';
   const description = isEvidence ? 'Ein Evidence Pack beschreibt versionierte Capabilities und ihre Datenverträge. Die Registrierung erteilt keine Ausführungsrechte.' : isProduct ? 'Das Produktmanifest definiert die Produktquellen und die genaue geltende Profilversion.' : isProfile ? 'Profile wählen Controls und Parameter aus einem Katalog.' : 'Gruppierte Anforderungen und ihre gespeicherten Quellen.';
@@ -125,13 +127,24 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
 
   /** @param {boolean} previewOnly */
   async function submit(previewOnly) {
-    if (!isOwner || (!previewOnly && targetProduct && !preview?.reviewDigest)) return;
+    if (!isOwner || (!previewOnly && needsReview && !preview?.reviewDigest)) return;
     controller.current?.abort();
     const current = new AbortController(); controller.current = current;
     setBusy(true); setPreviewBusy(previewOnly); setFailure('');
+    if (previewOnly && discoverIdentity) setPreviewState(null);
     let timedOut = false;
     const timeout = setTimeout(() => { timedOut = true; current.abort(); }, 45000);
-    const config = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: isEvidence ? 'evidence-source' : expectedId.trim(), version: isEvidence ? '1.0.0' : version.trim(), name: expectedId.trim() }, spec: { resourceType, provider: 'github', repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || defaultPath, expected: { id: expectedId.trim(), version: version.trim() } } };
+    const source = { resourceType, repository: repository.trim(), ref: ref.trim(), refType, manifestPath: path.trim() || defaultPath };
+    const lookup = previewOnly && discoverIdentity;
+    const expected = discoverIdentity && preview
+      ? { id: preview.resourceId, version: preview.version }
+      : { id: expectedId.trim(), version: version.trim() };
+    const config = lookup ? source : {
+      apiVersion: 'specbound.example/v1alpha1',
+      kind: 'ResourceSource',
+      metadata: { id: isEvidence ? 'evidence-source' : expected.id, version: isEvidence ? '1.0.0' : expected.version, name: expected.id },
+      spec: { ...source, provider: 'github', expected },
+    };
     try {
       const query = new URLSearchParams({ preview: String(previewOnly) });
       if (targetProduct) query.set('product_id', targetProduct.id);
@@ -141,12 +154,18 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
         submissionHeaders['X-Expected-Commit'] = preview.source.commit;
         if (preview.reviewDigest) submissionHeaders['X-Review-Digest'] = preview.reviewDigest;
       }
-      const response = await fetch(`${root}?${query}`, {
+      const response = await fetch(lookup ? `${root}/preview` : `${root}?${query}`, {
         method: 'POST', signal: current.signal, headers: submissionHeaders, body: JSON.stringify(config),
       });
       if (!response.ok) {
-        const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: 'Manifest, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt. Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.', 504: 'Zeitlimit beim Lesen der Git-Quelle erreicht. Bitte erneut versuchen.' };
+        if (!previewOnly && discoverIdentity && (response.status === 409 || response.status === 422)) {
+          setPreviewState(null);
+        }
+        const invalid = 'Manifest, Prüfbindungen oder Referenzen sind ungültig oder noch nicht unterstützt.';
+        const messages = { 403: 'Für diese Aktion fehlen die erforderlichen Rechte.', 409: 'Die Quelle hat sich verändert oder ID und Version bezeichnen andere Inhalte. Prüfe die Quelle erneut oder veröffentliche eine neue Version.', 422: discoverIdentity ? invalid : invalid + ' Prüfe auch die erwartete ID und Version.', 503: 'Die Git-Quelle ist nicht verfügbar oder nicht konfiguriert.', 504: 'Zeitlimit beim Lesen der Git-Quelle erreicht. Bitte erneut versuchen.' };
         const body = await response.json().catch(() => ({}));
+        if (body.detail === 'Reviewed configuration or references changed; check again') throw new Error('Die geprüfte Quelle oder ihre Referenzen haben sich geändert. Prüfe die Vorschau erneut.');
+        if (body.detail === 'The saved profile revision is bound to a different catalog revision') throw new Error('Dieses Profil ist bereits mit einer anderen Katalogrevision registriert. Öffne den gespeicherten Stand oder registriere eine neue Profilrevision.');
         if (body.detail === 'First manifest must include every existing product repository') throw new Error('Das erste Produktmanifest muss alle bereits verbundenen Repositories enthalten.');
         if (response.status === 409 && typeof body.detail === 'string' && body.detail.startsWith('Catalog is archived;')) throw new Error('Dieser Katalog ist archiviert. Stelle ihn unter „Entfernte Kataloge“ wieder her.');
         const detail = typeof body.detail === 'string' ? ` ${body.detail}` : '';
@@ -182,13 +201,26 @@ export function ResourceWorkspace({ organizationId, organization, accessToken = 
         <label className="field">Repository<input required maxLength={200} value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" /></label>
         <label className="field">Git-Ref<input required maxLength={200} value={ref} onChange={(event) => setRef(event.target.value)} /></label>
         <ManifestSourceFields path={path} onPath={setPath} refType={refType} onRefType={setRefType} defaultPath={defaultPath} />
-        <label className="field">Erwartete {noun}-ID<input required maxLength={isEvidence ? 200 : 128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isEvidence ? 'org.example.provider' : isProduct ? 'audio-visualizer' : isProfile ? 'application-baseline' : 'application-controls'} /></label>
-        <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={isEvidence ? undefined : 128} /></label>
-        <div className="resource-actions"><button type="button" disabled={busy || !repository.trim() || !expectedId.trim()} onClick={() => { void submit(true); }}>Vorschau prüfen</button><button type="submit" disabled={busy || Boolean(targetProduct && !preview?.reviewDigest)}>{targetProduct ? 'Manifest zuordnen' : `${noun} registrieren`}</button>{busy && previewBusy && <button type="button" onClick={cancel}>Abbrechen</button>}</div>
+        {!discoverIdentity && <>
+          <label className="field">Erwartete {noun}-ID<input required maxLength={isEvidence ? 200 : 128} value={expectedId} onChange={(event) => setExpectedId(event.target.value)} placeholder={isEvidence ? 'org.example.provider' : 'audio-visualizer'} /></label>
+          <label className="field">Erwartete Version<input required value={version} onChange={(event) => setVersion(event.target.value)} maxLength={isEvidence ? undefined : 128} /></label>
+        </>}
+        <div className="resource-actions">
+          <button type="button" disabled={busy || !repository.trim() || !ref.trim() || (!discoverIdentity && !expectedId.trim())} onClick={() => { void submit(true); }}>Vorschau prüfen</button>
+          <button type="submit" disabled={busy || (needsReview && !preview?.reviewDigest)}>{targetProduct ? 'Manifest zuordnen' : `${noun} registrieren`}</button>
+          {busy && previewBusy && <button type="button" onClick={cancel}>Abbrechen</button>}
+        </div>
         {busy && <p role="status">Quelle wird gelesen und geprüft …</p>}
         <p>Der Import prüft die Struktur und speichert eine feste Revision. Ein Produktprofil legt die geltenden Controls fest.</p>
       </form> : <p>Nur Organisationseigentümer können neue Quellen registrieren.</p>}
-      {preview && <section className="panel" aria-label={`${noun}vorschau`}><h2>Vorschau · {preview.name}</h2><p>Struktur geprüft · noch nicht registriert</p><ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} />{isEvidence ? <p>{preview.resolved.capabilities?.map((item) => `${item.id}/${item.version}`).join(', ')} · Struktur geprüft, keine Ausführungsfreigabe</p> : isProduct ? <><p>{preview.resolved.controls.length} geltende Controls aus {preview.resolved.profile?.name} · {preview.resolved.profile?.version}</p><p>Produktquellen: {preview.resolved.repositories?.map((item) => item.repository).join(', ')}</p></> : <CatalogControls key={preview.contentDigest} resource={preview} />}</section>}
+      {preview && <section className="panel" aria-label={`${noun}vorschau`}>
+        <h2>Vorschau · {preview.name}</h2>
+        <p>Struktur geprüft · noch nicht registriert</p>
+        {discoverIdentity && <p className="break-value">{preview.resourceId} · Version {preview.version}</p>}
+        <ManifestProvenance source={preview.source} defaultPath={preview.source.manifestPath} />
+        {isProfile && preview.resolved.catalog && <p>Eingebundener Katalog: <a href={`/catalogs?${new URLSearchParams({ organization: organizationId, resource: preview.resolved.catalog.revisionId })}`}>{preview.resolved.catalog.name} · {preview.resolved.catalog.version}</a></p>}
+        {isEvidence ? <p>{preview.resolved.capabilities?.map((item) => `${item.id}/${item.version}`).join(', ')} · Struktur geprüft, keine Ausführungsfreigabe</p> : isProduct ? <><p>{preview.resolved.controls.length} geltende Controls aus {preview.resolved.profile?.name} · {preview.resolved.profile?.version}</p><p>Produktquellen: {preview.resolved.repositories?.map((item) => item.repository).join(', ')}</p></> : <CatalogControls key={preview.contentDigest} resource={preview} />}
+      </section>}
       <a href={listUrl}>Zu den {plural}</a>
     </> : selected ? resource ? <>
       <div className="page-heading"><div><h1 id="resources-heading">{resource.name}</h1><p>{resource.resourceId} · Version {resource.version} · {resource.state === 'archived' ? 'Archiviert' : 'Registriert'} · Struktur geprüft</p></div><a href={listUrl}>Alle {plural}</a></div>

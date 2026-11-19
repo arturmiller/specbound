@@ -255,6 +255,75 @@ class ResourceRegistryTest(unittest.TestCase):
         self.assertEqual(response.status_code, 409, response.text)
         self.assertEqual(self.client.get(self.url).json(), [])
 
+    def discover(self):
+        source = {
+            key: value
+            for key, value in self.config["spec"].items()
+            if key not in ("expected", "provider")
+        }
+        result = self.client.post(self.url + "/preview", json=source)
+        self.assertEqual(result.status_code, 200, result.text)
+        return result.json()
+
+    def test_preview_discovers_catalog_identity_and_saves_the_reviewed_commit(self):
+        preview = self.discover()
+        self.assertEqual(
+            (preview["resourceId"], preview["version"]),
+            ("application-controls", "1.0.0"),
+        )
+        self.assertEqual(self.client.get(self.url).json(), [])
+        headers = {
+            "X-Expected-Commit": preview["source"]["commit"],
+            "X-Review-Digest": preview["reviewDigest"],
+        }
+        self.assertEqual(
+            self.post(headers={"X-Review-Digest": preview["reviewDigest"]}).status_code,
+            422,
+        )
+        self.source.commit = "b" * 40
+        self.assertEqual(self.post(headers=headers).status_code, 409)
+        self.assertEqual(self.client.get(self.url).json(), [])
+        self.source.commit = preview["source"]["commit"]
+        result = self.post(headers=headers)
+        self.assertEqual(result.status_code, 201, result.text)
+        self.assertEqual(result.json()["source"], preview["source"])
+
+    def test_profile_preview_rejects_a_changed_catalog_resolution_at_the_same_commit(
+        self,
+    ):
+        catalog_config = copy.deepcopy(self.config)
+        catalog = self.post().json()
+        self.source.commit = "b" * 40
+        self.config = self.profile_config()
+        profile_config = copy.deepcopy(self.config)
+        preview = self.discover()
+        self.assertEqual(preview["resolved"]["catalog"]["revisionId"], catalog["id"])
+
+        self.config = catalog_config
+        matching_catalog = self.post()
+        self.assertEqual(matching_catalog.status_code, 201, matching_catalog.text)
+        self.config = profile_config
+        headers = {
+            "X-Expected-Commit": preview["source"]["commit"],
+            "X-Review-Digest": preview["reviewDigest"],
+        }
+        self.assertEqual(self.post(headers=headers).status_code, 409)
+        self.assertTrue(
+            all(
+                item["resourceType"] == "Catalog"
+                for item in self.client.get(self.url).json()
+            )
+        )
+        updated = self.discover()
+        self.assertEqual(
+            updated["resolved"]["catalog"]["revisionId"], matching_catalog.json()["id"]
+        )
+        saved = self.post(
+            headers={**headers, "X-Review-Digest": updated["reviewDigest"]}
+        )
+        self.assertEqual(saved.status_code, 201, saved.text)
+        self.assertEqual(saved.json()["resolved"], updated["resolved"])
+
     def test_duplicate_ids_bad_bindings_and_wrong_identity_fail_before_persistence(
         self,
     ):

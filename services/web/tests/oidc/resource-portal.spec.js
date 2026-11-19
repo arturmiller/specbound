@@ -54,7 +54,7 @@ test('authenticated resource portal keeps product context above tabs and exposes
     }
     await nav.getByRole('link', { name: 'Kataloge', exact: true }).click();
     await page.getByRole('link', { name: 'Katalog registrieren', exact: true }).click();
-    for (const label of ['Repository', 'Git-Ref', 'Ref-Typ', 'Manifestpfad', 'Erwartete Katalog-ID', 'Erwartete Version']) {
+    for (const label of ['Repository', 'Git-Ref', 'Ref-Typ', 'Manifestpfad']) {
       const field = page.getByLabel(label, { exact: true });
       await expect(field).toBeVisible();
       await field.focus();

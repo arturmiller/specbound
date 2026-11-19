@@ -9,11 +9,14 @@ test('previews and imports grouped native OSCAL controls with real stored proven
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   await page.goto(`/catalogs?organization=${org}&view=connect`);
   await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
-  await page.getByLabel('Erwartete Katalog-ID').fill('application-controls');
+  await expect(page.getByLabel('Erwartete Katalog-ID')).toHaveCount(0);
+  await expect(page.getByLabel('Erwartete Version')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Katalog registrieren' })).toBeDisabled();
   const before = ownCatalogs(await (await page.request.get(root)).json());
   await page.getByRole('button', { name: 'Vorschau prüfen' }).click();
   const preview = page.getByRole('region', { name: 'Katalogvorschau' });
   await expect(preview.getByText('Struktur geprüft · noch nicht registriert')).toBeVisible();
+  await expect(preview.getByText('application-controls · Version 1.0.0')).toBeVisible();
   expect((ownCatalogs(await (await page.request.get(root)).json())).length).toBe(before.length);
   await expect(preview.getByRole('heading', { name: /Application Governance/ })).toBeVisible();
   await page.getByRole('button', { name: 'Katalog registrieren' }).click();
@@ -43,27 +46,39 @@ test('previews and imports grouped native OSCAL controls with real stored proven
   expect(consoleErrors).toEqual([]);
 });
 
-test('wrong native identity stays an explicit error and does not create a revision', async ({ page }) => {
+test('a changed source requires a new preview before registration', async ({ page }) => {
   await page.goto(`/catalogs?organization=${org}&view=connect`);
   await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
-  await page.getByLabel('Erwartete Katalog-ID').fill('missing-catalog');
   const before = ownCatalogs(await (await page.request.get(root)).json());
-  await page.getByRole('button', { name: 'Katalog registrieren' }).click();
-  await expect(page.getByRole('alert')).toContainText('ungültig oder noch nicht unterstützt');
+  const register = page.getByRole('button', { name: 'Katalog registrieren' });
+  const check = page.getByRole('button', { name: 'Vorschau prüfen' });
+  await check.click();
+  await expect(register).toBeEnabled();
+  const ref = page.getByLabel('Git-Ref', { exact: true });
+  await ref.fill('another-branch');
+  await expect(register).toBeDisabled();
+  await ref.fill('main');
+  await page.route(`**${root}?preview=false`, (route) => route.fulfill({
+    status: 409, json: { detail: 'Reviewed configuration or references changed; check again' },
+  }));
+  await register.click();
+  await expect(page.getByRole('alert')).toContainText('Prüfe die Vorschau erneut');
+  await expect(register).toBeDisabled();
+  await expect(page.getByRole('region', { name: 'Katalogvorschau' })).toHaveCount(0);
   expect((ownCatalogs(await (await page.request.get(root)).json())).length).toBe(before.length);
-  await expect(page).toHaveURL(/view=connect/);
+  await check.click();
+  await expect(register).toBeEnabled();
 });
 
 test('a slow source can be cancelled or times out and a later retry remains usable', async ({ page }) => {
   await page.clock.install();
   await page.goto(`/catalogs?organization=${org}&view=connect`);
   await page.getByLabel('Repository', { exact: true }).fill('fixture/oscal');
-  await page.getByLabel('Erwartete Katalog-ID').fill('application-controls');
-  const data = { apiVersion: 'specbound.example/v1alpha1', kind: 'ResourceSource', metadata: { id: 'preview', version: '1.0.0', name: 'Preview' }, spec: { resourceType: 'Catalog', provider: 'github', repository: 'fixture/oscal', ref: 'main', refType: 'branch', manifestPath: 'catalogs/application.json', expected: { id: 'application-controls', version: '1.0.0' } } };
-  const fixture = await (await page.request.post(`${root}?preview=true`, { data })).json();
+  const data = { resourceType: 'Catalog', repository: 'fixture/oscal', ref: 'main', refType: 'branch', manifestPath: 'catalogs/application.json' };
+  const fixture = await (await page.request.post(`${root}/preview`, { data })).json();
   const release = [];
   let requests = 0;
-  await page.route(`**${root}?preview=true`, async (route) => {
+  await page.route(`**${root}/preview`, async (route) => {
     requests += 1;
     if (requests <= 2) await new Promise((resolve) => release.push(resolve));
     await route.fulfill({ json: fixture });
