@@ -14,9 +14,10 @@ from app.identity import get_current_principal
 from app.main import app
 from app.oscal_resources import load_profile
 from app.pack_catalog import github_source_factory
-from app.tables import pack_catalog
+from app.tables import pack_catalog, principals
 from fastapi.testclient import TestClient
 from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import insert
 
 COMMIT = "a" * 40
 FIXTURES = Path(__file__).parent / "fixtures" / "governance"
@@ -113,12 +114,22 @@ class PackCatalogTest(unittest.TestCase):
         )
 
     def test_archived_pack_exports_valid_manifests_without_changing_approval(self):
+        with get_engine().begin() as db:
+            db.execute(
+                insert(principals)
+                .values(
+                    id="user:owner", kind="user", issuer="test", subject="catalog-owner"
+                )
+                .on_conflict_do_nothing()
+            )
         pack = self.client.post(
             self.url,
             json={"repository": "example/packs", "tag": "v1", "kind": "governance"},
         ).json()
         detail = self.url + "/" + pack["id"]
-        approval = self.client.put(detail + "/approval").json()
+        approved = self.client.put(detail + "/approval")
+        self.assertEqual(approved.status_code, 200, approved.text)
+        approval = approved.json()
         for bindings in (True, False):
             result = self.client.get(
                 detail + "/manifests", params={"include_bindings": bindings}
