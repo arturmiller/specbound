@@ -415,6 +415,9 @@ class PublicLicenseScansTest(unittest.TestCase):
                 result = response.json()
                 self.assertEqual(result["assessment"]["pullRequestNumber"], 17)
                 self.assertEqual(result["assessment"]["gitSha"], head)
+                self.assertEqual(
+                    result["pullRequestUrl"], f"https://github.com/{repository}/pull/17"
+                )
                 if scenario in {"wrong-commit", "timeout", "no-lockfile"}:
                     self.assertEqual(result["evidence"], [])
                     self.assertEqual(result["sourceScan"]["files"], [])

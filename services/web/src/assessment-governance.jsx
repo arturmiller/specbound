@@ -9,9 +9,12 @@ import { ManifestProvenance } from './manifest-source.jsx';
 export function ScanSource({ sourceScan }) {
   const { repository, ref, sourceRevision, files, unsupportedFiles } = sourceScan;
   const baseUrl = `https://github.com/${repository}`;
+  const reason = sourceScan.reason === 'no supported lockfile'
+    ? 'Dem geprüften Commit fehlt eine uv.lock. Die Lizenzen der Abhängigkeiten konnten nicht bewertet werden.'
+    : sourceScan.reason;
   return <>
     <p>Quellabdeckung: {sourceScan.coverage || 'Nicht gespeichert'}</p>
-    <p>{sourceScan.reason}</p>
+    <p>{reason}</p>
     <p className="break-value">Prüfquelle: {sourceRevision ? <a href={`${baseUrl}/commit/${sourceRevision}`}>{repository} · {sourceRevision.slice(0, 12)}</a> : <>{repository} · Revision nicht beobachtet</>} · Ref: {ref}</p>
     {sourceRevision && files.length > 0 && <ul>{files.map((path) => <li key={path}><a href={`${baseUrl}/blob/${sourceRevision}/${path.split('/').map(encodeURIComponent).join('/')}`}>{path}</a></li>)}</ul>}
     {unsupportedFiles.length > 0 && <p className="break-value">Nicht unterstützte Dateien: {unsupportedFiles.join(', ')}</p>}
