@@ -126,6 +126,25 @@ class CheckTest(unittest.TestCase):
         with self.engine.connect() as db:
             self.assertEqual(assess_snapshot(db, self.snapshot, NOW), ("failure", None))
 
+    def test_example_policy_or_unassessed_profile_control_cannot_pass(self):
+        with self.engine.connect() as db:
+            self.assertEqual(
+                assess_snapshot(
+                    db,
+                    {**self.snapshot, "governance_context": {"mode": "legacy-example"}},
+                    NOW,
+                ),
+                ("failure", None),
+            )
+            self.assertEqual(
+                assess_snapshot(
+                    db,
+                    {**self.snapshot, "control_results": [{"status": "UNKNOWN"}]},
+                    NOW,
+                ),
+                ("failure", None),
+            )
+
     def test_fail_and_unknown_are_never_success(self):
         with self.engine.connect() as db:
             for status in ("FAIL", "UNKNOWN"):

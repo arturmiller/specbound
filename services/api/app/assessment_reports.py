@@ -179,7 +179,16 @@ def assessment_report(
     source_scan = None
     if public_scan is not None:
         result = public_scan["result"] or {}
-        if result.get("sourceRevision") != snapshot["git_sha"]:
+        observed = result.get("sourceRevision")
+        unavailable = (
+            snapshot["context"] == "pull_request"
+            and public_scan["status"] == "failed"
+            and public_scan["ref"] == snapshot["git_sha"]
+            and observed is None
+            and result.get("sourceCoverage") == "UNKNOWN"
+            and not result.get("files")
+        )
+        if not unavailable and observed != snapshot["git_sha"]:
             raise HTTPException(
                 status_code=409, detail="Scan provenance does not match assessment"
             )
@@ -187,7 +196,7 @@ def assessment_report(
             "id": public_scan["id"],
             "repository": public_scan["repository"],
             "ref": public_scan["ref"],
-            "sourceRevision": result["sourceRevision"],
+            "sourceRevision": observed,
             "coverage": result.get("sourceCoverage"),
             "files": result.get("files", []),
             "unsupportedFiles": result.get("unsupportedFiles", []),

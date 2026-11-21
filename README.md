@@ -116,7 +116,7 @@ den Git-Ref angeben und den Scan starten. Für einen ersten Versuch eignet sich
 Der Zugriff benötigt kein
 GitHub-Token; GitHub kann anonyme Aufrufe pro IP begrenzen.
 
-Der Worker verarbeitet ausschließlich ausdrücklich gestartete öffentliche
+Der manuelle Scan-Worker verarbeitet ausdrücklich gestartete öffentliche
 Scans. Er liest erkannte Lockfiles der aufgelösten Git-Revision und Paketmetadaten
 von öffentlichem PyPI, ohne Pakete zu installieren oder Repository-Code
 auszuführen. Nur `uv.lock` wird derzeit ausgewertet. Andere Python-Lockfiles,
@@ -140,6 +140,30 @@ Allgemeine Image-, Secret- und Egress-Freigaben bleiben separat.
 Die Scanansicht speichert Aufträge und Ergebnisse in den bestehenden lokalen
 Compose-Volumes. Wird das Overlay nicht verwendet, bleiben neue Aufträge wartend,
 bis ein entsprechender Worker aktiviert wird.
+
+### Öffentliche Lizenzscans für Pull Requests
+
+Mit `PR_LICENSE_SCAN_ENABLED=true` verarbeitet der Worker auch signierte
+PR-Ereignisse der konfigurierten GitHub-Installation. Das Repository muss am
+Produkt gebunden sein. Der Worker liest öffentliche Lockfiles am gespeicherten
+PR-Head und friert die Produktregeln bei Scanbeginn ein. Das gespeicherte
+Assessment steht am Produkt unter **Anforderungen → Prüfung**. Die Anzeige
+enthält PR-Nummer, Scan-Revision, Controls und Nachweise.
+Für einen grünen Lizenzcheck braucht das Produkt ein explizit zugeordnetes
+Profil mit ausgeführten und bestandenen Controls. Ohne Profil dient die
+Beispielrichtlinie zur Anzeige des Scans.
+
+Für einen lokalen Test kann die API mit einem eigenen Test-Secret signierte
+Zustellungen auf `/webhooks/github` annehmen. Der Test
+`test_signed_pr_scan_publishes_commit_check_and_portal_evidence` prüft diese
+Kette mit PostgreSQL und einer simulierten GitHub-Checks-API. Eine echte
+Zustellung benötigt eine erreichbare HTTPS-Webhook-Adresse und das zur App
+passende Secret. Zum Veröffentlichen des Checks benötigt die App
+`checks: write` und `pull_requests: read`. Ergänze dafür
+`-f compose.github-publishing.yaml` beim Compose-Start. Dieses Overlay
+aktiviert den Check-Publisher und bindet den App-Schlüssel für ihn lesend ein.
+Ein roter Check blockiert den Merge, wenn er
+in den Repository-Regeln als Pflichtcheck eingerichtet ist.
 
 Für den regulären Anbieter wieder die `OIDC_*`-Variablen wie oben beschrieben
 setzen und `docker compose up --build` ohne das lokale Overlay starten. Ohne

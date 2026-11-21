@@ -74,7 +74,7 @@ def claim(db, *, now, job_id=None):
     return {**dict(row), "lease_token": token, "attempts": row["attempts"] + 1}
 
 
-def _run(repository, ref):
+def run_scan(repository, ref):
     try:
         with tempfile.TemporaryFile() as output:
             process = subprocess.run(
@@ -205,7 +205,7 @@ def finish(db, lease, response, *, now, clock=_clock):
     return True
 
 
-def poll_once(engine, *, execute=_run, clock=_clock, processing=None, job_id=None):
+def poll_once(engine, *, execute=run_scan, clock=_clock, processing=None, job_id=None):
     with engine.begin() as db:
         lease = claim(db, now=clock(), job_id=job_id)
     if lease is None:

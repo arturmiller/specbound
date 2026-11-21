@@ -121,7 +121,13 @@ def create_snapshot(
         or not 0 <= len(evaluation_ids) <= MAX_EVALUATIONS
         or (
             not evaluation_ids
-            and (not governance_context or governance_context.get("mode") != "profile")
+            and (
+                not governance_context
+                or (
+                    governance_context.get("mode") != "profile"
+                    and context != "pull_request"
+                )
+            )
         )
         or any(not isinstance(item, str) or not item for item in evaluation_ids)
         or len(set(evaluation_ids)) != len(evaluation_ids)

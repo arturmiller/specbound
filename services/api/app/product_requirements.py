@@ -146,13 +146,19 @@ def product_requirements(
         .mappings()
         .all()
     )
+    snapshot_by_id = {row["id"]: row for row in snapshots}
     linked = {scan["assessment_id"] for scan in scans}
     options = [
         {
             "id": scan["assessment_id"] or "scan:" + scan["id"],
             "createdAt": scan["created_at"],
             "status": scan["status"],
-            "context": "repository",
+            "context": snapshot_by_id.get(scan["assessment_id"], {}).get(
+                "context", "repository"
+            ),
+            "pullRequestNumber": snapshot_by_id.get(scan["assessment_id"], {}).get(
+                "pull_request_number"
+            ),
             "ref": scan["ref"],
             "repository": scan["repository"],
             "profileName": scan["profile_name"],

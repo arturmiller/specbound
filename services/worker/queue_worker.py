@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timezone
 
 from app.job_queue import LeaseLost, claim_next, fail_job, finish_job
+from app.tables import products
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,13 @@ def poll_once(
         if not callable(build_snapshot):
             raise ValueError("The handler must return a snapshot builder")
         with engine.begin() as db:
+            # Repository edits and deletion lock the product before dependent rows.
+            if not db.execute(
+                select(products.c.id)
+                .where(products.c.id == lease["productId"])
+                .with_for_update()
+            ).first():
+                raise LeaseLost("Product no longer exists")
             finish_job(
                 db,
                 lease["id"],
@@ -47,13 +56,15 @@ def poll_once(
     return True
 
 
-def run_queue(engine, organization_id, prepare, stop, *, interval=1.0):
+def run_queue(engine, organization_id, prepare, stop, *, interval=1.0, lease_seconds=30):
     """Poll until stopped; no queue runs without a supplied handler."""
     if interval <= 0:
         raise ValueError("Polling interval must be positive")
     while not stop.is_set():
         try:
-            worked = poll_once(engine, organization_id, prepare)
+            worked = poll_once(
+                engine, organization_id, prepare, lease_seconds=lease_seconds
+            )
         except SQLAlchemyError:
             logger.warning("Queue database unavailable")
             worked = False
