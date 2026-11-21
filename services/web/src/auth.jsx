@@ -4,7 +4,7 @@ import { TeamWorkspace } from './teams.jsx';
 import { ResourcePortal } from './resource-portal.jsx';
 import { Documentation } from './docs.jsx';
 
-/** @typedef {{enabled: boolean, issuer: string, clientId: string, audience: string}} AuthConfig */
+/** @typedef {{enabled: boolean, issuer: string, clientId: string, audience: string, localDevelopment?: boolean}} AuthConfig */
 
 /** @param {string} path */
 function canonicalLocation(path) {
@@ -39,6 +39,7 @@ export function AuthWorkspace({ apiStatus }) {
         if (!active) return;
         if (!config.enabled) { if (active) setReady(true); return; }
         if (!window.isSecureContext) throw new Error('Secure browser context required');
+        const sharedSession = config.localDevelopment === true && location.hostname === '127.0.0.1';
         const oidc = new UserManager({
           authority: config.issuer,
           client_id: config.clientId,
@@ -48,12 +49,32 @@ export function AuthWorkspace({ apiStatus }) {
           resource: config.audience,
           automaticSilentRenew: false,
           loadUserInfo: false,
-          userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+          userStore: new WebStorageStateStore({ store: sharedSession ? window.localStorage : window.sessionStorage }),
           stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
         });
-        const onExpired = () => { if (active) setUser(null); void oidc.removeUser(); };
+        async function syncUser() {
+          const stored = await oidc.getUser().catch(() => null);
+          if (active) setUser(stored?.expired ? null : stored);
+        }
+        /** @param {StorageEvent} event */
+        function onStorage(event) {
+          if (event.storageArea !== window.localStorage) return;
+          if (event.key === null || event.key === `oidc.user:${config.issuer}:${config.clientId}`) void syncUser();
+        }
+        const onExpired = () => {
+          if (sharedSession) {
+            void syncUser();
+          } else {
+            if (active) setUser(null);
+            void oidc.removeUser();
+          }
+        };
         oidc.events.addAccessTokenExpired(onExpired);
-        cleanup = () => oidc.events.removeAccessTokenExpired(onExpired);
+        if (sharedSession) window.addEventListener('storage', onStorage);
+        cleanup = () => {
+          oidc.events.removeAccessTokenExpired(onExpired);
+          if (sharedSession) window.removeEventListener('storage', onStorage);
+        };
         let current;
         const params = new URLSearchParams(window.location.search);
         if (params.has('code') || (params.has('error') && params.has('state'))) {
@@ -75,7 +96,10 @@ export function AuthWorkspace({ apiStatus }) {
         } else {
           current = await oidc.getUser();
         }
-        if (current?.expired) { await oidc.removeUser(); current = null; }
+        if (current?.expired) {
+          if (!sharedSession) await oidc.removeUser();
+          current = null;
+        }
         if (active) { setManager(oidc); setUser(current); setConfigured(true); setReady(true); }
       } catch {
         if (active) { setError('Anmeldung konnte nicht initialisiert werden.'); setReady(true); }

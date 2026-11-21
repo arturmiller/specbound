@@ -11,6 +11,20 @@ async function signIn(page) {
   await page.getByRole('button', { name: 'Continue' }).click();
 }
 
+test('local login is shared with a separate browser tab and follows logout', async ({ page, context }) => {
+  await signIn(page);
+  await expect(page.getByRole('button', { name: 'Lokal abmelden' })).toBeVisible();
+
+  const assessment = await context.newPage();
+  await assessment.goto('/assessments/local-session-test');
+  await expect(assessment.getByRole('button', { name: 'Lokal abmelden' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Lokal abmelden' }).click();
+  await expect(assessment.getByRole('button', { name: 'Anmelden' })).toBeVisible();
+  await assessment.reload();
+  await expect(assessment.getByRole('button', { name: 'Anmelden' })).toBeVisible();
+});
+
 test('local login uses an API access token and creates the first organization', async ({ page, request }) => {
   const api = 'http://127.0.0.1:8000';
   expect((await request.get(`${api}/organizations`)).status()).toBe(401);
@@ -20,9 +34,9 @@ test('local login uses an API access token and creates the first organization', 
   await expect(page.getByText('Keine Organisationen verfügbar.')).toBeVisible();
 
   const tokens = await page.evaluate(() => {
-    const key = Object.keys(sessionStorage).find((item) => item.startsWith('oidc.user:'));
+    const key = Object.keys(localStorage).find((item) => item.startsWith('oidc.user:'));
     if (!key) throw new Error('OIDC session missing');
-    const user = JSON.parse(sessionStorage.getItem(key));
+    const user = JSON.parse(localStorage.getItem(key));
     const [header, payload] = user.access_token.split('.').slice(0, 2).map((part) => JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))));
     return { access: user.access_token, id: user.id_token, header, payload };
   });

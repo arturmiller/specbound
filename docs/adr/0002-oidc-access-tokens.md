@@ -23,6 +23,7 @@ der zugrunde liegende Account ein Mensch ist. Ein bereits registrierter
 Agenten-Principal wird über diesen Benutzer-Login nicht als Benutzer akzeptiert.
 
 Der Browser speichert die OIDC-Sitzung im tabbezogenen `sessionStorage`.
+Die gemeinsame lokale Entwicklungssitzung ist in ADR 0033 beschrieben.
 „Lokal abmelden“ entfernt diese Sitzung; es beendet weder die Sitzung beim
 Provider noch widerruft es einen bereits ausgestellten Token. Er läuft nach
 seiner vom Provider bestimmten Laufzeit ab. Es wird kein Refresh-Token

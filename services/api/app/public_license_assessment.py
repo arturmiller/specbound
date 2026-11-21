@@ -13,14 +13,13 @@ from app.coverage import PYTHON_LICENSE_SCANNER
 from app.findings import apply_snapshot
 from app.frozen_governance import plan_public_scan
 from app.rule_evaluation import evaluate_and_store
-from app.snapshots import create_snapshot
+from app.snapshots import COMMIT, create_snapshot
 from app.tables import evidence_records, scanner_coverage
 
 CAPABILITY = "python.package-license/v1"
 ENVIRONMENT = "repository"
 TTL_SECONDS = 24 * 60 * 60
 SHA256 = re.compile(r"[0-9a-f]{64}")
-GIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 
 def _subject(job, package, revision, now):
@@ -104,7 +103,7 @@ def _verified_metadata(package):
     return {"licenseExpression": expression, "artifacts": artifacts}
 
 
-def create_public_license_assessment(db, job, result, *, now):
+def create_public_license_assessment(db, job, result, *, now, pull_request_number=None):
     """Use only this worker's result; incomplete information never becomes PASS."""
     packages, files = result.get("packages"), result.get("files")
     source_coverage, revision = (
@@ -113,17 +112,24 @@ def create_public_license_assessment(db, job, result, *, now):
     )
     context = job.get("governance_context")
     profile_bound = context is not None and context.get("mode") == "profile"
+    is_pr = pull_request_number is not None
+    if is_pr:
+        # A source error still has a known target, but no observed revision.
+        if revision is None and source_coverage == "UNKNOWN" and not packages and not files:
+            revision = job["ref"]
+        if revision != job["ref"]:
+            raise ValueError("License scan did not observe the queued commit")
     if (
-        (not profile_bound and source_coverage not in ("covered", "partial"))
+        (not (profile_bound or is_pr) and source_coverage not in ("covered", "partial"))
         or not isinstance(revision, str)
-        or not GIT_SHA.fullmatch(revision)
+        or not COMMIT.fullmatch(revision)
     ):
         return None
     if (
         not isinstance(packages, list)
         or not 0 <= len(packages) <= 200
         or not isinstance(files, list)
-        or (not profile_bound and (not packages or not files))
+        or (not (profile_bound or is_pr) and (not packages or not files))
     ):
         return None
     if any(not isinstance(path, str) or not path or len(path) > 500 for path in files):
@@ -221,9 +227,9 @@ def create_public_license_assessment(db, job, result, *, now):
         db,
         job["organization_id"],
         job["product_id"],
-        context="repository",
+        context="pull_request" if is_pr else "repository",
         binding_id=job["binding_id"],
-        pull_request_number=None,
+        pull_request_number=pull_request_number,
         environment=ENVIRONMENT,
         git_sha=revision,
         pack_sha=policy["revision"],
@@ -232,5 +238,6 @@ def create_public_license_assessment(db, job, result, *, now):
         governance_context=context,
         execution_gaps=execution_gaps,
     )
-    apply_snapshot(db, job["organization_id"], snapshot["id"])
+    if not is_pr:
+        apply_snapshot(db, job["organization_id"], snapshot["id"])
     return snapshot["id"]

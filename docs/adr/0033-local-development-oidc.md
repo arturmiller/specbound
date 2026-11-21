@@ -7,6 +7,12 @@ Der Anbieter stellt dafür RS256-signierte RFC-9068-Access-Tokens aus; die API
 prüft sie unverändert gemäß ADR 0002. Ein ID-Token ist kein API-Access-Token.
 Die registrierte Redirect-URI ist `http://127.0.0.1:5173/`.
 
+Für diesen Entwicklungsanbieter speichert das Portal die kurzlebige
+OIDC-Sitzung im `localStorage` des Loopback-Portals. Weitere Tabs können so
+einen Assessment-Link mit derselben Sitzung öffnen. „Lokal abmelden“ entfernt
+sie für alle Portal-Tabs desselben Browserprofils. Der Anmeldevorgang mit PKCE
+verwendet weiterhin den tabbezogenen `sessionStorage`.
+
 Browser und API verwenden denselben Loopback-Issuer. Die API erreicht den JWKS
 über `http://local-oidc:5556/jwks` im isolierten Docker-Netz. Damit diese eine
 interne HTTP-Adresse zugelassen wird, setzt ausschließlich das lokale Overlay

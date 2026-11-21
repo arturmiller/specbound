@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.coverage import scan_covers
 from app.git_source import SourceUnavailable
-from app.pr_comment import STATUSES
+from app.pr_comment import STATUSES, assessment_url
 from app.pr_comment_delivery import deliver_once
 from app.tables import evidence_records, rule_evaluations, scanner_coverage
 
@@ -16,6 +16,7 @@ CHECK_NAME = "Specbound assessment"
 def assess_snapshot(db, snapshot, now):
     """Return a conservative conclusion and the earliest evidence expiration."""
     counts, evaluations = snapshot["counts"], snapshot["evaluations"]
+    governance = snapshot.get("governance_context") or {}
     if (
         not isinstance(counts, dict)
         or set(counts) != {key for _, key in STATUSES}
@@ -25,6 +26,11 @@ def assess_snapshot(db, snapshot, now):
         or counts["FAIL"]
         or counts["UNKNOWN"]
         or not counts["PASS"]
+        or governance.get("mode") == "legacy-example"
+        or any(
+            control["status"] != "PASS"
+            for control in snapshot.get("control_results") or []
+        )
     ):
         return "failure", None
     expected_ids = snapshot["evaluation_ids"]
@@ -86,6 +92,7 @@ def assess_snapshot(db, snapshot, now):
             ref=scan["ref"],
             expected_commit=snapshot["git_sha"],
             not_after=now,
+            scanner=scan["scanner"],
         ):
             return "failure", None
         ids = row["evidence_ids"]
@@ -119,7 +126,7 @@ def assess_snapshot(db, snapshot, now):
     return "success", min(expiry, now + timedelta(minutes=5))
 
 
-def publish_check(db, source, job, snapshot, _portal, now):
+def publish_check(db, source, job, snapshot, portal, now):
     token = source._token(permissions={"pull_requests": "read", "checks": "write"})
     prefix = f"/repos/{source.repository}"
     pull = source._request("GET", f"{prefix}/pulls/{job['pull_request_number']}", token)
@@ -179,17 +186,24 @@ def publish_check(db, source, job, snapshot, _portal, now):
             )
         return None
     conclusion, expires = assess_snapshot(db, snapshot, now)
+    summary = (
+        "Evidence and coverage are current."
+        if conclusion == "success"
+        else "Assessment failed or evidence and coverage are insufficient."
+    )
     body = {
         "name": CHECK_NAME,
         "status": "completed",
         "conclusion": conclusion,
         "output": {
             "title": "Assessment " + conclusion,
-            "summary": "Evidence and coverage are current."
-            if conclusion == "success"
-            else "Assessment failed or evidence and coverage are insufficient.",
+            "summary": summary,
         },
     }
+    if portal:
+        details_url = assessment_url(portal, snapshot["id"])
+        body["details_url"] = details_url
+        body["output"]["summary"] += f"\n\n[Specbound-Ergebnis öffnen](<{details_url}>)"
     if matches:
         source._request("PATCH", f"{prefix}/check-runs/{matches[0]}", token, json=body)
     else:

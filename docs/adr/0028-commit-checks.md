@@ -27,4 +27,8 @@ Die Veröffentlichung wird über `GITHUB_CHECK_PUBLISHING=true` aktiviert und
 benötigt dieselbe App-Konfiguration wie ADR 0027 sowie `checks: write` und
 `pull_requests: read`. Sie ändert keine Branch-Schutzregeln: Soll der Check einen
 Merge verhindern, muss er dort explizit als verpflichtend eingerichtet sein.
-Ohne Assessment-Handler entstehen weiterhin keine produktiven Ergebnisse.
+Der optionale Lizenzscan-Handler verarbeitet PR-Jobs für öffentliche GitHub-
+Repositories mit `PR_LICENSE_SCAN_ENABLED=true`. Er speichert das Ergebnis und
+die Nachweise am signierten PR-Head. Der Check verlangt vollständige Abdeckung
+und bestandene Controls. Wenn `PORTAL_PUBLIC_URL` konfiguriert ist, verlinkt
+der Check auf das zugehörige Assessment.
