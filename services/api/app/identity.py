@@ -24,6 +24,7 @@ class OidcConfig:
     jwks_url: str
     client_id: str
     audience: str
+    local_development: bool = False
 
 
 def _trusted_url(url: str) -> bool:
@@ -67,7 +68,7 @@ def oidc_config() -> OidcConfig | None:
         return None
     if urlsplit(issuer).scheme == "https" and urlsplit(jwks_url).scheme != "https":
         return None
-    return OidcConfig(issuer, jwks_url, client_id, audience)
+    return OidcConfig(issuer, jwks_url, client_id, audience, local_development=local_jwks)
 
 
 def _unauthorized() -> HTTPException:
@@ -210,6 +211,7 @@ def public_auth_config():
         "issuer": config.issuer,
         "clientId": config.client_id,
         "audience": config.audience,
+        "localDevelopment": config.local_development,
     }
 
 

@@ -162,6 +162,9 @@ passende Secret. Zum Veröffentlichen des Checks benötigt die App
 `checks: write` und `pull_requests: read`. Ergänze dafür
 `-f compose.github-publishing.yaml` beim Compose-Start. Dieses Overlay
 aktiviert den Check-Publisher und bindet den App-Schlüssel für ihn lesend ein.
+Für einen Link zum lokalen Assessment im GitHub-Check setze
+`PORTAL_PUBLIC_URL=http://127.0.0.1:5173`. Der Link öffnet das Portal auf dem
+Rechner, auf dem dieser Stack läuft.
 Ein roter Check blockiert den Merge, wenn er
 in den Repository-Regeln als Pflichtcheck eingerichtet ist.
 

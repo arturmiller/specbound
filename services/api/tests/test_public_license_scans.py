@@ -457,6 +457,10 @@ class PublicLicenseScansTest(unittest.TestCase):
                     github.published[0]["details_url"],
                     f"https://portal.example/assessments/{snapshot}",
                 )
+                self.assertIn(
+                    f"[Specbound-Ergebnis öffnen](<https://portal.example/assessments/{snapshot}>)",
+                    github.published[0]["output"]["summary"],
+                )
 
     def test_adopting_a_manifest_keeps_existing_product_repository_and_report(self):
         before = self.finish_profile_scan(self.observed_result("GPL-3.0-only"))

@@ -186,19 +186,24 @@ def publish_check(db, source, job, snapshot, portal, now):
             )
         return None
     conclusion, expires = assess_snapshot(db, snapshot, now)
+    summary = (
+        "Evidence and coverage are current."
+        if conclusion == "success"
+        else "Assessment failed or evidence and coverage are insufficient."
+    )
     body = {
         "name": CHECK_NAME,
         "status": "completed",
         "conclusion": conclusion,
         "output": {
             "title": "Assessment " + conclusion,
-            "summary": "Evidence and coverage are current."
-            if conclusion == "success"
-            else "Assessment failed or evidence and coverage are insufficient.",
+            "summary": summary,
         },
     }
     if portal:
-        body["details_url"] = assessment_url(portal, snapshot["id"])
+        details_url = assessment_url(portal, snapshot["id"])
+        body["details_url"] = details_url
+        body["output"]["summary"] += f"\n\n[Specbound-Ergebnis öffnen](<{details_url}>)"
     if matches:
         source._request("PATCH", f"{prefix}/check-runs/{matches[0]}", token, json=body)
     else:
