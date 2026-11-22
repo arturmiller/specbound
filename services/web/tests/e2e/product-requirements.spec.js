@@ -116,7 +116,7 @@ test('keeps partial PASS coverage and unsupported lockfile causes visible on the
   await page.request.post(`/api/__e2e/process-public-license-scan?no_observations=true&scan_id=${emptyJob.id}`);
   const empty = (await (await page.request.get(root)).json())[0];
   await page.goto(`/products?organization=${org}&product=${productId}&view=requirements&assessment=${empty.assessmentId}`);
-  await expect(coverage).toContainText('no supported lockfile');
+  await expect(coverage).toContainText('Dem geprüften Commit fehlt eine uv.lock.');
   await expect(coverage).toContainText('poetry.lock');
   await expect(page.getByText('2 Controls · 0 Einzelbewertungen · 0 ausgewählte Nachweise')).toBeVisible();
 });

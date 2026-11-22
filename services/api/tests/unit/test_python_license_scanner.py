@@ -5,6 +5,7 @@ import io
 import json
 import tarfile
 import unittest
+from unittest.mock import patch
 
 from app.git_source import GitSnapshot
 from app.license_policy import evaluate_license
@@ -242,6 +243,29 @@ source = { git = "https://example.invalid/repository" }
         self.assertEqual(scan_python_licenses({})["coverage"], "UNKNOWN")
         self.assertEqual(
             scan_python_licenses({"uv.lock": b"garbage"})["coverage"], "UNKNOWN"
+        )
+
+    def test_reuses_metadata_for_shared_artifacts_and_preserves_each_lockfile(self):
+        lock = b"""version = 1
+[[package]]
+name = "example"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [{ hash = "sha256:DIGEST" }]
+"""
+        shared = lock.replace(b"DIGEST", b"a" * 64)
+        other = lock.replace(b"DIGEST", b"b" * 64)
+        with patch(
+            "app.python_license_scan.read_pypi_license",
+            return_value={"status": "OBSERVED", "expression": "MIT"},
+        ) as read:
+            result = scan_python_licenses(
+                {"api/uv.lock": shared, "worker/uv.lock": shared, "test/uv.lock": other}
+            )
+        self.assertEqual(read.call_count, 2)
+        self.assertEqual(
+            [package["path"] for package in result["packages"]],
+            ["api/uv.lock", "test/uv.lock", "worker/uv.lock"],
         )
 
     def test_unsupported_lockfile_prevents_full_coverage(self):
