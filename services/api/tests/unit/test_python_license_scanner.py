@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 from app.git_source import GitSnapshot
 from app.license_policy import evaluate_license
-from app.pypi_license_metadata import read_pypi_license
+from app.public_license_assessment import _verified_metadata
+from app.pypi_license_metadata import MAX_ARTIFACTS, read_pypi_license
 from app.python_license_scan import scan_python_licenses, scan_python_repository
 from app.python_lockfiles import LockedPackage, find_uv_locks, parse_uv_lock
 
@@ -120,6 +121,74 @@ class PyPIMetadataTest(unittest.TestCase):
         self.assertEqual(result["expression"], "MIT")
         self.assertEqual(result["artifacts"][0]["artifactSha256"], self.artifact_hash)
 
+    def test_verified_legacy_license_preserves_the_original_declaration(self):
+        self.metadata = (
+            b"Metadata-Version: 2.3\nName: example\nVersion: 1.2\n"
+            b"License: BSD-3-Clause\nClassifier: License :: OSI Approved :: BSD License\n\n"
+        )
+        self.item["core-metadata"]["sha256"] = hashlib.sha256(self.metadata).hexdigest()
+        result = read_pypi_license(self.package, self.fetch)
+        self.assertEqual(result["expression"], "BSD-3-Clause")
+        self.assertEqual(result["artifacts"][0]["licenseField"], "License")
+        self.assertEqual(result["artifacts"][0]["declaredLicense"], "BSD-3-Clause")
+
+    def test_ambiguous_and_dynamic_legacy_metadata_remains_unknown(self):
+        for declaration in (
+            b"License: Dual License",
+            b"License: BSD",
+            b"License: MIT\nDynamic: License",
+            b"License: MIT\nLicense: GPL-3.0-only",
+            b"License: MIT\nClassifier: License :: OSI Approved :: GPL Version 3",
+            b"License: MIT\nLicense-Expression: \n",
+        ):
+            with self.subTest(declaration=declaration):
+                self.metadata = (
+                    b"Metadata-Version: 2.3\nName: example\nVersion: 1.2\n"
+                    + declaration
+                    + b"\n\n"
+                )
+                self.item["core-metadata"]["sha256"] = hashlib.sha256(
+                    self.metadata
+                ).hexdigest()
+                self.assertEqual(
+                    read_pypi_license(self.package, self.fetch)["status"], "UNKNOWN"
+                )
+
+    def test_explicit_spdx_expression_has_priority_over_legacy_text(self):
+        self.metadata = self.metadata.replace(
+            b"License-Expression: MIT\n",
+            b"License-Expression: GPL-3.0-only\nLicense: MIT\n",
+        )
+        self.item["core-metadata"]["sha256"] = hashlib.sha256(self.metadata).hexdigest()
+        result = read_pypi_license(self.package, self.fetch)
+        self.assertEqual(result["expression"], "GPL-3.0-only")
+        self.assertEqual(evaluate_license(result["expression"]), "FAIL")
+
+    def test_large_release_is_read_and_accepted_by_assessment(self):
+        digests = tuple(f"{index:064x}" for index in range(MAX_ARTIFACTS))
+        items = [{**self.item, "hashes": {"sha256": digest}} for digest in digests]
+        package = LockedPackage("uv.lock", "example", "1.2", "pypi", digests, ())
+
+        def fetch(url, **kwargs):
+            if url.startswith("https://pypi.org/simple/"):
+                return json.dumps({"files": items}).encode()
+            return self.fetch(url, **kwargs)
+
+        result = read_pypi_license(package, fetch)
+        self.assertEqual(result["status"], "OBSERVED")
+        self.assertEqual(len(result["artifacts"]), MAX_ARTIFACTS)
+        self.assertIsNotNone(
+            _verified_metadata(
+                {
+                    "source": "pypi",
+                    "licenseExpression": result["expression"],
+                    "metadata": result,
+                }
+            )
+        )
+        items.pop()
+        self.assertEqual(read_pypi_license(package, fetch)["status"], "UNKNOWN")
+
     def test_missing_hash_wrong_metadata_and_untrusted_source_are_unknown(self):
         self.item["core-metadata"]["sha256"] = "b" * 64
         self.assertEqual(
@@ -173,6 +242,11 @@ class PyPIMetadataTest(unittest.TestCase):
 
         result = read_pypi_license(package, fetch)
         self.assertEqual((result["status"], result["expression"]), ("OBSERVED", "MIT"))
+        with patch("app.pypi_license_metadata.MAX_SDIST_UNPACKED", 128):
+            self.assertEqual(
+                read_pypi_license(package, fetch),
+                {"status": "UNKNOWN", "reason": "source archive exceeds size limit"},
+            )
         item["hashes"]["sha256"] = "a" * 64
         package = LockedPackage("uv.lock", "example", "1.2", "pypi", ("a" * 64,), ())
         self.assertEqual(read_pypi_license(package, fetch)["status"], "UNKNOWN")
@@ -204,7 +278,6 @@ class LicenseScanTest(unittest.TestCase):
 
         result = scan_python_repository(Source(), "main")
         self.assertEqual(result["sourceRevision"], "a" * 40)
-
 
     def test_realistic_mixed_results_remain_scoped_to_lockfile(self):
         lock = b"""version = 1

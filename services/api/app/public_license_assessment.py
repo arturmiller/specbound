@@ -12,6 +12,7 @@ from sqlalchemy import insert
 from app.coverage import PYTHON_LICENSE_SCANNER
 from app.findings import apply_snapshot
 from app.frozen_governance import plan_public_scan
+from app.pypi_license_metadata import MAX_ARTIFACTS
 from app.rule_evaluation import evaluate_and_store
 from app.snapshots import COMMIT, create_snapshot
 from app.tables import evidence_records, scanner_coverage
@@ -69,7 +70,7 @@ def _verified_metadata(package):
     if not isinstance(expression, str) or not expression or len(expression) > 2048:
         return None
     artifacts = metadata.get("artifacts")
-    if not isinstance(artifacts, list) or not 0 < len(artifacts) <= 100:
+    if not isinstance(artifacts, list) or not 0 < len(artifacts) <= MAX_ARTIFACTS:
         return None
     for artifact in artifacts:
         if (
@@ -115,7 +116,12 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
     is_pr = pull_request_number is not None
     if is_pr:
         # A source error still has a known target, but no observed revision.
-        if revision is None and source_coverage == "UNKNOWN" and not packages and not files:
+        if (
+            revision is None
+            and source_coverage == "UNKNOWN"
+            and not packages
+            and not files
+        ):
             revision = job["ref"]
         if revision != job["ref"]:
             raise ValueError("License scan did not observe the queued commit")

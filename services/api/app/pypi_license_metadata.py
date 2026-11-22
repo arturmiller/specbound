@@ -9,38 +9,58 @@ import tarfile
 import zlib
 from email import policy
 from email.parser import BytesParser
-from urllib.error import HTTPError, URLError
+from functools import partial
+from tempfile import SpooledTemporaryFile
 from urllib.parse import quote, urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-MAX_INDEX_BYTES = 4 * 1024 * 1024
+import httpx
+
+from app.license_policy import canonical_license_id
+
+MAX_INDEX_BYTES = 32 * 1024 * 1024
 MAX_METADATA_BYTES = 1024 * 1024
 MAX_SDIST_BYTES = 20 * 1024 * 1024
-MAX_SDIST_UNPACKED = 32 * 1024 * 1024
+MAX_SDIST_UNPACKED = 96 * 1024 * 1024
 MAX_SDIST_ENTRIES = 10000
-MAX_ARTIFACTS = 100
+MAX_ARTIFACTS = 160
 SHA256 = re.compile(r"[0-9a-f]{64}")
 
+LEGACY_LICENSE_NAMES = {
+    "mit license": "MIT",
+    "apache license 2.0": "Apache-2.0",
+}
 
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+LICENSE_CLASSIFIERS = {
+    "MIT License": {"MIT"},
+    "BSD License": {"BSD-2-Clause", "BSD-3-Clause", "BSD-4-Clause"},
+    "Apache Software License": {"Apache-2.0"},
+    "Mozilla Public License 2.0 (MPL 2.0)": {"MPL-2.0"},
+}
 
 
-def _fetch(url, *, accept, limit):
-    request = Request(
-        url, headers={"Accept": accept, "User-Agent": "Specbound-License-Scanner/1"}
-    )
-    # No inherited proxy settings, redirects, repository code, or credentials.
-    from urllib.request import ProxyHandler
+class _UnresolvedLicense(ValueError):
+    """A known reason why an artifact's license could not be resolved."""
 
-    with build_opener(ProxyHandler({}), _NoRedirect()).open(
-        request, timeout=10
+
+def _fetch(client, url, *, accept, limit):
+    data = bytearray()
+    with client.stream(
+        "GET",
+        url,
+        headers={
+            "Accept": accept,
+            "Accept-Encoding": "identity",
+            "User-Agent": "Specbound-License-Scanner/1",
+        },
     ) as response:
-        data = response.read(limit + 1)
-    if len(data) > limit:
-        raise ValueError("response too large")
-    return data
+        response.raise_for_status()
+        if response.headers.get("content-encoding", "identity").lower() != "identity":
+            raise ValueError("unexpected metadata content encoding")
+        for chunk in response.iter_raw(chunk_size=65536):
+            if len(data) + len(chunk) > limit:
+                raise ValueError("response too large")
+            data.extend(chunk)
+    return bytes(data)
 
 
 def _artifact_url(url):
@@ -64,12 +84,23 @@ def _metadata_url(url):
 
 def _sdist_metadata(artifact):
     """Read root PKG-INFO from bounded bytes without extracting archive paths."""
-    with gzip.GzipFile(fileobj=io.BytesIO(artifact)) as stream:
-        data = stream.read(MAX_SDIST_UNPACKED + 1)
-    if len(data) > MAX_SDIST_UNPACKED:
-        raise ValueError("source archive exceeds size limit")
+    with (
+        gzip.GzipFile(fileobj=io.BytesIO(artifact)) as stream,
+        SpooledTemporaryFile(max_size=MAX_METADATA_BYTES) as unpacked,
+    ):
+        remaining = MAX_SDIST_UNPACKED
+        while chunk := stream.read(min(65536, remaining + 1)):
+            remaining -= len(chunk)
+            if remaining < 0:
+                raise _UnresolvedLicense("source archive exceeds size limit")
+            unpacked.write(chunk)
+        unpacked.seek(0)
+        return _read_pkg_info(unpacked)
+
+
+def _read_pkg_info(unpacked):
     found = None
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+    with tarfile.open(fileobj=unpacked, mode="r:") as archive:
         for index, member in enumerate(archive):
             if index >= MAX_SDIST_ENTRIES:
                 raise ValueError("source archive has too many entries")
@@ -98,22 +129,52 @@ def _metadata(content, name, version):
     names = message.get_all("Name", [])
     versions = message.get_all("Version", [])
     expressions = message.get_all("License-Expression", [])
-    dynamic = [str(item).lower() for item in message.get_all("Dynamic", [])]
+    dynamic = {str(item).strip().lower() for item in message.get_all("Dynamic", [])}
     normalized_name = (
         re.sub(r"[-_.]+", "-", str(names[0])).lower() if len(names) == 1 else None
     )
     if normalized_name != name or versions != [version]:
         raise ValueError("metadata package mismatch")
-    if (
-        "license-expression" in dynamic
-        or len(expressions) != 1
-        or not str(expressions[0]).strip()
+    if "license-expression" in dynamic:
+        raise _UnresolvedLicense("dynamic license declaration")
+    if expressions:
+        if len(expressions) != 1 or not str(expressions[0]).strip():
+            raise _UnresolvedLicense("ambiguous license expression")
+        return {
+            "licenseExpression": str(expressions[0]).strip(),
+            "licenseField": "License-Expression",
+        }
+    legacy = message.get_all("License", [])
+    if "license" in dynamic or len(legacy) != 1:
+        raise _UnresolvedLicense("no static license declaration")
+    declared = str(legacy[0]).strip()
+    expression = LEGACY_LICENSE_NAMES.get(declared.casefold()) or canonical_license_id(
+        declared
+    )
+    if not expression:
+        raise _UnresolvedLicense("ambiguous legacy license declaration")
+    classifiers = {
+        str(item).strip()
+        for item in message.get_all("Classifier", [])
+        if str(item).strip().startswith("License :: ")
+    }
+    classifiers.discard("License :: OSI Approved")
+    if len(classifiers) > 1 or any(
+        expression
+        not in LICENSE_CLASSIFIERS.get(
+            classifier.removeprefix("License :: OSI Approved :: "), ()
+        )
+        for classifier in classifiers
     ):
-        raise ValueError("license expression unavailable")
-    return str(expressions[0]).strip()
+        raise _UnresolvedLicense("ambiguous legacy license classifiers")
+    return {
+        "licenseExpression": expression,
+        "licenseField": "License",
+        "declaredLicense": declared,
+    }
 
 
-def read_pypi_license(package, fetch=_fetch):
+def read_pypi_license(package, fetch=None):
     """Return exact-artifact declarations or an explicit unresolved reason.
 
     We do not infer a distribution's license from project classifiers or
@@ -122,11 +183,22 @@ def read_pypi_license(package, fetch=_fetch):
     if package.source != "pypi":
         return {"status": "UNKNOWN", "reason": "unsupported package source"}
     hashes = set(package.artifact_hashes)
-    if package.has_unhashed_artifacts or not hashes or len(hashes) > MAX_ARTIFACTS:
+    if package.has_unhashed_artifacts or not hashes:
         return {
             "status": "UNKNOWN",
-            "reason": "artifact hashes missing or too numerous",
+            "reason": "artifact hashes missing",
         }
+    if len(hashes) > MAX_ARTIFACTS:
+        return {"status": "UNKNOWN", "reason": "too many locked artifacts"}
+    if fetch is not None:
+        return _read_pypi_license(package, hashes, fetch)
+    # Keep connections scoped to this release and never use ambient credentials,
+    # proxies or redirects.
+    with httpx.Client(timeout=10, follow_redirects=False, trust_env=False) as client:
+        return _read_pypi_license(package, hashes, partial(_fetch, client))
+
+
+def _read_pypi_license(package, hashes, fetch):
     index_url = f"https://pypi.org/simple/{quote(package.name, safe='')}/"
     try:
         body = fetch(
@@ -181,7 +253,7 @@ def read_pypi_license(package, fetch=_fetch):
                     "metadataSha256": metadata_hash,
                     "sourceUrl": url,
                     "sourceKind": source_kind,
-                    "licenseExpression": _metadata(data, package.name, package.version),
+                    **_metadata(data, package.name, package.version),
                 }
             )
         expressions = {item["licenseExpression"] for item in declarations}
@@ -196,14 +268,15 @@ def read_pypi_license(package, fetch=_fetch):
             "expression": expressions.pop(),
             "artifacts": declarations,
         }
+    except _UnresolvedLicense as exc:
+        return {"status": "UNKNOWN", "reason": str(exc)}
     except (
         ValueError,
         TypeError,
         AttributeError,
         KeyError,
         json.JSONDecodeError,
-        HTTPError,
-        URLError,
+        httpx.HTTPError,
         TimeoutError,
         OSError,
         EOFError,

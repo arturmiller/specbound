@@ -1,5 +1,6 @@
 """Evaluate SPDX expressions against an explicit, conservative allowlist."""
 
+import re
 from functools import lru_cache
 
 from license_expression import (
@@ -20,6 +21,21 @@ DEFAULT_ALLOWED = frozenset(
 @lru_cache(maxsize=1)
 def _licensing():
     return get_spdx_licensing()
+
+
+def canonical_license_id(value):
+    """Accept a single SPDX identifier with the same spelling apart from case."""
+    if len(value) > MAX_EXPRESSION or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9.-]*", value
+    ):
+        return None
+    try:
+        parsed = _licensing().parse(value, validate=True, strict=True)
+    except (ExpressionError, ValueError, TypeError, RecursionError):
+        return None
+    if isinstance(parsed, LicenseSymbol) and str(parsed).casefold() == value.casefold():
+        return str(parsed)
+    return None
 
 
 def _decision(node, allowed, depth=0):
