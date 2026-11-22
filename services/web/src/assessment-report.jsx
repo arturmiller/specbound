@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { AssessmentGovernance } from './assessment-governance.jsx';
+import { ApprovalDetails, ApprovalForm, licenseUseLabel } from './license-approvals.jsx';
 import { runDate } from './run-list.jsx';
 
 /** @typedef {{id: string, evaluationId: string, outcome: string, state: string, reason: string}} Finding */
-/** @typedef {{id: string, status: string, reason: string, evidenceIds: string[], control: {id: string}, subject: {id: string, labels?: {name?: string, version?: string, lockfile?: string}, provenance?: {sourceRef?: string}}, coverage: {status: string, revision: string | null, errors: {path: string, reason: string}[]} | null}} Evaluation */
+/** @typedef {{id: string, status: string, reason: string, licenseApprovalEligible?: boolean, evidenceIds: string[], control: {id: string}, subject: {id: string, labels?: {name?: string, version?: string, lockfile?: string}, provenance?: {sourceRef?: string}}, coverage: {status: string, revision: string | null, errors: {path: string, reason: string}[]} | null}} Evaluation */
 /** @typedef {{id: string, capability: string, provenance?: {sourceRef?: string}, observedAt: string, expiresAt: string, value: unknown}} Evidence */
-/** @typedef {{sourceScan?: import('./assessment-governance.jsx').SourceScan | null, pullRequestUrl?: string | null, assessment: {governanceContext?: import('./assessment-governance.jsx').FrozenContext | null, controls?: import('./assessment-governance.jsx').ControlResult[] | null, id: string, organizationId: string, productId: string, context: string, createdAt?: string, gitSha: string, packSha: string, pullRequestNumber: number | null, environment: string, counts: {PASS: number, FAIL: number, UNKNOWN: number, NOT_APPLICABLE: number}}, evaluations: Evaluation[], evidence: Evidence[], findings: Finding[]}} Report */
+/** @typedef {{sourceScan?: import('./assessment-governance.jsx').SourceScan | null, pullRequestUrl?: string | null, licenseUse?: string | null, canApproveLicenses?: boolean, assessment: {governanceContext?: import('./assessment-governance.jsx').FrozenContext | null, controls?: import('./assessment-governance.jsx').ControlResult[] | null, id: string, organizationId: string, productId: string, context: string, createdAt?: string, gitSha: string, packSha: string, pullRequestNumber: number | null, environment: string, counts: {PASS: number, FAIL: number, UNKNOWN: number, NOT_APPLICABLE: number}}, evaluations: Evaluation[], evidence: Evidence[], findings: Finding[]}} Report */
 
 const statusNames = /** @type {Record<string, string>} */ ({
   FAIL: 'Verstoß',
@@ -20,13 +21,22 @@ function licenseOf(evidence) {
   return value && typeof value === 'object' && 'licenseExpression' in value &&
     typeof value.licenseExpression === 'string' ? value.licenseExpression : '';
 }
-/** @param {{evaluation: Evaluation, evidence: Evidence[], finding?: Finding, organizationId: string, sourceScan?: Report['sourceScan'], controlTitle?: string}} props */
-function EvaluationRow({ evaluation, evidence, finding, organizationId, sourceScan, controlTitle }) {
+/** @param {Evidence | undefined} evidence */
+function approvalOf(evidence) {
+  const value = evidence?.value;
+  return value && typeof value === 'object' && 'licenseApproval' in value
+    ? /** @type {import('./license-approvals.jsx').LicenseApproval} */ (value.licenseApproval)
+    : null;
+}
+
+/** @param {{evaluation: Evaluation, evidence: Evidence[], finding?: Finding, organizationId: string, sourceScan?: Report['sourceScan'], controlTitle?: string, productId: string, assessmentId: string, accessToken: string, licenseUse?: string | null, canApprove?: boolean}} props */
+function EvaluationRow({ evaluation, evidence, finding, organizationId, sourceScan, controlTitle, productId, assessmentId, accessToken, licenseUse, canApprove }) {
   const { labels, provenance } = evaluation.subject;
   const name = labels?.name
     ? [labels.name, labels.version].filter(Boolean).join(' · ')
     : controlTitle || 'Kontrolle';
   const license = licenseOf(evidence[0]);
+  const approval = approvalOf(evidence[0]);
   const lockfile = labels?.lockfile;
   const lockfileUrl = lockfile && sourceScan?.sourceRevision
     ? 'https://github.com/' + sourceScan.repository + '/blob/' + sourceScan.sourceRevision + '/' + lockfile.split('/').map(encodeURIComponent).join('/')
@@ -35,10 +45,12 @@ function EvaluationRow({ evaluation, evidence, finding, organizationId, sourceSc
     <summary>
       <span><strong>{name}</strong>{lockfile && <small>{lockfile}</small>}</span>
       {license && <span className="assessment-license">{license}</span>}
-      <span className={'assessment-status status-' + evaluation.status.toLowerCase()}>{statusNames[evaluation.status] || evaluation.status}</span>
+      <span className={'assessment-status status-' + evaluation.status.toLowerCase()}>{approval ? 'Mit Freigabe' : statusNames[evaluation.status] || evaluation.status}</span>
     </summary>
     <div className="assessment-item-body">
       <p>{evaluation.reason}</p>
+      {approval && <ApprovalDetails approval={approval} productId={productId} accessToken={accessToken} canManage={Boolean(canApprove)} />}
+      {canApprove && licenseUse && evaluation.licenseApprovalEligible && <ApprovalForm productId={productId} assessmentId={assessmentId} evaluationId={evaluation.id} accessToken={accessToken} use={licenseUse} status={evaluation.status} />}
       <nav className="assessment-links" aria-label="Nachweise und Quelle">
         {finding && <a href={'/findings?' + new URLSearchParams({ organization: organizationId, finding: finding.id })}>Finding ansehen</a>}
         {lockfileUrl && <a href={lockfileUrl}>Lockfile öffnen</a>}
@@ -61,6 +73,25 @@ export function AssessmentReport({ id, accessToken = '' }) {
   const [error, setError] = useState('');
   const [showOpenItems, setShowOpenItems] = useState(false);
   const [showTechnical, setShowTechnical] = useState(false);
+  const [recheckState, setRecheckState] = useState('');
+  const [recheckError, setRecheckError] = useState('');
+  async function recheck() {
+    setRecheckState('sending');
+    setRecheckError('');
+    try {
+      const response = await fetch(`/api/assessments/${encodeURIComponent(id)}/license-recheck`, {
+        method: 'POST', headers: accessToken ? { Authorization: 'Bearer ' + accessToken } : undefined,
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.detail || 'Erneute Prüfung konnte nicht eingeplant werden.');
+      }
+      setRecheckState('queued');
+    } catch (failure) {
+      setRecheckState('');
+      setRecheckError(failure instanceof Error ? failure.message : 'Erneute Prüfung konnte nicht eingeplant werden.');
+    }
+  }
   useEffect(() => {
     const controller = new AbortController();
     fetch('/api/assessments/' + encodeURIComponent(id), { signal: controller.signal, headers: accessToken ? { Authorization: 'Bearer ' + accessToken } : {} })
@@ -103,11 +134,15 @@ export function AssessmentReport({ id, accessToken = '' }) {
   const requirementsUrl = '/products?' + new URLSearchParams({ organization: organizationId, product: productId, view: 'requirements', assessment: id });
   const historyUrl = isPR ? '/pr-checks?' + new URLSearchParams({ organization: organizationId }) : productUrl;
   const evidenceById = new Map(evidence.map((item) => [item.id, item]));
+  const approved = remaining.filter((item) => item.evidenceIds.some((key) => approvalOf(evidenceById.get(key))));
+  const regular = remaining.filter((item) => !approved.includes(item));
   const findingByEvaluation = new Map(findings.map((item) => [item.evaluationId, item]));
   const controlTitles = new Map(controls?.map((item) => [item.controlId, item.title]));
   /** @param {Evaluation} item */
   const renderEvaluation = (item) => <EvaluationRow
     key={item.id} evaluation={item} organizationId={organizationId} sourceScan={sourceScan}
+    productId={productId} assessmentId={id} accessToken={accessToken}
+    licenseUse={report.licenseUse} canApprove={report.canApproveLicenses}
     finding={findingByEvaluation.get(item.id)} controlTitle={controlTitles.get(item.control.id)}
     evidence={item.evidenceIds.flatMap((value) => { const found = evidenceById.get(value); return found ? [found] : []; })}
   />;
@@ -124,12 +159,17 @@ export function AssessmentReport({ id, accessToken = '' }) {
         <p className="assessment-stand">Ergebnis dieses Laufs{assessment.createdAt && ' · ' + runDate(assessment.createdAt)}</p>
         <h1 id="assessment-heading">{title}</h1>
         <p>{summary}</p>
+        {report.licenseUse && <p className="assessment-stand">{licenseUseLabel(report.licenseUse)}</p>}
       </div>
       <div className="assessment-outcome-links">
         {commitUrl && <a href={commitUrl}>Commit {assessment.gitSha.slice(0, 8)}</a>}
         {repositoryUrl && <a href={repositoryUrl}>{sourceScan?.repository || new URL(repositoryUrl).pathname.slice(1)}</a>}
       </div>
     </header>
+    {report.canApproveLicenses && isPR && pullRequestUrl && status !== 'pass' && <p>
+      {recheckState === 'queued' ? <span role="status">Erneute Prüfung eingeplant. <a href={historyUrl}>PR-Prüfungen öffnen</a></span> : <button type="button" onClick={() => void recheck()} disabled={recheckState === 'sending'}>Diesen Commit erneut prüfen</button>}
+      {recheckError && <span role="alert"> {recheckError}</span>}
+    </p>}
     {sourceScan && sourceScan.coverage !== 'covered' && <p className="assessment-blocker">
       {sourceScan.reason === 'no supported lockfile' ? 'Dem geprüften Commit fehlt eine uv.lock.'
         : sourceScan.reason === 'timeout' ? 'Der Scan hat das Zeitlimit erreicht.' : 'Die Quellabdeckung ist unvollständig.'}
@@ -146,6 +186,10 @@ export function AssessmentReport({ id, accessToken = '' }) {
         {incompleteControls.map((item) => <p key={item.controlId}>{item.title} · Keine Einzelbewertung verfügbar</p>)}
       </>}
     </details>}
+    {approved.length > 0 && <details className="panel assessment-disclosure">
+      <summary>Bewertungen mit Freigabe ({approved.length})</summary>
+      {approved.map(renderEvaluation)}
+    </details>}
     {noProfile && <p className="assessment-note">Dieser Lauf verwendet die Beispielrichtlinie. Ein Produktprofil ist erforderlich, damit der PR-Check bestehen kann.</p>}
     <details className="panel assessment-disclosure" onToggle={(event) => setShowTechnical(event.currentTarget.open)}>
       <summary>Technische Details</summary>
@@ -157,9 +201,9 @@ export function AssessmentReport({ id, accessToken = '' }) {
         {!commitUrl && <p>Commit des Laufs: <code>{assessment.gitSha}</code></p>}
         <p>Umgebung: {assessment.environment}</p>
         <AssessmentGovernance context={assessment.governanceContext} controls={controls} sourceScan={sourceScan} />
-        {remaining.length > 0 && <details className="assessment-disclosure">
-          <summary>Weitere Einzelbewertungen ({remaining.length})</summary>
-          {remaining.map(renderEvaluation)}
+        {regular.length > 0 && <details className="assessment-disclosure">
+          <summary>Weitere Einzelbewertungen ({regular.length})</summary>
+          {regular.map(renderEvaluation)}
         </details>}
       </>}
     </details>

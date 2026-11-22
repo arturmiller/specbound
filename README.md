@@ -153,6 +153,9 @@ Für einen grünen Lizenzcheck braucht das Produkt ein explizit zugeordnetes
 Profil mit ausgeführten und bestandenen Controls. Ohne Profil dient die
 Beispielrichtlinie zur Anzeige des Scans.
 
+Der [Lizenzcheck für Unternehmensnutzung und Releases](docs/release-license-review.md)
+beschreibt Nutzungsprofile, belegte Freigaben und die Prüfung der gebauten Artefakte.
+
 Für einen lokalen Test kann die API mit einem eigenen Test-Secret signierte
 Zustellungen auf `/webhooks/github` annehmen. Der Test
 `test_signed_pr_scan_publishes_commit_check_and_portal_evidence` prüft diese

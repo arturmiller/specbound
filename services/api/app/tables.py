@@ -152,6 +152,16 @@ pack_approvals = Table(
     Column("revision_id", String), Column("organization_id", String), Column("repository", String),
     Column("approved_by", String), Column("approved_at", DateTime(timezone=True)),
 )
+license_approvals = Table(
+    "license_approvals", metadata,
+    Column("id", String), Column("organization_id", String), Column("product_id", String),
+    Column("binding_id", String), Column("subject_id", String), Column("artifact_digest", String),
+    Column("control_id", String), Column("policy_digest", String), Column("license_use", String),
+    Column("kind", String), Column("reason", String), Column("conditions", String),
+    Column("proof_url", String), Column("approved_by", String),
+    Column("created_at", DateTime(timezone=True)), Column("expires_at", DateTime(timezone=True)),
+    Column("revoked_at", DateTime(timezone=True)),
+)
 resource_documents = Table(
     "resource_documents", metadata,
     Column("revision_id", String), Column("organization_id", String), Column("kind", String),

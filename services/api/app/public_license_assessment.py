@@ -12,6 +12,16 @@ from sqlalchemy import insert
 from app.coverage import PYTHON_LICENSE_SCANNER
 from app.findings import apply_snapshot
 from app.frozen_governance import plan_public_scan
+from app.license_policy import evaluate_license
+from app.license_scope import (
+    approval_rule,
+    approval_scope,
+    current_license_configuration,
+    license_decision,
+    license_use,
+    live_approvals,
+    locked_artifact_digest,
+)
 from app.pypi_license_metadata import MAX_ARTIFACTS
 from app.rule_evaluation import evaluate_and_store
 from app.snapshots import COMMIT, create_snapshot
@@ -55,6 +65,7 @@ def _subject(job, package, revision, now):
             "sourceRevision": revision,
         },
         "observedAt": now.isoformat(),
+        "licenseArtifactDigest": locked_artifact_digest(package),
     }
 
 
@@ -104,6 +115,67 @@ def _verified_metadata(package):
     return {"licenseExpression": expression, "artifacts": artifacts}
 
 
+def _evidence(db, job, subject, value, revision, environment, now, approval=None):
+    expires = now + timedelta(seconds=TTL_SECONDS)
+    if approval:
+        value = {
+            **(value or {"licenseExpression": None, "artifacts": []}),
+            "licenseApproval": license_decision(approval),
+        }
+        if approval["expires_at"] is not None:
+            expires = min(expires, approval["expires_at"])
+    return db.execute(
+        insert(evidence_records)
+        .values(
+            id=str(uuid4()),
+            organization_id=job["organization_id"],
+            product_id=job["product_id"],
+            subject_id=subject["id"],
+            capability=CAPABILITY,
+            environment=environment,
+            target_revision=revision,
+            collector_revision=None,
+            collector_image=None,
+            producer_kind="public-license-scan",
+            producer_scan_id=job["id"],
+            provenance={
+                "sourceRef": value["artifacts"][0]["sourceUrl"]
+                if value["artifacts"]
+                else subject["provenance"]["sourceRef"],
+                "scanId": job["id"],
+                "repository": job["repository"],
+                "lockfile": subject["labels"]["lockfile"],
+            },
+            value=value,
+            observed_at=now,
+            expires_at=expires,
+            ttl_seconds=max(1, int((expires - now).total_seconds())),
+        )
+        .returning(evidence_records.c.id)
+    ).scalar_one()
+
+
+def _approval_for(db, job, context, subject, control, value, now):
+    scope = approval_scope(context, job["binding_id"], subject, control)
+    if scope is None:
+        return None
+    if (
+        value
+        and evaluate_license(
+            value["licenseExpression"], approval_rule(control)["allowed"]
+        )
+        == "PASS"
+    ):
+        return None
+    matches = db.execute(live_approvals(scope, now).limit(2)).mappings().all()
+    if len(matches) != 1:
+        return None
+    approval = matches[0]
+    if approval["kind"] == "conditions-met" and value is None:
+        return None
+    return approval
+
+
 def create_public_license_assessment(db, job, result, *, now, pull_request_number=None):
     """Use only this worker's result; incomplete information never becomes PASS."""
     packages, files = result.get("packages"), result.get("files")
@@ -112,6 +184,12 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
         result.get("sourceRevision"),
     )
     context = job.get("governance_context")
+    environment = license_use(context) or ENVIRONMENT
+    approval_context = (
+        context
+        if environment != ENVIRONMENT and current_license_configuration(db, context)
+        else None
+    )
     profile_bound = context is not None and context.get("mode") == "profile"
     is_pr = pull_request_number is not None
     if is_pr:
@@ -181,40 +259,25 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
             raise ValueError("Package is outside scanned lockfiles")
         subject = _subject(job, package, revision, now)
         value = _verified_metadata(package)
-        evidence_id = None
-        if value is not None:
-            evidence_id = str(uuid4())
-            db.execute(
-                insert(evidence_records).values(
-                    id=evidence_id,
-                    organization_id=job["organization_id"],
-                    product_id=job["product_id"],
-                    subject_id=subject["id"],
-                    capability=CAPABILITY,
-                    environment=ENVIRONMENT,
-                    target_revision=revision,
-                    collector_revision=None,
-                    collector_image=None,
-                    producer_kind="public-license-scan",
-                    producer_scan_id=job["id"],
-                    provenance={
-                        "sourceRef": value["artifacts"][0]["sourceUrl"],
-                        "scanId": job["id"],
-                        "repository": job["repository"],
-                        "lockfile": package["path"],
-                    },
-                    value=value,
-                    observed_at=now,
-                    expires_at=now + timedelta(seconds=TTL_SECONDS),
-                    ttl_seconds=TTL_SECONDS,
-                )
-            )
+        evidence_id = (
+            _evidence(db, job, subject, value, revision, environment, now)
+            if value is not None
+            else None
+        )
         scope = {
             "productId": job["product_id"],
             "targetRevision": revision,
-            "environment": ENVIRONMENT,
+            "environment": environment,
         }
         for control in policy["controls"]:
+            approved = _approval_for(
+                db, job, approval_context, subject, control, value, now
+            )
+            selected = (
+                _evidence(db, job, subject, value, revision, environment, now, approved)
+                if approved
+                else evidence_id
+            )
             evaluation = evaluate_and_store(
                 db,
                 job["organization_id"],
@@ -226,7 +289,8 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
                 scan_id=scan,
                 binding_id=job["binding_id"],
                 ref=job["ref"],
-                selected_evidence_id=evidence_id,
+                selected_evidence_id=selected,
+                approved_license_use=approved is not None,
             )
             evaluation_ids.append(evaluation["id"])
     snapshot = create_snapshot(
@@ -236,7 +300,7 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
         context="pull_request" if is_pr else "repository",
         binding_id=job["binding_id"],
         pull_request_number=pull_request_number,
-        environment=ENVIRONMENT,
+        environment=environment,
         git_sha=revision,
         pack_sha=policy["revision"],
         evaluation_ids=evaluation_ids,

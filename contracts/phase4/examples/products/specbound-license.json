@@ -1,0 +1,14 @@
+{
+  "apiVersion": "specbound.example/v1alpha1",
+  "kind": "Product",
+  "metadata": {
+    "id": "specbound-license",
+    "version": "1.0.0",
+    "name": "Specbound"
+  },
+  "spec": {
+    "licenseUse": "customer-distribution",
+    "repositories": [{ "provider": "github", "repository": "arturmiller/specbound" }],
+    "profile": { "id": "license-distribution", "version": "1.0.0" }
+  }
+}

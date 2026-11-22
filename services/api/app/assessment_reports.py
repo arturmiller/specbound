@@ -12,6 +12,7 @@ from app.findings import _serialize as serialize_finding
 from app.findings import get_history
 from app.github_source import REPOSITORY
 from app.identity import get_current_principal
+from app.license_scope import approval_scope, license_use
 from app.products import _product
 from app.pull_request_events import parse_pr_event
 from app.snapshots import _serialize as serialize_snapshot
@@ -22,6 +23,7 @@ from app.tables import (
     finding_history,
     findings,
     github_events,
+    organizations,
     public_license_scans,
     rule_evaluations,
     scanner_coverage,
@@ -50,6 +52,29 @@ def _pull_request_url(db, snapshot):
             github_events.c.event_type == "pull_request",
         )
     ).one_or_none()
+    if delivery is None:
+        # A recheck replaces the job's current result. Its signed delivery
+        # still proves the identity of the previous assessment's PR head.
+        candidates = db.execute(
+            select(github_events.c.payload, assessment_jobs.c.pull_request_id)
+            .join(
+                assessment_jobs,
+                github_events.c.delivery_id == assessment_jobs.c.delivery_id,
+            )
+            .where(
+                assessment_jobs.c.organization_id == snapshot["organization_id"],
+                assessment_jobs.c.product_id == snapshot["product_id"],
+                assessment_jobs.c.binding_id == snapshot["binding_id"],
+                assessment_jobs.c.pull_request_number
+                == snapshot["pull_request_number"],
+                assessment_jobs.c.head_sha == snapshot["git_sha"],
+                assessment_jobs.c.created_at <= snapshot["created_at"],
+                github_events.c.organization_id == snapshot["organization_id"],
+                github_events.c.event_type == "pull_request",
+            )
+            .limit(2)
+        ).all()
+        delivery = candidates[0] if len(candidates) == 1 else None
     if delivery is None:
         return None
     payload, pull_request_id = delivery
@@ -252,6 +277,16 @@ def assessment_report(
         "assessment": serialize_snapshot(snapshot),
         "pullRequestUrl": _pull_request_url(db, snapshot),
         "sourceScan": source_scan,
+        "licenseUse": license_use(snapshot["governance_context"]),
+        "canApproveLicenses": bool(
+            license_use(snapshot["governance_context"])
+            and db.execute(
+                select(organizations.c.id).where(
+                    organizations.c.id == snapshot["organization_id"],
+                    organizations.c.owner_principal_id == principal,
+                )
+            ).first()
+        ),
         "evaluations": [
             {
                 "id": row["id"],
@@ -260,6 +295,15 @@ def assessment_report(
                 "status": row["status"],
                 "reason": row["reason"],
                 "evidenceIds": row["evidence_ids"],
+                "licenseApprovalEligible": row["status"] in ("FAIL", "UNKNOWN")
+                and bool(
+                    approval_scope(
+                        snapshot["governance_context"],
+                        snapshot["binding_id"],
+                        row["subject"],
+                        row["control"],
+                    )
+                ),
                 "coverage": (
                     {
                         "status": scan_by_id[row["scan_id"]]["status"],

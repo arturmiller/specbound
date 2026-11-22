@@ -135,6 +135,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .assessment-license { color: #465c77; font-size: 13px; }
 .assessment-item-body { margin: 0 0 14px 21px; font-size: 14px; }
 .assessment-item-body > details { margin-top: 12px; }
+.license-approval { margin: 12px 0; padding: 10px 12px; border: 1px solid #d7e1ef; border-radius: 6px; }
 .assessment-item-body p { margin: 6px 0 12px; }
 .assessment-links { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; }
 .assessment-disclosure > summary, .assessment-item summary { cursor: pointer; }

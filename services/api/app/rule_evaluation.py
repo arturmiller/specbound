@@ -17,6 +17,7 @@ from app.assessment import (
 )
 from app.coverage import OPENAPI_SCANNER, PYTHON_LICENSE_SCANNER, scan_covers
 from app.evidence_records import assess_with_evidence, current_evidence
+from app.license_scope import approval_rule
 from app.manifest_io import validate
 from app.rule_engine import RuleTruth, evaluate_assertions
 from app.tables import products, rule_evaluations, teams
@@ -71,6 +72,7 @@ def evaluate_and_store(
     binding_id,
     ref,
     selected_evidence_id=_AUTO_EVIDENCE,
+    approved_license_use=False,
 ):
     """Only trusted scanner output and a pinned, validated control are accepted."""
     if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
@@ -183,7 +185,17 @@ def evaluate_and_store(
                     control["assertions"], evidence[0]["value"]
                 )
                 evidence_ids = (evidence[0]["id"],)
-                if decision.truth is RuleTruth.UNKNOWN:
+                if (
+                    approved_license_use
+                    and approval_rule(control)
+                    and evidence[0]["value"].get("licenseApproval")
+                ):
+                    result = AssessmentResult(
+                        AssessmentStatus.PASS,
+                        "Nutzung mit belegter Freigabe",
+                        evidence_ids,
+                    )
+                elif decision.truth is RuleTruth.UNKNOWN:
                     result = AssessmentResult(
                         AssessmentStatus.UNKNOWN, decision.reason, evidence_ids
                     )

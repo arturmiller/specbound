@@ -115,6 +115,9 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=None):
                     "version": package.version,
                     "source": package.source,
                     "markers": list(package.markers),
+                    "artifactHashes": []
+                    if package.has_unhashed_artifacts
+                    else list(package.artifact_hashes),
                     "licenseExpression": expression,
                     "status": result,
                     "metadata": metadata,

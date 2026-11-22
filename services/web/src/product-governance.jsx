@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CatalogControls } from './resources.jsx';
 import { ManifestProvenance } from './manifest-source.jsx';
 import { ResourceRevisions } from './resource-revisions.jsx';
+import { licenseUseLabel } from './license-approvals.jsx';
 
 /** @param {{productId: string, organizationId: string, accessToken: string, canManage?: boolean}} props */
 export function ProductGovernance({ productId, organizationId, accessToken, canManage = false }) {
@@ -27,6 +28,7 @@ export function ProductGovernance({ productId, organizationId, accessToken, canM
     </> : <>
       <p>Produkt: {product.resourceId} · {product.version}</p>
       <p>Geltendes Profil: <a href={`/profiles?${new URLSearchParams({ organization: organizationId, resource: profile.id || '' })}`}>{profile.name} · {profile.version}</a></p>
+      {product.resolved.licenseUse && <p>Lizenzprüfung für {licenseUseLabel(product.resolved.licenseUse)}</p>}
       <p>Katalog: <a href={`/catalogs?${new URLSearchParams({ organization: organizationId, resource: profile.resolved.catalog?.revisionId || '' })}`}>{profile.resolved.catalog?.name} · {profile.resolved.catalog?.version}</a></p>
       <ManifestProvenance source={product.source} defaultPath={product.source.manifestPath} />
       <ResourceRevisions key={product.id} organizationId={organizationId} revisionId={product.id || ''} accessToken={accessToken} isOwner={canManage} />

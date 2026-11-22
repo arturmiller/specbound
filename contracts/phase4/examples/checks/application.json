@@ -40,7 +40,8 @@
           {
             "operator": "spdx-allowlist",
             "path": "licenseExpression",
-            "allowedParameter": "license-allowlist"
+            "allowedParameter": "license-allowlist",
+            "allowApprovedUse": true
           }
         ]
       }
