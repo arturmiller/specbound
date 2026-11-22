@@ -18,7 +18,7 @@ test('search and filters lead from actual findings to the exact report and produ
   await expect(page.getByRole('link', { name: 'Assessment-Bericht öffnen' })).toHaveAttribute('href', `/assessments/${item.id}`);
   await page.getByRole('link', { name: 'Assessment-Bericht öffnen' }).click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/assessments/${item.id}`);
-  await expect(page.getByText(item.id, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Prüfung fehlgeschlagen' })).toBeVisible();
   await page.goto(`/overview?organization=${item.organizationId}`);
   const productResults = page.locator('.overview-results .panel').filter({ has: page.getByRole('heading', { name: 'Produkte', exact: true }) });
   await productResults.getByRole('link', { name: 'Product' }).click();

@@ -19,6 +19,7 @@ test('starts a profile-bound scan and retains unsupported controls in its histor
   }
   await page.goto(`/products?organization=${org}&product=${productId}&view=repository`);
   const scan = page.getByRole('region', { name: 'Lizenzscan für djfun/audio-visualizer-python' });
+  await scan.getByText('Scanumfang und Richtlinie').click();
   await expect(scan.getByText(/Scan fixiert das geltende Produktprofil/)).toBeVisible();
   await expect(scan.getByRole('button', { name: 'Öffentlichen Lizenzscan starten' })).toBeEnabled();
   const scanStarted = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/public-license-scans'));
@@ -28,6 +29,7 @@ test('starts a profile-bound scan and retains unsupported controls in its histor
   const processed = await page.request.post(`/api/__e2e/process-public-license-scan?scan_id=${startedJob.id}`);
   expect((await processed.json()).processed).toBe(true);
   await expect(scan.getByText('Abgeschlossen')).toBeVisible({ timeout: 8000 });
+  await scan.getByText('Details zum letzten Lauf').click();
   await expect(scan.getByText('Application Baseline · 1.0.0')).toBeVisible();
   await expect(scan.getByText('OBSERVED', { exact: true })).toBeVisible();
   await scan.getByRole('link', { name: /Assessment und Findings/ }).click();

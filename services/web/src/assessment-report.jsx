@@ -1,18 +1,69 @@
 import React, { useEffect, useState } from 'react';
 import { AssessmentGovernance } from './assessment-governance.jsx';
+import { runDate } from './run-list.jsx';
 
-/** @typedef {{id: string, outcome: string, state: string, reason: string}} Finding */
+/** @typedef {{id: string, evaluationId: string, outcome: string, state: string, reason: string}} Finding */
 /** @typedef {{id: string, status: string, reason: string, evidenceIds: string[], control: {id: string}, subject: {id: string, labels?: {name?: string, version?: string, lockfile?: string}, provenance?: {sourceRef?: string}}, coverage: {status: string, revision: string | null, errors: {path: string, reason: string}[]} | null}} Evaluation */
 /** @typedef {{id: string, capability: string, provenance?: {sourceRef?: string}, observedAt: string, expiresAt: string, value: unknown}} Evidence */
-/** @typedef {{sourceScan?: import('./assessment-governance.jsx').SourceScan | null, pullRequestUrl?: string | null, assessment: {governanceContext?: import('./assessment-governance.jsx').FrozenContext | null, controls?: import('./assessment-governance.jsx').ControlResult[] | null, id: string, organizationId: string, productId: string, context: string, gitSha: string, packSha: string, pullRequestNumber: number | null, environment: string, counts: {PASS: number, FAIL: number, UNKNOWN: number, NOT_APPLICABLE: number}}, evaluations: Evaluation[], evidence: Evidence[], findings: Finding[]}} Report */
+/** @typedef {{sourceScan?: import('./assessment-governance.jsx').SourceScan | null, pullRequestUrl?: string | null, assessment: {governanceContext?: import('./assessment-governance.jsx').FrozenContext | null, controls?: import('./assessment-governance.jsx').ControlResult[] | null, id: string, organizationId: string, productId: string, context: string, createdAt?: string, gitSha: string, packSha: string, pullRequestNumber: number | null, environment: string, counts: {PASS: number, FAIL: number, UNKNOWN: number, NOT_APPLICABLE: number}}, evaluations: Evaluation[], evidence: Evidence[], findings: Finding[]}} Report */
+
+const statusNames = /** @type {Record<string, string>} */ ({
+  FAIL: 'Verstoß',
+  UNKNOWN: 'Ungeklärt',
+  PASS: 'Erfüllt',
+  NOT_APPLICABLE: 'Nicht anwendbar',
+});
+
+/** @param {Evidence | undefined} evidence */
+function licenseOf(evidence) {
+  const value = evidence?.value;
+  return value && typeof value === 'object' && 'licenseExpression' in value &&
+    typeof value.licenseExpression === 'string' ? value.licenseExpression : '';
+}
+/** @param {{evaluation: Evaluation, evidence: Evidence[], finding?: Finding, organizationId: string, sourceScan?: Report['sourceScan'], controlTitle?: string}} props */
+function EvaluationRow({ evaluation, evidence, finding, organizationId, sourceScan, controlTitle }) {
+  const { labels, provenance } = evaluation.subject;
+  const name = labels?.name
+    ? [labels.name, labels.version].filter(Boolean).join(' · ')
+    : controlTitle || 'Kontrolle';
+  const license = licenseOf(evidence[0]);
+  const lockfile = labels?.lockfile;
+  const lockfileUrl = lockfile && sourceScan?.sourceRevision
+    ? 'https://github.com/' + sourceScan.repository + '/blob/' + sourceScan.sourceRevision + '/' + lockfile.split('/').map(encodeURIComponent).join('/')
+    : '';
+  return <details className="assessment-item">
+    <summary>
+      <span><strong>{name}</strong>{lockfile && <small>{lockfile}</small>}</span>
+      {license && <span className="assessment-license">{license}</span>}
+      <span className={'assessment-status status-' + evaluation.status.toLowerCase()}>{statusNames[evaluation.status] || evaluation.status}</span>
+    </summary>
+    <div className="assessment-item-body">
+      <p>{evaluation.reason}</p>
+      <nav className="assessment-links" aria-label="Nachweise und Quelle">
+        {finding && <a href={'/findings?' + new URLSearchParams({ organization: organizationId, finding: finding.id })}>Finding ansehen</a>}
+        {lockfileUrl && <a href={lockfileUrl}>Lockfile öffnen</a>}
+        {evidence.map((item, index) => <a key={item.id} href={'/evidence?' + new URLSearchParams({ organization: organizationId, evidence: item.id, view: 'detail' })}>{evidence.length > 1 ? 'Nachweis ' + (index + 1) + ' öffnen' : 'Nachweis öffnen'}</a>)}
+      </nav>
+      <details>
+        <summary>Prüfregel und technische Herkunft</summary>
+        {provenance?.sourceRef && <p>Quellverweis: {provenance.sourceRef}</p>}
+        {evaluation.coverage && <p>Quellabdeckung: {evaluation.coverage.status}</p>}
+        {evaluation.coverage?.errors.map((entry) => <p key={entry.path + entry.reason}>{entry.path} {entry.reason}</p>)}
+        <pre>{JSON.stringify(evaluation.control, null, 2)}</pre>
+      </details>
+    </div>
+  </details>;
+}
 
 /** @param {{id: string, accessToken?: string}} props */
 export function AssessmentReport({ id, accessToken = '' }) {
   const [report, setReport] = useState(/** @type {Report | null} */ (null));
   const [error, setError] = useState('');
+  const [showOpenItems, setShowOpenItems] = useState(false);
+  const [showTechnical, setShowTechnical] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/assessments/${encodeURIComponent(id)}`, { signal: controller.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} })
+    fetch('/api/assessments/' + encodeURIComponent(id), { signal: controller.signal, headers: accessToken ? { Authorization: 'Bearer ' + accessToken } : {} })
       .then((response) => {
         if (response.status === 403) throw new Error('Für dieses Assessment fehlen die erforderlichen Rechte.');
         if (response.status === 401) throw new Error('Für dieses Assessment ist eine Anmeldung erforderlich.');
@@ -23,29 +74,94 @@ export function AssessmentReport({ id, accessToken = '' }) {
     return () => controller.abort();
   }, [id, accessToken]);
 
-  if (error) return <p role="alert">{error}</p>;
+  if (error) return <p role="alert" className="alert">{error}</p>;
   if (!report) return <p role="status">Assessment wird geladen …</p>;
-  const { assessment, evaluations, evidence, findings } = report;
-  const prNumber = assessment.pullRequestNumber == null ? '' : `#${assessment.pullRequestNumber}`;
-  const pullRequest = report.pullRequestUrl && prNumber
-    ? <a href={report.pullRequestUrl} aria-label={`Pull Request ${prNumber} auf GitHub öffnen`}>{prNumber}</a>
-    : prNumber;
-  const selectedView = new URLSearchParams(window.location.search).get('view') || 'report';
-  const view = assessment.context === 'pull_request' && ['summary', 'report', 'iterations', 'review'].includes(selectedView) ? selectedView : 'report';
-  /** @param {string} target */
-  const reportUrl = (target) => `/assessments/${encodeURIComponent(id)}${target === 'report' ? '' : `?view=${target}`}`;
-  const counts = [['Passed', assessment.counts.PASS], ['Failed', assessment.counts.FAIL], ['Unknown', assessment.counts.UNKNOWN], ['N/A', assessment.counts.NOT_APPLICABLE]];
-  const countCards = <div className="pr-counts">{counts.map(([label, count]) => <div key={label}><strong>{count}</strong><span>{label}</span></div>)}</div>;
-  return <section className="pr-screen assessment-report" aria-labelledby="assessment-heading">
-    <p className="eyebrow">{assessment.context === 'pull_request' && <>PULL REQUEST {pullRequest} / </>}ASSESSMENT</p>
-    <div className="page-heading"><div><h1 id="assessment-heading">Assessment-Bericht</h1><p>{assessment.context === 'pull_request' ? 'Gespeicherter Snapshot; GitHub-Feedback und aktueller Merge-Status sind davon getrennt.' : 'Gespeicherter Assessment-Snapshot mit revisionsgenauer Herkunft.'}</p></div></div>
-    {assessment.context === 'pull_request' && <nav className="pr-tabs" aria-label="Assessment-Ansichten"><a href={reportUrl('summary')} aria-current={view === 'summary' ? 'page' : undefined}>Zusammenfassung</a><a href={reportUrl('report')} aria-current={view === 'report' ? 'page' : undefined}>Bericht</a><a href={reportUrl('iterations')} aria-current={view === 'iterations' ? 'page' : undefined}>Recheck</a><a href={reportUrl('review')} aria-current={view === 'review' ? 'page' : undefined}>Review</a></nav>}
-    <div className="pr-meta"><div><span>ASSESSMENT</span><strong>{assessment.id}</strong></div><div><span>PRODUKT-REVISION</span><strong>{assessment.gitSha}</strong></div><div><span>PACKREVISION</span><strong>{assessment.packSha}</strong></div><div><span>UMGEBUNG / KONTEXT</span><strong>{assessment.environment} · {assessment.context}</strong></div></div>
-    <AssessmentGovernance context={assessment.governanceContext} controls={assessment.controls} sourceScan={report.sourceScan} />
-    {view === 'summary' && <div className="pr-columns"><div className="panel"><h2>Bewertungen im Snapshot</h2>{countCards}<p>Die Zahlen stammen aus diesem gespeicherten Assessment.</p><a href={reportUrl('report')}>Vollständigen Bericht öffnen →</a></div><div className="panel"><h2>GitHub-Feedback</h2><p>Ein veröffentlichter Kommentar oder Check-Status wird hier nicht aus dem Snapshot abgeleitet.</p><div className="team-info">GitHub-Kommentar, aktuelle Revision und Merge-Gate sind über diese Ansicht nicht nachgewiesen.</div></div></div>}
-    {view === 'iterations' && <div className="pr-columns"><div className="panel"><h2>Push und erneute Prüfung</h2><p>Dieser Bericht gehört unveränderlich zu Revision <strong className="break-value">{assessment.gitSha}</strong>.</p><div className="team-info">Ein manueller Recheck und eine vollständige PR-Historie sind hier nicht verfügbar. Neue Ergebnisse werden als eigene Snapshots gespeichert.</div></div><div className="panel"><h2>Gespeicherter Stand</h2>{countCards}<a href={reportUrl('report')}>Bericht öffnen →</a></div></div>}
-    {view === 'review' && <div className="pr-columns"><div className="panel"><h2>Review und Merge</h2><p>Der aktuelle GitHub-Check, die neueste PR-Revision und der Review-Status sind hier nicht verfügbar.</p><div className="team-info">Ein gespeichertes Bewertungsergebnis bestätigt weder den aktuellen Merge-Status noch den Zustand einer produktiven Umgebung.</div></div><div className="panel"><h2>Bewertung dieses Snapshots</h2>{countCards}<a href={reportUrl('report')}>Bericht öffnen →</a></div></div>}
-    {view === 'report' && <><div className="pr-columns"><div className="panel"><h2>Findings für diese Revision</h2>{findings.length === 0 ? <p>Für diesen Snapshot wurden keine Finding-Ereignisse gespeichert.</p> : <ul className="pr-findings">{findings.map((item) => <li key={item.id}><div><strong>{item.outcome}: {item.state}</strong><p>{item.reason}</p></div><a href={`/findings?${new URLSearchParams({ organization: assessment.organizationId, finding: item.id })}`}>Aktuelles Finding →</a></li>)}</ul>}<h2>Controls und Bewertungen</h2>{evaluations.map((item) => <article key={item.id} className="pr-evaluation"><h3>{item.control.id}: <span className={`assessment-status status-${item.status.toLowerCase()}`}>{item.status === 'NOT_APPLICABLE' ? 'N/A' : item.status}</span></h3><p>Grund: {item.reason}</p><p>Quellabdeckung: {item.coverage ? item.coverage.status : 'Nicht vorhanden'}{item.coverage && <> · Scan-Revision: {item.coverage.revision || 'Nicht verfügbar'}{item.coverage.revision !== assessment.gitSha && ' (abweichende Revision)'}</>} (historischer Scan)</p>{item.coverage?.errors?.map((entry, index) => <p key={index}>Abdeckungsfehler: {entry.path} {entry.reason}</p>)}<p>Subject: {item.subject.labels?.name ? `${item.subject.labels.name}${item.subject.labels.version ? ` · ${item.subject.labels.version}` : ''}` : item.subject.id}</p>{item.subject.labels?.name && <p className="break-value">Subject-ID: {item.subject.id}</p>}<p>Quellverweis: {item.subject.provenance?.sourceRef || 'Nicht verfügbar'}</p><p>Evidence: {item.evidenceIds.length ? item.evidenceIds.join(', ') : 'Keine'}</p><details><summary>Control</summary><pre>{JSON.stringify(item.control, null, 2)}</pre></details></article>)}</div><div className="panel"><h2>Herkunft und Umfang</h2>{countCards}<dl className="team-role-list evidence-details"><div><dt>Assessment</dt><dd>{assessment.id}</dd></div><div><dt>Produkt</dt><dd>{assessment.productId}</dd></div><div><dt>Pull Request</dt><dd>{pullRequest || 'Nicht verfügbar'}</dd></div><div><dt>Revision</dt><dd>{assessment.gitSha}</dd></div><div><dt>Governance-Pack</dt><dd>{assessment.packSha}</dd></div></dl><div className="team-info">Der Snapshot beschreibt nur den gespeicherten Kontext und ersetzt keinen aktuellen GitHub-Check.</div></div></div><div className="panel pr-evidence"><h2>Evidence und Fakten</h2>{evidence.length === 0 ? <p>Keine Evidence für diesen Snapshot.</p> : evidence.map((item) => <article key={item.id} className="pr-evaluation"><h3>{item.capability}</h3><p>Evidence: <a href={`/evidence?${new URLSearchParams({ organization: assessment.organizationId, evidence: item.id, view: 'detail' })}`}>{item.id}</a></p><p>Quelle: {item.provenance?.sourceRef || 'Nicht verfügbar'}</p><p>Beobachtet: {item.observedAt} · Gültig bis: {item.expiresAt}</p><pre>{JSON.stringify(item.value, null, 2)}</pre></article>)}</div></>}
-    <a className="team-back" href={`${assessment.context === 'pull_request' ? '/pr-checks' : '/overview'}?${new URLSearchParams({ organization: assessment.organizationId })}`}>← {assessment.context === 'pull_request' ? 'Zu PR-Assessments' : 'Zur Übersicht'}</a>
+  const { assessment, evaluations, evidence, findings, sourceScan, pullRequestUrl } = report;
+  const { counts, controls, context, organizationId, productId, pullRequestNumber } = assessment;
+  const isPR = context === 'pull_request';
+  const incompleteControls = (controls || []).filter((control) => !['PASS', 'FAIL'].includes(control.status) && !control.evaluationIds.length);
+  const violations = evaluations.filter((item) => item.status === 'FAIL');
+  const unresolved = evaluations.filter((item) => item.status === 'UNKNOWN');
+  const remaining = evaluations.filter((item) => !['FAIL', 'UNKNOWN'].includes(item.status));
+  const noProfile = isPR && assessment.governanceContext?.mode === 'legacy-example';
+  const incomplete = counts.UNKNOWN > 0 || !counts.PASS || incompleteControls.length > 0 ||
+    Boolean(sourceScan && sourceScan.coverage !== 'covered') || noProfile ||
+    Boolean(isPR && controls?.some((control) => control.status !== 'PASS'));
+  const failed = counts.FAIL > 0 || controls?.some((control) => control.status === 'FAIL');
+  const status = failed ? 'fail' : incomplete ? 'unknown' : 'pass';
+  const title = failed ? 'Prüfung fehlgeschlagen' : incomplete ? 'Prüfung unvollständig' : 'Prüfung bestanden';
+  const summary = [
+    counts.FAIL ? counts.FAIL + (counts.FAIL === 1 ? ' Verstoß' : ' Verstöße') : '',
+    counts.UNKNOWN ? counts.UNKNOWN + ' ungeklärt' : '',
+    counts.PASS ? counts.PASS + ' erfüllt' : '',
+    counts.NOT_APPLICABLE ? counts.NOT_APPLICABLE + ' nicht anwendbar' : '',
+  ].filter(Boolean).join(' · ') || 'Für diesen Lauf liegen keine Einzelbewertungen vor.';
+  const repositoryUrl = pullRequestUrl?.replace(/\/pull\/\d+$/, '') ||
+    (sourceScan?.repository ? 'https://github.com/' + sourceScan.repository : '');
+  const commitUrl = repositoryUrl && assessment.gitSha ? repositoryUrl + '/commit/' + assessment.gitSha : '';
+  const productUrl = '/products?' + new URLSearchParams({ organization: organizationId, product: productId, view: 'scans' });
+  const requirementsUrl = '/products?' + new URLSearchParams({ organization: organizationId, product: productId, view: 'requirements', assessment: id });
+  const historyUrl = isPR ? '/pr-checks?' + new URLSearchParams({ organization: organizationId }) : productUrl;
+  const evidenceById = new Map(evidence.map((item) => [item.id, item]));
+  const findingByEvaluation = new Map(findings.map((item) => [item.evaluationId, item]));
+  const controlTitles = new Map(controls?.map((item) => [item.controlId, item.title]));
+  /** @param {Evaluation} item */
+  const renderEvaluation = (item) => <EvaluationRow
+    key={item.id} evaluation={item} organizationId={organizationId} sourceScan={sourceScan}
+    finding={findingByEvaluation.get(item.id)} controlTitle={controlTitles.get(item.control.id)}
+    evidence={item.evidenceIds.flatMap((value) => { const found = evidenceById.get(value); return found ? [found] : []; })}
+  />;
+
+  return <section className="assessment-report" aria-labelledby="assessment-heading">
+    <p className="assessment-breadcrumb">
+      <a href={historyUrl}>{isPR ? 'PR-Prüfungen' : 'Prüfungen'}</a>
+      {pullRequestNumber != null && <> / {pullRequestUrl
+        ? <a href={pullRequestUrl} aria-label={'Pull Request #' + pullRequestNumber + ' auf GitHub öffnen'}>PR #{pullRequestNumber}</a>
+        : <span>PR #{pullRequestNumber}</span>}</>}
+    </p>
+    <header className={'assessment-outcome outcome-' + status}>
+      <div className="assessment-outcome-result">
+        <p className="assessment-stand">Ergebnis dieses Laufs{assessment.createdAt && ' · ' + runDate(assessment.createdAt)}</p>
+        <h1 id="assessment-heading">{title}</h1>
+        <p>{summary}</p>
+      </div>
+      <div className="assessment-outcome-links">
+        {commitUrl && <a href={commitUrl}>Commit {assessment.gitSha.slice(0, 8)}</a>}
+        {repositoryUrl && <a href={repositoryUrl}>{sourceScan?.repository || new URL(repositoryUrl).pathname.slice(1)}</a>}
+      </div>
+    </header>
+    {sourceScan && sourceScan.coverage !== 'covered' && <p className="assessment-blocker">
+      {sourceScan.reason === 'no supported lockfile' ? 'Dem geprüften Commit fehlt eine uv.lock.'
+        : sourceScan.reason === 'timeout' ? 'Der Scan hat das Zeitlimit erreicht.' : 'Die Quellabdeckung ist unvollständig.'}
+    </p>}
+    {violations.length > 0 && <section className="panel" aria-labelledby="violations-heading">
+      <h2 id="violations-heading">{sourceScan ? 'Abhängigkeiten mit Verstößen' : 'Fehlgeschlagene Kontrollen'}</h2>
+      {violations.map(renderEvaluation)}
+    </section>}
+    {(unresolved.length > 0 || incompleteControls.length > 0) && <details className="panel assessment-disclosure"
+      onToggle={(event) => setShowOpenItems(event.currentTarget.open)}>
+      <summary>Ungeklärte Bewertungen ({unresolved.length + incompleteControls.length})</summary>
+      {showOpenItems && <>
+        {unresolved.map(renderEvaluation)}
+        {incompleteControls.map((item) => <p key={item.controlId}>{item.title} · Keine Einzelbewertung verfügbar</p>)}
+      </>}
+    </details>}
+    {noProfile && <p className="assessment-note">Dieser Lauf verwendet die Beispielrichtlinie. Ein Produktprofil ist erforderlich, damit der PR-Check bestehen kann.</p>}
+    <details className="panel assessment-disclosure" onToggle={(event) => setShowTechnical(event.currentTarget.open)}>
+      <summary>Technische Details</summary>
+      {showTechnical && <>
+        <div className="assessment-links">
+          <a href={requirementsUrl}>Anforderungen für diesen Lauf öffnen</a>
+          <a href={productUrl}>Produktprüfungen öffnen</a>
+        </div>
+        {!commitUrl && <p>Commit des Laufs: <code>{assessment.gitSha}</code></p>}
+        <p>Umgebung: {assessment.environment}</p>
+        <AssessmentGovernance context={assessment.governanceContext} controls={controls} sourceScan={sourceScan} />
+        {remaining.length > 0 && <details className="assessment-disclosure">
+          <summary>Weitere Einzelbewertungen ({remaining.length})</summary>
+          {remaining.map(renderEvaluation)}
+        </details>}
+      </>}
+    </details>
   </section>;
 }

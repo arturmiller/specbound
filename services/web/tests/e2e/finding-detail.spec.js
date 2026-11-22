@@ -19,8 +19,9 @@ test('a real finding links its exact assessment and evidence with separate revis
   await expect(page.getByText(report.assessment.gitSha, { exact: true })).toBeVisible();
   await expect(page.getByText(report.assessment.packSha, { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Assessment-Bericht öffnen' })).toHaveAttribute('href', `/assessments/${item.id}`);
+  await expect(page.getByText(item.id, { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Abgelaufen · UNKNOWN/)).toBeVisible();
-  await page.getByRole('link', { name: evidence.id }).click();
+  await page.getByRole('link', { name: 'Nachweis öffnen', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Evidence-Details' })).toBeVisible();
   await expect(page.getByText('Abgelaufen · UNKNOWN')).toBeVisible();
   await expect(page.getByText('FAIL', { exact: true })).toBeVisible();
@@ -51,7 +52,7 @@ test('unknown and N/A results do not silently resolve a finding', async ({ page 
   });
   await page.goto('/findings?organization=org&finding=finding1');
   await expect(page.getByRole('heading', { name: /CTRL-1/ })).toBeVisible();
-  await expect(page.getByText('Finding finding1 · Status open · test')).toBeVisible();
+  await expect(page.getByText('Status open · test')).toBeVisible();
   await expect(page.getByText('Keine Evidence mit dieser Bewertung verknüpft.')).toBeVisible();
   await expect(page.getByText('UNKNOWN', { exact: true }).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -60,7 +61,7 @@ test('unknown and N/A results do not silently resolve a finding', async ({ page 
   status = 'NOT_APPLICABLE';
   await page.reload();
   await expect(page.getByText('N/A', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Finding finding1 · Status open · test')).toBeVisible();
+  await expect(page.getByText('Status open · test')).toBeVisible();
 });
 
 test('forbidden findings do not expose a trace', async ({ page }) => {

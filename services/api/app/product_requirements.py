@@ -132,6 +132,7 @@ def product_requirements(
                 assessment_snapshots.c.context,
                 assessment_snapshots.c.pull_request_number,
                 assessment_snapshots.c.git_sha,
+                assessment_snapshots.c.counts,
                 assessment_snapshots.c.governance_context["profile"]["name"]
                 .as_string()
                 .label("profile_name"),
@@ -153,6 +154,7 @@ def product_requirements(
             "id": scan["assessment_id"] or "scan:" + scan["id"],
             "createdAt": scan["created_at"],
             "status": scan["status"],
+            "counts": snapshot_by_id.get(scan["assessment_id"], {}).get("counts"),
             "context": snapshot_by_id.get(scan["assessment_id"], {}).get(
                 "context", "repository"
             ),
@@ -171,6 +173,7 @@ def product_requirements(
             "id": row["id"],
             "createdAt": row["created_at"],
             "status": "completed",
+            "counts": row["counts"],
             "context": row["context"],
             "ref": row["git_sha"],
             "pullRequestNumber": row["pull_request_number"],

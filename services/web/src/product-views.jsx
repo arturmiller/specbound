@@ -4,12 +4,14 @@ import { ProductGovernance } from './product-governance.jsx';
 import { PublicLicenseScans } from './public-license-scans.jsx';
 import { ManifestProvenance } from './manifest-source.jsx';
 import { ScanSource } from './assessment-governance.jsx';
+import { RunList, resultBadge, runDate } from './run-list.jsx';
 
 /** @typedef {{id: string, name: string, configurationStatus?: string}} Product */
 /** @typedef {{id: string, status: string, reason: string, evidenceIds: string[], subject: {id: string, labels?: {name?: string, version?: string, lockfile?: string}}, control: unknown, coverage?: {status: string, revision: string | null, errors: {path: string, reason: string}[]} | null}} Evaluation */
 /** @typedef {{id: string, capability: string, producerKind: string, producerScanId?: string, collectorRevision?: string, collectorImage?: string, provenance?: {sourceRef?: string}, observedAt: string, expiresAt: string, freshness: string, value: unknown}} Evidence */
 /** @typedef {import('./resources.jsx').ResourceControl & {result: import('./assessment-governance.jsx').ControlResult, evaluations: Evaluation[], definitionVariants?: unknown[]}} Control */
-/** @typedef {{productId: string, selectionId: string, options: {id: string, createdAt: string, status: string, context: string, ref: string, repository?: string, pullRequestNumber?: number, profileName?: string, profileVersion?: string}[], run: {status: string, errorCode?: string, coverage?: string, reason?: string, files?: string[], unsupportedFiles?: string[]} | null, context: import('./assessment-governance.jsx').FrozenContext | null, provenanceStatus: string, groups: import('./resources.jsx').ResourceGroup[], controls: Control[], evidence: Evidence[], findings: {id: string, evaluationId: string, state: string, reason?: string}[], sourceScan: import('./assessment-governance.jsx').SourceScan | null, asOf: string}} Requirements */
+/** @typedef {{id: string, createdAt: string, status: string, context: string, repository?: string, pullRequestNumber?: number | null, counts?: import('./run-list.jsx').EvaluationCounts | null}} RunOption */
+/** @typedef {{productId: string, selectionId: string, options: RunOption[], run: {status: string, errorCode?: string, coverage?: string, reason?: string, files?: string[], unsupportedFiles?: string[]} | null, context: import('./assessment-governance.jsx').FrozenContext | null, provenanceStatus: string, groups: import('./resources.jsx').ResourceGroup[], controls: Control[], evidence: Evidence[], findings: {id: string, evaluationId: string, state: string, reason?: string}[], sourceScan: import('./assessment-governance.jsx').SourceScan | null, asOf: string}} Requirements */
 
 /** @param {string} org @param {string} product @param {string} view @param {string} [assessment] */
 export function productViewUrl(org, product, view, assessment) {
@@ -44,13 +46,16 @@ function EvidenceDetails({ evidence, organizationId, productId }) {
 }
 
 
-/** @param {string} value */
-function dateLabel(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short' }).format(date);
-}
 const runLabels = /** @type {Record<string, string>} */ ({ pending: 'Wartend', running: 'Wird ausgef\u00fchrt', completed: 'Abgeschlossen', failed: 'Fehlgeschlagen' });
 const contextLabels = /** @type {Record<string, string>} */ ({ repository: 'Repositorypr\u00fcfung', pull_request: 'Pull Request', baseline: 'Basisstand' });
+
+/** @param {RunOption} option */
+function runLabel(option) {
+  const target = option.repository || contextLabels[option.context] || 'Prüfung';
+  return option.pullRequestNumber == null ? target : option.repository
+    ? `${target} · PR #${option.pullRequestNumber}`
+    : `PR #${option.pullRequestNumber}`;
+}
 /** @param {import('./resources.jsx').ResourceGroup} group @param {import('./resources.jsx').ResourceGroup[]} groups */
 function groupLabel(group, groups) {
   const byKey = new Map(groups.map((item) => [item.key, item]));
@@ -142,16 +147,27 @@ export function ProductViews({ product, organizationId, accessToken, view, canEd
   const controls = data?.controls.filter((item) => (status === 'all' || item.result.status === status) && `${item.id} ${item.title} ${JSON.stringify(item.parts)}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) || [];
   const sourceScan = data?.sourceScan;
   const currentSelection = data?.selectionId || selection || '';
+  const runs = view === 'scans' ? options.map((option) => ({
+    id: option.id,
+    href: option.id.startsWith('scan:')
+      ? productViewUrl(organizationId, product.id, 'requirements', option.id)
+      : '/assessments/' + encodeURIComponent(option.id),
+    label: runLabel(option),
+    createdAt: option.createdAt,
+    ...(option.status === 'failed'
+      ? { status: 'Scan fehlgeschlagen', tone: 'fail' }
+      : option.counts ? resultBadge(option.counts) : { status: runLabels[option.status] || option.status }),
+  })) : [];
   return <section className="product-views" aria-labelledby="products-heading">
     <h1 id="products-heading">{product.name}</h1>
     <nav className="product-detail-nav" aria-label="Produktansichten">{[['requirements', 'Anforderungen'], ['scans', 'Prüfungen'], ['scope', 'Geltungsbereich']].map(([id, label]) => <a key={id} href={productViewUrl(organizationId, product.id, id)} aria-current={view === id ? 'page' : undefined}>{label}</a>)}</nav>
     {view === 'scope' ? <ProductGovernance canManage={canManage} key={product.id} productId={product.id} organizationId={organizationId} accessToken={accessToken} /> : view === 'scans' ? <>
-      <h2>Prüfungen</h2><p>Ergebnisse und Nachweise öffnen in Anforderungen den gespeicherten Prüfstand.</p>
+      <h2>Prüfungen</h2>
+      {state.scope !== scope ? <p role="status">Prüfungen werden geladen …</p> : state.error ? <p role="alert">{state.error}</p> : runs.length ? <RunList runs={runs} label="Produktprüfungen" /> : <p>Noch keine gespeicherten Prüfungen.</p>}
       {sources.identity !== identity ? <p role="status">Produktquellen werden geladen …</p> : sources.error ? <p role="alert">{sources.error}</p> : sources.items.filter((item) => item.provider.toLowerCase() === 'github').map((binding) => <PublicLicenseScans organizationId={organizationId} key={binding.id} productId={product.id} bindingId={binding.id} repository={binding.repository} accessToken={accessToken} canEdit={canEdit} profileManaged={product.configurationStatus === 'manifest_managed'} />)}
-      {state.scope !== scope ? <p role="status">Prüfungen werden geladen …</p> : state.error ? <p role="alert">{state.error}</p> : options.length ? <ul>{options.map((option) => <li key={option.id}><a href={productViewUrl(organizationId, product.id, 'requirements', option.id)}>{dateLabel(option.createdAt)} · {option.repository || contextLabels[option.context] || option.context} · {option.ref.slice(0, 12)} · {runLabels[option.status] || option.status} · {option.profileName || 'Historischer Stand ohne Profilangabe'}</a></li>)}</ul> : <p>Noch keine gespeicherten Prüfungen.</p>}
     </> : <>
       <h2>Anforderungen</h2><div className="requirements-filters">
-        <label className="field">Prüfung<select aria-label="Prüfung" value={currentSelection} onChange={(event) => { setSelection(event.target.value); updateQuery('assessment', event.target.value); }}><option value="current">Aktuelle Anforderungen · ohne Prüfung</option>{options.map((item) => <option key={item.id} value={item.id}>{dateLabel(item.createdAt)} · {item.repository || contextLabels[item.context] || item.context} {item.pullRequestNumber ? `#${item.pullRequestNumber}` : ''} · {item.ref.slice(0, 12)} · {runLabels[item.status] || item.status} · {item.profileName || 'Profil unbekannt'} {item.profileVersion || ''}</option>)}{currentSelection && currentSelection !== 'current' && !options.some((item) => item.id === currentSelection) && <option value={currentSelection}>Gewählte Prüfung</option>}</select></label>
+        <label className="field">Prüfung<select aria-label="Prüfung" value={currentSelection} onChange={(event) => { setSelection(event.target.value); updateQuery('assessment', event.target.value); }}><option value="current">Aktuelle Anforderungen · ohne Prüfung</option>{options.map((item) => <option key={item.id} value={item.id}>{runLabel(item)} · {runDate(item.createdAt)} · {runLabels[item.status] || item.status}</option>)}{currentSelection && currentSelection !== 'current' && !options.some((item) => item.id === currentSelection) && <option value={currentSelection}>Gewählte Prüfung</option>}</select></label>
         <label className="field">Status<select aria-label="Status" value={status} onChange={(event) => { setStatus(event.target.value); updateQuery('status', event.target.value === 'all' ? '' : event.target.value); }}>{['all', 'FAIL', 'UNKNOWN', 'PASS', 'NOT_APPLICABLE'].map((value) => <option key={value} value={value}>{value === 'all' ? 'Alle' : value}</option>)}</select></label>
         <label className="field">Controls suchen<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); updateQuery('search', event.target.value); }} /></label>
       </div>
