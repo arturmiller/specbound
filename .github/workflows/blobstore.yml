@@ -13,10 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
+          version: '0.11.7'
           python-version: '3.12'
-      - run: pip install -r services/api/requirements-dev.txt
+      - name: Install locked API dependencies
+        run: |
+          uv sync --project services/api --locked
+          echo "$PWD/services/api/.venv/bin" >> "$GITHUB_PATH"
       - name: Start MinIO and initialize the local bucket
         run: |
           docker compose up -d minio

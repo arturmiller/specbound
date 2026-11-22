@@ -4,16 +4,16 @@ Specbound kann lokal mit Docker Compose gestartet werden. API, Web, PostgreSQL u
 
 ## Beispiel
 
-Im Repository eine Python-Umgebung einrichten und mit dem folgenden Befehl die Entwicklungsabhängigkeiten installieren:
+Mit uv die lokale Python-Umgebung für die API aus dem versionierten Lockfile einrichten.
 
 ```sh
-python -m pip install -r services/api/requirements-dev.txt
+uv sync --project services/api --python 3.12 --locked --group dev
 ```
 
-Anschließend den Gesundheitsendpunkt ohne laufende Dienste ausprobieren:
+Anschließend lässt sich der Gesundheitsendpunkt ohne laufende Dienste ausprobieren.
 
 ```sh
-python services/api/examples/docs_examples.py start
+uv run --project services/api --python 3.12 --locked --group dev python services/api/examples/docs_examples.py start
 ```
 
 Die Ausgabe enthält status: ok. Für die laufenden Dienste verwenden Sie docker compose up --build; das Portal ist danach unter localhost:5173 erreichbar.

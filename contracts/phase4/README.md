@@ -82,8 +82,8 @@ Die Datenbank-/API-Migration erfolgt in den vertikalen Folgeaufgaben, mit Upgrad
 ## Validierung ausführen
 
 ```sh
-uv run --no-project --with-requirements services/api/requirements-dev.txt python contracts/phase4/validate_examples.py
-uv run --no-project --with-requirements services/api/requirements-dev.txt python -m unittest discover -s tests/contracts -v
+uv run --project services/api --python 3.12 --locked python contracts/phase4/validate_examples.py
+uv run --project services/api --python 3.12 --locked python -m unittest discover -s tests/contracts -v
 ```
 
 Die offiziellen Schemas liegen unverändert unter `contracts/oscal/1.2.3`; `sources.json` enthält Release-URLs und SHA-256-Pins. Die offline ausgeführten Beispiele benötigen keinen Repositoryzugriff und keine Credentials. Unicode-Patterns der offiziellen Schemas werden mit der gepinnten `regex`-Bibliothek geprüft, nicht entfernt.

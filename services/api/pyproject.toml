@@ -1,0 +1,31 @@
+[dependency-groups]
+runtime = [
+    "fastapi==0.162.0",
+    "uvicorn==0.54.0",
+    "alembic==1.20.1",
+    "SQLAlchemy==2.0.56",
+    "psycopg[binary]==3.3.3",
+    "PyJWT[crypto]==2.15.1",
+    "PyYAML==6.0.3",
+    "boto3==1.43.125",
+    "httpx==0.28.1",
+    "jsonschema==4.26.0",
+    "rfc3339-validator==0.1.4",
+    "license-expression==30.4.4",
+    "regex==2026.11.15",
+]
+dev = [
+    "ruff==0.17.3",
+    "docker==7.1.0",
+]
+
+[tool.uv]
+default-groups = ["runtime"]
+environments = ["python_version == '3.12'"]
+
+[tool.uv.dependency-groups]
+runtime = { requires-python = "==3.12.*" }
+dev = { requires-python = "==3.12.*" }
+
+[tool.uv.workspace]
+members = []

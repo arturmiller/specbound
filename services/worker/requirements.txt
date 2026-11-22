@@ -1,9 +1,0 @@
-docker==7.1.0
-jsonschema==4.26.0
-PyYAML==6.0.3
-rfc3339-validator==0.1.4
-SQLAlchemy==2.0.56
-psycopg[binary]==3.3.3
-httpx==0.28.1
-PyJWT[crypto]==2.15.1
-license-expression==30.4.4

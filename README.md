@@ -200,6 +200,23 @@ npm run check
 Prüft Build, JavaScript-Syntax, Originaldaten, Referenzen, Task-Abhängigkeiten
 und Zustandsimport. `npm run build` erzeugt die statisch hostbare Site in `dist/`.
 
+## Python-Abhängigkeiten
+
+API und Worker haben jeweils ein `pyproject.toml` und eine versionierte
+`uv.lock`. Ändere die direkten Abhängigkeiten im jeweiligen
+`pyproject.toml` und aktualisiere die zugehörige Lockdatei mit Python 3.12.
+
+```sh
+uv lock --project services/api --python 3.12
+uv lock --project services/worker --python 3.12
+```
+
+Docker installiert die Gruppe `runtime` mit `uv sync --locked` aus dem
+Lockfile des jeweiligen Dienstes. Die API-Tests laden zusätzlich die Gruppe
+`dev` aus demselben Lockfile. Der Lizenzscanner prüft die versionierten
+Archive für beide Lockfiles, einschließlich der dort festgehaltenen
+Entwicklungsabhängigkeiten und Plattformvarianten.
+
 ## Arbeitsstand sichern
 
 - **Sicherung** exportiert Board-Positionen, Screen-Namen, Notizen, unplatzierten
