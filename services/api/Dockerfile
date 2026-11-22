@@ -1,9 +1,15 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS python-base
+
+FROM python-base AS dependencies
 WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /bin/uv
 COPY services/api/pyproject.toml services/api/uv.lock ./
 RUN uv sync --locked --only-group runtime --python /usr/local/bin/python --no-cache
+
+FROM python-base
+WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
+COPY --from=dependencies /app/.venv /app/.venv
 COPY services/api/app ./app
 COPY services/api/alembic.ini ./alembic.ini
 COPY services/api/logging.json ./logging.json

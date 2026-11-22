@@ -42,8 +42,9 @@ Erzeuge den Portal-Build mit `npm ci` und `npm run build` in `services/web`.
 Der Build enthält ein Inventar der eingebundenen npm-Pakete mit den Hashes der
 JavaScript-Dateien. Baue API und Worker aus der zu prüfenden Revision und exportiere
 die auszuliefernden Images mit `docker image save`. Der Release-Check katalogisiert
-die beiden Archive mit [Syft](https://github.com/anchore/syft) und verifiziert den
-Portal-Build anhand seines Inventars.
+alle ausgelieferten Schichten der Archive mit [Syft](https://github.com/anchore/syft)
+und verifiziert den Portal-Build anhand seines Inventars. `uv` und die Lockfiles
+liegen in der Build-Stufe. Die finale Stufe übernimmt die installierten Abhängigkeiten.
 
 Beispiel für den Aufruf aus `services/api` mit installierten Projektabhängigkeiten
 und geprüft installiertem Syft.
@@ -51,7 +52,8 @@ und geprüft installiertem Syft.
 ```sh
 python -m app.release_license_review --portal ../web/dist \
   --api-image api.tar --worker-image worker.tar \
-  --policy distribution-policy.json --output release-license-review.json
+  --policy distribution-policy.json --output release-license-review.json \
+  --summary release-license-review.md
 ```
 
 Eine erste Prüfung kann mit dieser Richtlinie beginnen.
@@ -65,7 +67,10 @@ Eine erste Prüfung kann mit dieser Richtlinie beginnen.
 ```
 
 Der Bericht enthält für `portal`, `api-image` und `worker-image` je einen
-SHA-256-Digest und die gefundenen Komponenten. Die freigebende Stelle bestätigt
+SHA-256-Digest und die gefundenen Komponenten. Wenn Syft eine Lizenzdatei oder
+Paketmetadaten im Image ermittelt, enthält der Bericht deren Fundstelle. Die
+Markdown-Zusammenfassung zeigt fehlende Freigaben und offene Komponenten.
+Die freigebende Stelle bestätigt
 für jeden Digest die Vollständigkeit des Inventars einschließlich eingebetteter
 Bibliotheken und mitgelieferter Assets sowie die erfüllten Lizenzhinweise und
 weiteren Auflagen.

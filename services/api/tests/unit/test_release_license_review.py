@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.release_license_review import browser_inventory, review_artifact
+from app.release_license_review import _component, browser_inventory, review_artifact
+from app.release_license_summary import markdown_summary
 
 
 class ReleaseLicenseReviewTest(unittest.TestCase):
@@ -61,3 +62,55 @@ class ReleaseLicenseReviewTest(unittest.TestCase):
         )
         self.assertTrue(accepted["ready"])
         self.assertEqual(accepted["components"][0]["status"], "APPROVED")
+
+    def test_summary_groups_identical_findings_and_keeps_their_locations(self):
+        package = {
+            "SPDXID": "SPDXRef-Package-deb-test",
+            "name": "binary <unsafe>",
+            "versionInfo": "1",
+            "licenseDeclared": "GPL-3.0-only",
+            "licenseConcluded": "NOASSERTION",
+        }
+        location = "/usr/share/doc/test/copyright"
+        native = {
+            "purl": "pkg:deb/debian/test@1",
+            "type": "deb",
+            "licenses": [{"locations": [{"path": location}]}],
+        }
+        component = _component(package, native)
+        self.assertEqual(component["licenseSources"], [location])
+        report = {
+            "ready": False,
+            "projectLicenseReviewed": False,
+            "artifacts": {
+                key: review_artifact(key, digest, [component], ["MIT"], {})
+                for key, digest in (("api-image", "a" * 64), ("worker-image", "b" * 64))
+            },
+        }
+        text = markdown_summary(report)
+        self.assertEqual(text.count("binary &lt;unsafe&gt; 1"), 1)
+        self.assertEqual(text.count(location), 2)
+        self.assertIn("Außerhalb der Richtlinie", text)
+        self.assertIn("Rechte am eigenen Code", text)
+
+    def test_findings_report_different_license_gaps(self):
+        inputs = [
+            ("NOASSERTION", "NOASSERTION", "missing-declaration"),
+            ("MIT", "Apache-2.0", "conflicting-declarations"),
+            ("LicenseRef-Custom", "NOASSERTION", "unresolved-expression"),
+        ]
+        for declared, concluded, reason in inputs:
+            with self.subTest(reason=reason):
+                component = _component(
+                    {
+                        "SPDXID": "SPDXRef-Package-test",
+                        "name": "test",
+                        "licenseDeclared": declared,
+                        "licenseConcluded": concluded,
+                    },
+                    {},
+                )
+                report = review_artifact(
+                    "api-image", "a" * 64, [component], ["MIT"], {}
+                )
+                self.assertEqual(report["components"][0]["reason"], reason)

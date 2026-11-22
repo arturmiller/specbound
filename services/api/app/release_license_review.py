@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from app.license_policy import evaluate_license
+from app.release_license_summary import markdown_summary
 
 MAX_JSON_BYTES = 64 * 1024 * 1024
 ARTIFACTS = ("portal", "api-image", "worker-image")
@@ -48,9 +49,37 @@ def browser_inventory(root):
         if path.endswith((".js", ".mjs"))
     }:
         raise ValueError("Portal JavaScript files do not match the build inventory")
-    return hashlib.sha256(
-        json.dumps(digests, sort_keys=True).encode()
-    ).hexdigest(), inventory["dependencies"]
+    return hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest(), [
+        {**component, "ecosystem": "npm"} for component in inventory["dependencies"]
+    ]
+
+
+def _component(package, native):
+    declared = package.get("licenseDeclared")
+    concluded = package.get("licenseConcluded")
+    declarations = {
+        item
+        for item in (declared, concluded)
+        if item not in (None, "NONE", "NOASSERTION")
+    }
+    paths = {location["path"] for location in native.get("locations", [])}
+    license_paths = {
+        location["path"]
+        for license_entry in native.get("licenses", [])
+        for location in license_entry.get("locations", [])
+    }
+    return {
+        "name": package["name"],
+        "version": package.get("versionInfo"),
+        "license": next(iter(declarations)) if len(declarations) == 1 else None,
+        "declaredLicense": declared,
+        "concludedLicense": concluded,
+        "id": package["SPDXID"],
+        "purl": native.get("purl"),
+        "ecosystem": native.get("type"),
+        "locations": sorted(paths),
+        "licenseSources": sorted(license_paths),
+    }
 
 
 def image_inventory(path, syft):
@@ -70,42 +99,58 @@ def image_inventory(path, syft):
             raise ValueError("Expected exactly one image in the archive")
     with tempfile.TemporaryDirectory() as directory:
         output = Path(directory) / "image.json"
+        native_output = Path(directory) / "syft.json"
         subprocess.run(
             [
                 syft,
                 "scan",
                 f"docker-archive:{path.resolve()}",
+                "--scope",
+                "all-layers",
                 "-o",
                 f"spdx-json={output}",
+                "-o",
+                f"syft-json={native_output}",
             ],
             check=True,
             timeout=300,
         )
         packages = json.loads(_json_bytes(output))["packages"]
+        native_artifacts = json.loads(_json_bytes(native_output))["artifacts"]
+    native_by_id = {item["id"]: item for item in native_artifacts}
+    if len(native_by_id) != len(native_artifacts):
+        raise ValueError("Ambiguous Syft package identifiers")
     if _hash(path) != digest:
         raise ValueError("Image archive changed during the scan")
     components = []
     for package in packages:
         if package.get("primaryPackagePurpose") == "CONTAINER":
             continue
-        declared = package.get("licenseDeclared")
-        concluded = package.get("licenseConcluded")
-        candidates = {
-            item
-            for item in (declared, concluded)
-            if item not in (None, "NONE", "NOASSERTION")
-        }
-        components.append(
-            {
-                "name": package["name"],
-                "version": package.get("versionInfo"),
-                "license": candidates.pop() if len(candidates) == 1 else None,
-                "declaredLicense": declared,
-                "concludedLicense": concluded,
-                "id": package["SPDXID"],
-            }
-        )
+        # Syft's SPDX encoder places its artifact ID after the final hyphen.
+        native = native_by_id.get(package["SPDXID"].rsplit("-", 1)[-1], {})
+        if native.get("name") != package["name"] or native.get(
+            "version"
+        ) != package.get("versionInfo"):
+            native = {}
+        components.append(_component(package, native))
     return digest, components
+
+
+def _decision_reason(component, status):
+    if status == "APPROVED":
+        return "approved"
+    if status == "PASS":
+        return "allowed"
+    if status == "FAIL":
+        return "outside-policy"
+    if component["license"]:
+        return "unresolved-expression"
+    declarations = {
+        component.get(key) for key in ("declaredLicense", "concludedLicense")
+    } - {None, "NOASSERTION", "NONE"}
+    return (
+        "conflicting-declarations" if len(declarations) > 1 else "missing-declaration"
+    )
 
 
 def review_artifact(name, digest, components, allowed, reviewed):
@@ -129,6 +174,7 @@ def review_artifact(name, digest, components, allowed, reviewed):
             {
                 **component,
                 "status": status,
+                "reason": _decision_reason(component, status),
                 **({"approvalEvidence": clearance} if status == "APPROVED" else {}),
             }
         )
@@ -161,6 +207,7 @@ def main():
         "--policy", type=Path, required=True, help="Approved release review input"
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--summary", type=Path, help="Optional Markdown review summary")
     args = parser.parse_args()
     try:
         policy_bytes = _json_bytes(args.policy)
@@ -174,11 +221,16 @@ def main():
         ):
             raise ValueError("A non-empty SPDX allowlist is required")
         reviewed = policy.get("reviewedArtifacts", {})
-        if args.output.resolve().is_relative_to(
-            args.portal.resolve()
-        ) or args.output.resolve() in {
+        outputs = [
+            path.resolve() for path in (args.output, args.summary) if path is not None
+        ]
+        inputs = {
             item.resolve() for item in (args.policy, args.api_image, args.worker_image)
-        }:
+        }
+        if len(set(outputs)) != len(outputs) or any(
+            path.is_relative_to(args.portal.resolve()) or path in inputs
+            for path in outputs
+        ):
             raise ValueError("The report must be outside its inputs")
         inventory = (
             browser_inventory(args.portal),
@@ -196,20 +248,16 @@ def main():
         ready = source_license_reviewed and all(
             item["ready"] for item in results.values()
         )
-        args.output.write_text(
-            json.dumps(
-                {
-                    "use": policy["use"],
-                    "policySha256": hashlib.sha256(policy_bytes).hexdigest(),
-                    "projectLicenseReviewed": source_license_reviewed,
-                    "ready": ready,
-                    "artifacts": results,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+        report = {
+            "use": policy["use"],
+            "policySha256": hashlib.sha256(policy_bytes).hexdigest(),
+            "projectLicenseReviewed": source_license_reviewed,
+            "ready": ready,
+            "artifacts": results,
+        }
+        args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        if args.summary is not None:
+            args.summary.write_text(markdown_summary(report), encoding="utf-8")
         return 0 if ready else 1
     except (
         OSError,
