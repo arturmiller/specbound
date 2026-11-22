@@ -616,7 +616,8 @@ class PublicLicenseScansTest(unittest.TestCase):
             metadata={"status": "UNKNOWN"},
         )
         first = self.finish_profile_scan(package_result)
-        self.assertEqual(first["assessment"]["counts"]["UNKNOWN"], 1)
+        self.assertEqual(first["assessment"]["counts"]["FAIL"], 1)
+        self.assertEqual(first["findings"][0]["outcome"], "FAIL")
         endpoint = f"/products/{self.product}/license-approvals"
         grant = self.client.post(
             endpoint,
@@ -636,7 +637,7 @@ class PublicLicenseScansTest(unittest.TestCase):
         changed = copy.deepcopy(package_result)
         changed["packages"][0]["artifactHashes"] = ["c" * 64]
         self.assertEqual(
-            self.finish_profile_scan(changed)["assessment"]["counts"]["UNKNOWN"], 1
+            self.finish_profile_scan(changed)["assessment"]["counts"]["FAIL"], 1
         )
 
         # Adopt the same control and repository under a new use; only the
@@ -663,7 +664,61 @@ class PublicLicenseScansTest(unittest.TestCase):
         self.assertEqual(adoption.status_code, 201, adoption.text)
         current = self.finish_profile_scan(package_result)
         self.assertEqual(current["licenseUse"], "saas")
-        self.assertEqual(current["assessment"]["counts"]["UNKNOWN"], 1)
+        self.assertEqual(current["assessment"]["counts"]["FAIL"], 1)
+
+    def test_unresolved_source_blocks_a_package_with_an_allowed_wheel(self):
+        self.configure_native_product(
+            allowed=["MPL-2.0"], license_only=True, license_use="customer-distribution"
+        )
+        scan = self.observed_result("MPL-2.0")
+        package = scan["packages"][0]
+        package.update(
+            name="certifi",
+            version="2026.11.20",
+            licenseExpression=None,
+            artifactHashes=["a" * 64, "c" * 64],
+        )
+        wheel = {
+            **package["metadata"]["artifacts"][0],
+            "filename": "certifi.whl",
+            "status": "OBSERVED",
+        }
+        package["metadata"] = {
+            "status": "UNKNOWN",
+            "reason": "dynamic license declaration",
+            "artifacts": [
+                wheel,
+                {
+                    "artifactSha256": "c" * 64,
+                    "filename": "certifi.tar.gz",
+                    "status": "UNKNOWN",
+                    "reason": "dynamic license declaration",
+                },
+            ],
+        }
+        report = self.finish_profile_scan(scan)
+        snapshot = report["assessment"]
+        evaluation = report["evaluations"][0]
+        self.assertEqual(snapshot["counts"]["FAIL"], 1)
+        self.assertEqual(snapshot["counts"]["UNKNOWN"], 0)
+        self.assertIn("Paketdatei", evaluation["reason"])
+        self.assertEqual(report["findings"][0]["outcome"], "FAIL")
+        evidence = report["evidence"][0]["value"]
+        self.assertEqual(evidence["licenseCoverage"], "incomplete")
+        self.assertEqual(evidence["artifacts"][0]["licenseExpression"], "MPL-2.0")
+        self.assertEqual(evidence["artifacts"][1]["status"], "UNKNOWN")
+        refused = self.client.post(
+            f"/products/{self.product}/license-approvals",
+            json={
+                "assessmentId": snapshot["id"],
+                "evaluationId": evaluation["id"],
+                "kind": "conditions-met",
+                "reason": "Wheel checked.",
+                "conditions": "Publish notice.",
+                "proofUrl": "https://proof.example.test/wheel",
+            },
+        )
+        self.assertEqual(refused.status_code, 422, refused.text)
 
     def test_adopting_a_manifest_keeps_existing_product_repository_and_report(self):
         before = self.finish_profile_scan(self.observed_result("GPL-3.0-only"))
@@ -1002,18 +1057,17 @@ class PublicLicenseScansTest(unittest.TestCase):
                 ).scalar_one(),
                 "open",
             )
-            self.assertEqual(
-                db.execute(
-                    select(func.count())
-                    .select_from(evidence_records)
-                    .where(evidence_records.c.producer_scan_id == unknown_job["id"])
-                ).scalar_one(),
-                0,
-            )
+            evidence = db.execute(
+                select(evidence_records.c.value).where(
+                    evidence_records.c.producer_scan_id == unknown_job["id"]
+                )
+            ).scalar_one()
+            self.assertEqual(evidence["licenseCoverage"], "incomplete")
+            self.assertIsNone(evidence["licenseExpression"])
         self.assertEqual(
             self.client.get(f"/assessments/{unknown['assessmentId']}").json()[
                 "assessment"
-            ]["counts"]["UNKNOWN"],
+            ]["counts"]["FAIL"],
             1,
         )
         run_scan("MIT")

@@ -126,9 +126,10 @@ angezeigt. Lockfiles können Pakete für andere Umgebungen enthalten; ein Scan i
 kein Inventar der tatsächlich installierten Pakete.
 
 Das versionierte Beispiel-Governance-Pack erlaubt MIT, Apache-2.0, BSD-2-Clause,
-BSD-3-Clause und ISC; andere bekannte Lizenzen, darunter GPL, ergeben `FAIL`,
-unklare Informationen `UNKNOWN`. Für belegte Paketmetadaten entstehen Evidence,
-ein Repository-Assessment und bei `FAIL` Findings; diese sind im Scanbericht und
+BSD-3-Clause und ISC. Eine Lizenz außerhalb der Richtlinie oder ein ungeklärter
+Dateinachweis ergibt `FAIL`. Der Bericht zeigt den Befund und die Nachweise
+pro Paketdatei, auch bei teilweise belegten Lizenzen. Für Bewertungen entstehen
+Evidence, ein Repository-Assessment und bei `FAIL` Findings; diese sind im Scanbericht und
 unter **Findings → Repository-Scans** sichtbar. Das Beispiel-Pack ist keine
 unternehmensspezifische Rechtsfreigabe. Auch Open-Source-Lizenzen außerhalb
 dieser kurzen Allowlist werden als nicht freigegeben angezeigt. Ältere Scans ohne Assessment können

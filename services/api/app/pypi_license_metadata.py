@@ -15,20 +15,19 @@ from urllib.parse import quote, urlsplit
 
 import httpx
 
-from app.license_policy import canonical_license_id
+from app.license_policy import (
+    LEGACY_LICENSE_NAMES,
+    MAX_EXPRESSION,
+    canonical_license_id,
+)
 
 MAX_INDEX_BYTES = 32 * 1024 * 1024
 MAX_METADATA_BYTES = 1024 * 1024
 MAX_SDIST_BYTES = 20 * 1024 * 1024
-MAX_SDIST_UNPACKED = 96 * 1024 * 1024
+MAX_SDIST_UNPACKED = 160 * 1024 * 1024
 MAX_SDIST_ENTRIES = 10000
 MAX_ARTIFACTS = 160
 SHA256 = re.compile(r"[0-9a-f]{64}")
-
-LEGACY_LICENSE_NAMES = {
-    "mit license": "MIT",
-    "apache license 2.0": "Apache-2.0",
-}
 
 LICENSE_CLASSIFIERS = {
     "MIT License": {"MIT"},
@@ -78,10 +77,6 @@ def _artifact_url(url):
     return url
 
 
-def _metadata_url(url):
-    return _artifact_url(url) + ".metadata"
-
-
 def _sdist_metadata(artifact):
     """Read root PKG-INFO from bounded bytes without extracting archive paths."""
     with (
@@ -122,30 +117,48 @@ def _read_pkg_info(unpacked):
     return found
 
 
-def _metadata(content, name, version):
+def _metadata(content, name, version, *, wheel):
     message = BytesParser(policy=policy.compat32).parsebytes(content, headersonly=True)
     if message.defects:
         raise ValueError("invalid metadata")
     names = message.get_all("Name", [])
     versions = message.get_all("Version", [])
     expressions = message.get_all("License-Expression", [])
-    dynamic = {str(item).strip().lower() for item in message.get_all("Dynamic", [])}
+    # In a built wheel Dynamic describes how the value was produced. In a
+    # source distribution it says the value may change during its build.
+    dynamic = (
+        set()
+        if wheel
+        else {str(item).strip().lower() for item in message.get_all("Dynamic", [])}
+    )
     normalized_name = (
         re.sub(r"[-_.]+", "-", str(names[0])).lower() if len(names) == 1 else None
     )
     if normalized_name != name or versions != [version]:
         raise ValueError("metadata package mismatch")
+    metadata_version = re.fullmatch(
+        r"(1|2)\.([0-9]{1,2})", str(message.get("Metadata-Version", ""))
+    )
+    if len(message.get_all("Metadata-Version", [])) != 1 or not metadata_version:
+        raise ValueError("invalid metadata version")
+    if not wheel and tuple(map(int, metadata_version.groups())) < (2, 2):
+        raise _UnresolvedLicense("source metadata predates static license declarations")
     if "license-expression" in dynamic:
         raise _UnresolvedLicense("dynamic license declaration")
     if expressions:
-        if len(expressions) != 1 or not str(expressions[0]).strip():
+        if (
+            len(expressions) != 1
+            or not 0 < len(str(expressions[0]).strip()) <= MAX_EXPRESSION
+        ):
             raise _UnresolvedLicense("ambiguous license expression")
         return {
             "licenseExpression": str(expressions[0]).strip(),
             "licenseField": "License-Expression",
         }
     legacy = message.get_all("License", [])
-    if "license" in dynamic or len(legacy) != 1:
+    if "license" in dynamic:
+        raise _UnresolvedLicense("dynamic license declaration")
+    if len(legacy) != 1:
         raise _UnresolvedLicense("no static license declaration")
     declared = str(legacy[0]).strip()
     expression = LEGACY_LICENSE_NAMES.get(declared.casefold()) or canonical_license_id(
@@ -198,6 +211,62 @@ def read_pypi_license(package, fetch=None):
         return _read_pypi_license(package, hashes, partial(_fetch, client))
 
 
+_METADATA_ERRORS = (
+    ValueError,
+    TypeError,
+    AttributeError,
+    KeyError,
+    httpx.HTTPError,
+    TimeoutError,
+    OSError,
+    EOFError,
+    tarfile.TarError,
+    zlib.error,
+)
+_ARTIFACT_UNAVAILABLE = "artifact license metadata unavailable or invalid"
+
+
+def _read_artifact(package, item, digest, fetch):
+    result = {"artifactSha256": digest, "status": "UNKNOWN"}
+    if item is None:
+        return {**result, "reason": "locked artifact missing in index"}
+    try:
+        url = _artifact_url(item.get("url"))
+        filename = urlsplit(url).path.rsplit("/", 1)[-1]
+        wheel = filename.endswith(".whl")
+        result.update(filename=filename, sourceUrl=url)
+        metadata_hashes = item.get("core-metadata", item.get("dist-info-metadata"))
+        metadata_hash = (
+            metadata_hashes.get("sha256") if isinstance(metadata_hashes, dict) else None
+        )
+        if isinstance(metadata_hash, str) and SHA256.fullmatch(metadata_hash):
+            url = url + ".metadata"
+            source_kind = "distribution-metadata"
+            data = fetch(url, accept="text/plain", limit=MAX_METADATA_BYTES)
+            if hashlib.sha256(data).hexdigest() != metadata_hash:
+                raise ValueError("metadata hash mismatch")
+        elif filename.endswith(".tar.gz"):
+            source_kind = "source-archive-pkg-info"
+            artifact = fetch(
+                url, accept="application/octet-stream", limit=MAX_SDIST_BYTES
+            )
+            if hashlib.sha256(artifact).hexdigest() != digest:
+                raise ValueError("source archive hash mismatch")
+            data = _sdist_metadata(artifact)
+            metadata_hash = hashlib.sha256(data).hexdigest()
+        else:
+            raise _UnresolvedLicense("verified distribution metadata unavailable")
+        result.update(
+            metadataSha256=metadata_hash, sourceUrl=url, sourceKind=source_kind
+        )
+        declaration = _metadata(data, package.name, package.version, wheel=wheel)
+        return {**result, **declaration, "status": "OBSERVED"}
+    except _UnresolvedLicense as exc:
+        return {**result, "reason": str(exc)}
+    except _METADATA_ERRORS:
+        return {**result, "reason": _ARTIFACT_UNAVAILABLE}
+
+
 def _read_pypi_license(package, hashes, fetch):
     index_url = f"https://pypi.org/simple/{quote(package.name, safe='')}/"
     try:
@@ -219,71 +288,22 @@ def _read_pypi_license(package, hashes, fetch):
                 if digest in matches:
                     raise ValueError("ambiguous artifact hash")
                 matches[digest] = item
-        if set(matches) != hashes:
-            raise ValueError("locked artifacts missing in index")
-        declarations = []
-        for digest, item in sorted(matches.items()):
-            metadata_hashes = item.get("core-metadata", item.get("dist-info-metadata"))
-            metadata_hash = (
-                metadata_hashes.get("sha256")
-                if isinstance(metadata_hashes, dict)
-                else None
-            )
-            if isinstance(metadata_hash, str) and SHA256.fullmatch(metadata_hash):
-                url = _metadata_url(item.get("url"))
-                source_kind = "distribution-metadata"
-                data = fetch(url, accept="text/plain", limit=MAX_METADATA_BYTES)
-                if hashlib.sha256(data).hexdigest() != metadata_hash:
-                    raise ValueError("metadata hash mismatch")
-            else:
-                url = _artifact_url(item.get("url"))
-                source_kind = "source-archive-pkg-info"
-                if not url.endswith(".tar.gz"):
-                    raise ValueError("verified distribution metadata unavailable")
-                artifact = fetch(
-                    url, accept="application/octet-stream", limit=MAX_SDIST_BYTES
-                )
-                if hashlib.sha256(artifact).hexdigest() != digest:
-                    raise ValueError("source archive hash mismatch")
-                data = _sdist_metadata(artifact)
-                metadata_hash = hashlib.sha256(data).hexdigest()
-            declarations.append(
-                {
-                    "artifactSha256": digest,
-                    "metadataSha256": metadata_hash,
-                    "sourceUrl": url,
-                    "sourceKind": source_kind,
-                    **_metadata(data, package.name, package.version),
-                }
-            )
-        expressions = {item["licenseExpression"] for item in declarations}
-        if len(expressions) != 1:
-            return {
-                "status": "UNKNOWN",
-                "reason": "artifact license expressions differ",
-                "artifacts": declarations,
-            }
-        return {
-            "status": "OBSERVED",
-            "expression": expressions.pop(),
-            "artifacts": declarations,
-        }
-    except _UnresolvedLicense as exc:
-        return {"status": "UNKNOWN", "reason": str(exc)}
-    except (
-        ValueError,
-        TypeError,
-        AttributeError,
-        KeyError,
-        json.JSONDecodeError,
-        httpx.HTTPError,
-        TimeoutError,
-        OSError,
-        EOFError,
-        tarfile.TarError,
-        zlib.error,
-    ):
+    except _METADATA_ERRORS:
+        return {"status": "UNKNOWN", "reason": _ARTIFACT_UNAVAILABLE}
+    artifacts = [
+        _read_artifact(package, matches.get(digest), digest, fetch)
+        for digest in sorted(hashes)
+    ]
+    unresolved = next((item for item in artifacts if item["status"] == "UNKNOWN"), None)
+    if unresolved:
         return {
             "status": "UNKNOWN",
-            "reason": "artifact license metadata unavailable or invalid",
+            "reason": unresolved["reason"],
+            "artifacts": artifacts,
         }
+    expressions = {item["licenseExpression"] for item in artifacts}
+    return {
+        "status": "OBSERVED",
+        "expression": next(iter(expressions)) if len(expressions) == 1 else None,
+        "artifacts": artifacts,
+    }

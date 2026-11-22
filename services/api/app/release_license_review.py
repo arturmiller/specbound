@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from app.license_policy import evaluate_license
+from app.license_policy import LEGACY_LICENSE_NAMES, evaluate_license
 from app.release_license_summary import markdown_summary
 
 MAX_JSON_BYTES = 64 * 1024 * 1024
@@ -62,16 +62,26 @@ def _component(package, native):
         for item in (declared, concluded)
         if item not in (None, "NONE", "NOASSERTION")
     }
+    expression = next(iter(declarations)) if len(declarations) == 1 else None
+    licenses = native.get("licenses", [])
+    if native.get("type") == "python" and expression and len(licenses) == 1:
+        license_entry = licenses[0]
+        raw = license_entry.get("value") or ""
+        # Compare Syft's SPDX export with the sole declaration in the image.
+        if license_entry.get("type") == "declared" and expression == (
+            "LicenseRef-" + raw.strip().replace(" ", "-")
+        ):
+            expression = LEGACY_LICENSE_NAMES.get(raw.strip().casefold(), expression)
     paths = {location["path"] for location in native.get("locations", [])}
     license_paths = {
         location["path"]
-        for license_entry in native.get("licenses", [])
+        for license_entry in licenses
         for location in license_entry.get("locations", [])
     }
     return {
         "name": package["name"],
         "version": package.get("versionInfo"),
-        "license": next(iter(declarations)) if len(declarations) == 1 else None,
+        "license": expression,
         "declaredLicense": declared,
         "concludedLicense": concluded,
         "id": package["SPDXID"],

@@ -114,3 +114,30 @@ class ReleaseLicenseReviewTest(unittest.TestCase):
                     "api-image", "a" * 64, [component], ["MIT"], {}
                 )
                 self.assertEqual(report["components"][0]["reason"], reason)
+
+    def test_image_inventory_only_normalizes_exact_python_license_names(self):
+        for name, expected in (
+            ("MIT license", "MIT"),
+            ("Apache License 2.0", "Apache-2.0"),
+            ("Dual License", "LicenseRef-Dual-License"),
+        ):
+            with self.subTest(name=name):
+                original = "LicenseRef-" + name.replace(" ", "-")
+                package = {
+                    "SPDXID": "SPDXRef-Package-test",
+                    "name": "example",
+                    "licenseDeclared": original,
+                    "licenseConcluded": "NOASSERTION",
+                }
+                licenses = [{"value": name, "type": "declared"}]
+                native = {"type": "python", "licenses": licenses}
+                self.assertEqual(_component(package, native)["license"], expected)
+                self.assertEqual(
+                    _component(package, {**native, "type": "deb"})["license"],
+                    original,
+                )
+                self.assertIsNone(
+                    _component({**package, "licenseConcluded": "ISC"}, native)[
+                        "license"
+                    ]
+                )

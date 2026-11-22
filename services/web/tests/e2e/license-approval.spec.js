@@ -63,3 +63,45 @@ test('a license approval retains the finding context and keeps the proof behind 
   await expect(page.getByText('LGPL-3.0-only', { exact: true })).toBeVisible();
   await expect(page.getByText('Mit Freigabe', { exact: true })).toBeVisible();
 });
+
+test('an unresolved source archive blocks the package and keeps the wheel evidence visible', async ({ page }) => {
+  const wheel = 'certifi-2026.11.20-py3-none-any.whl';
+  const wheelUrl = 'https://files.pythonhosted.org/packages/example/' + wheel;
+  await page.route('**/api/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/auth/config')) return route.fulfill({ json: { enabled: false } });
+    if (path.endsWith('/organizations')) return route.fulfill({ json: [{ id: 'org', name: 'Org' }] });
+    if (!path.endsWith('/assessments/certifi')) return route.fulfill({ json: [] });
+    return route.fulfill({ json: {
+      licenseUse: 'customer-distribution', canApproveLicenses: true,
+      assessment: {
+        id: 'certifi', organizationId: 'org', productId: 'product', context: 'pull_request',
+        gitSha: 'a'.repeat(40), environment: 'customer-distribution', pullRequestNumber: 17,
+        counts: { PASS: 0, FAIL: 1, UNKNOWN: 0, NOT_APPLICABLE: 0 },
+      },
+      findings: [],
+      evaluations: [{
+        id: 'evaluation', status: 'FAIL', licenseApprovalEligible: true, evidenceIds: ['evidence'],
+        reason: 'Lizenznachweis für mindestens eine Paketdatei fehlt oder ist ungeklärt',
+        subject: { id: 'package', labels: { name: 'certifi', version: '2026.11.20', lockfile: 'uv.lock' } },
+        control: { id: 'PY-LIC-001' },
+      }],
+      evidence: [{
+        id: 'evidence',
+        value: { licenseCoverage: 'incomplete', artifacts: [
+          { artifactSha256: 'a'.repeat(64), filename: wheel, sourceUrl: wheelUrl, status: 'OBSERVED', licenseExpression: 'MPL-2.0' },
+          { artifactSha256: 'b'.repeat(64), filename: 'certifi-2026.11.20.tar.gz', status: 'UNKNOWN', reason: 'dynamic license declaration' },
+        ] },
+      }],
+    } });
+  });
+
+  await page.goto('/assessments/certifi');
+  await page.getByText('certifi · 2026.11.20', { exact: true }).click();
+  await page.getByText('Lizenznachweise pro Paketdatei (2)').click();
+  await expect(page.getByRole('link', { name: wheel })).toHaveAttribute('href', wheelUrl);
+  await expect(page.getByText(/MPL-2.0 belegt/)).toBeVisible();
+  await expect(page.getByText(/certifi-2026.11.20.tar.gz · Ungeklärt · Dynamische Lizenzangabe im Quellarchiv/)).toBeVisible();
+  await page.getByText('Nutzung freigeben', { exact: true }).click();
+  await expect(page.locator('option[value="conditions-met"]')).toHaveCount(0);
+});

@@ -73,6 +73,7 @@ def evaluate_and_store(
     ref,
     selected_evidence_id=_AUTO_EVIDENCE,
     approved_license_use=False,
+    require_artifact_licenses=False,
 ):
     """Only trusted scanner output and a pinned, validated control are accepted."""
     if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
@@ -182,7 +183,9 @@ def evaluate_and_store(
                 )
             else:
                 decision = evaluate_assertions(
-                    control["assertions"], evidence[0]["value"]
+                    control["assertions"],
+                    evidence[0]["value"],
+                    require_artifact_licenses=require_artifact_licenses,
                 )
                 evidence_ids = (evidence[0]["id"],)
                 if (

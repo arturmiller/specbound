@@ -3,7 +3,11 @@
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from app.license_policy import DEFAULT_ALLOWED, evaluate_license
+from app.license_policy import (
+    DEFAULT_ALLOWED,
+    artifact_license_outcomes,
+    evaluate_license,
+)
 from app.pypi_license_metadata import read_pypi_license
 from app.python_lockfiles import find_uv_locks
 
@@ -98,6 +102,7 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=None):
                 )
             )
     packages = []
+    unresolved = False
     for path, entries in locks.items():
         for package in entries:
             metadata = (
@@ -107,7 +112,20 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=None):
             )
             observed = metadata.get("status") == "OBSERVED"
             expression = metadata.get("expression") if observed else None
-            result = evaluate_license(expression, policy) if observed else "UNKNOWN"
+            if observed and "artifacts" in metadata:
+                outcomes = artifact_license_outcomes(
+                    {
+                        "licenseCoverage": "complete",
+                        "artifacts": [
+                            {**item, "status": item.get("status", "OBSERVED")}
+                            for item in metadata["artifacts"]
+                        ],
+                    },
+                    policy,
+                )
+            else:
+                outcomes = {evaluate_license(expression, policy)}
+            unresolved = unresolved or "UNKNOWN" in outcomes
             packages.append(
                 {
                     "path": path,
@@ -119,14 +137,12 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=None):
                     if package.has_unhashed_artifacts
                     else list(package.artifact_hashes),
                     "licenseExpression": expression,
-                    "status": result,
+                    "status": "PASS" if outcomes == {"PASS"} else "FAIL",
                     "metadata": metadata,
                 }
             )
     return {
-        "coverage": "partial"
-        if unsupported or any(item["status"] == "UNKNOWN" for item in packages)
-        else "covered",
+        "coverage": "partial" if unsupported or unresolved else "covered",
         "sourceCoverage": "partial"
         if unsupported or any(not entries for entries in locks.values())
         else "covered",

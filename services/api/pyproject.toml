@@ -12,7 +12,6 @@ runtime = [
     "jsonschema==4.26.0",
     "rfc3339-validator==0.1.4",
     "license-expression==30.4.4",
-    "regex==2026.11.15",
 ]
 dev = [
     "ruff==0.17.3",

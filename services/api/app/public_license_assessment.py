@@ -12,7 +12,7 @@ from sqlalchemy import insert
 from app.coverage import PYTHON_LICENSE_SCANNER
 from app.findings import apply_snapshot
 from app.frozen_governance import plan_public_scan
-from app.license_policy import evaluate_license
+from app.license_policy import artifact_license_outcomes
 from app.license_scope import (
     approval_rule,
     approval_scope,
@@ -71,48 +71,77 @@ def _subject(job, package, revision, now):
 
 def _verified_metadata(package):
     metadata = package.get("metadata")
-    expression = package.get("licenseExpression")
-    if (
-        package.get("source") != "pypi"
-        or not isinstance(metadata, dict)
-        or metadata.get("status") != "OBSERVED"
-    ):
-        return None
-    if not isinstance(expression, str) or not expression or len(expression) > 2048:
+    if package.get("source") != "pypi" or not isinstance(metadata, dict):
         return None
     artifacts = metadata.get("artifacts")
     if not isinstance(artifacts, list) or not 0 < len(artifacts) <= MAX_ARTIFACTS:
         return None
+    hashes, verified = set(), []
     for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            return None
+        digest = artifact.get("artifactSha256")
         if (
-            not isinstance(artifact, dict)
-            or artifact.get("licenseExpression") != expression
+            not isinstance(digest, str)
+            or not SHA256.fullmatch(digest)
+            or digest in hashes
         ):
             return None
-        if artifact.get("sourceKind") not in (
-            "distribution-metadata",
-            "source-archive-pkg-info",
-        ):
+        hashes.add(digest)
+        status = artifact.get("status", metadata.get("status"))
+        if status not in ("OBSERVED", "UNKNOWN"):
             return None
-        if any(
-            not isinstance(artifact.get(key), str)
-            or not SHA256.fullmatch(artifact[key])
-            for key in ("artifactSha256", "metadataSha256")
-        ):
-            return None
-        url = artifact.get("sourceUrl")
-        if not isinstance(url, str) or len(url) > 4096:
-            return None
-        parsed = urlsplit(url)
-        if (
-            parsed.scheme != "https"
-            or parsed.netloc != "files.pythonhosted.org"
-            or not parsed.path.startswith("/packages/")
-            or parsed.query
-            or parsed.fragment
-        ):
-            return None
-    return {"licenseExpression": expression, "artifacts": artifacts}
+        entry = {**artifact, "status": status}
+        url = entry.get("sourceUrl")
+        if url is not None:
+            if not isinstance(url, str) or len(url) > 4096:
+                return None
+            parsed = urlsplit(url)
+            if (
+                parsed.scheme != "https"
+                or parsed.netloc != "files.pythonhosted.org"
+                or not parsed.path.startswith("/packages/")
+                or parsed.query
+                or parsed.fragment
+            ):
+                return None
+        if status == "OBSERVED":
+            expression = entry.get("licenseExpression")
+            metadata_digest = entry.get("metadataSha256")
+            if (
+                not isinstance(expression, str)
+                or not 0 < len(expression) <= 2048
+                or not isinstance(metadata_digest, str)
+                or not SHA256.fullmatch(metadata_digest)
+                or not url
+                or entry.get("sourceKind")
+                not in ("distribution-metadata", "source-archive-pkg-info")
+            ):
+                return None
+        else:
+            entry.pop("licenseExpression", None)
+        verified.append(entry)
+    expected = package.get("artifactHashes")
+    matching = expected is None or (
+        isinstance(expected, list)
+        and all(isinstance(item, str) for item in expected)
+        and set(expected) == hashes
+    )
+    complete = (
+        matching
+        and metadata.get("status") == "OBSERVED"
+        and all(item["status"] == "OBSERVED" for item in verified)
+    )
+    expressions = {
+        item["licenseExpression"] for item in verified if item["status"] == "OBSERVED"
+    }
+    return {
+        "licenseExpression": next(iter(expressions))
+        if complete and len(expressions) == 1
+        else None,
+        "licenseCoverage": "complete" if complete else "incomplete",
+        "artifacts": verified,
+    }
 
 
 def _evidence(db, job, subject, value, revision, environment, now, approval=None):
@@ -139,9 +168,14 @@ def _evidence(db, job, subject, value, revision, environment, now, approval=None
             producer_kind="public-license-scan",
             producer_scan_id=job["id"],
             provenance={
-                "sourceRef": value["artifacts"][0]["sourceUrl"]
-                if value["artifacts"]
-                else subject["provenance"]["sourceRef"],
+                "sourceRef": next(
+                    (
+                        item["sourceUrl"]
+                        for item in value["artifacts"]
+                        if item.get("sourceUrl")
+                    ),
+                    subject["provenance"]["sourceRef"],
+                ),
                 "scanId": job["id"],
                 "repository": job["repository"],
                 "lockfile": subject["labels"]["lockfile"],
@@ -159,19 +193,14 @@ def _approval_for(db, job, context, subject, control, value, now):
     scope = approval_scope(context, job["binding_id"], subject, control)
     if scope is None:
         return None
-    if (
-        value
-        and evaluate_license(
-            value["licenseExpression"], approval_rule(control)["allowed"]
-        )
-        == "PASS"
-    ):
+    outcomes = artifact_license_outcomes(value, approval_rule(control)["allowed"])
+    if outcomes == {"PASS"}:
         return None
     matches = db.execute(live_approvals(scope, now).limit(2)).mappings().all()
     if len(matches) != 1:
         return None
     approval = matches[0]
-    if approval["kind"] == "conditions-met" and value is None:
+    if approval["kind"] == "conditions-met" and "UNKNOWN" in outcomes:
         return None
     return approval
 
@@ -258,12 +287,15 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
         if not isinstance(package, dict) or package.get("path") not in files:
             raise ValueError("Package is outside scanned lockfiles")
         subject = _subject(job, package, revision, now)
-        value = _verified_metadata(package)
-        evidence_id = (
-            _evidence(db, job, subject, value, revision, environment, now)
-            if value is not None
-            else None
-        )
+        value = _verified_metadata(package) or {
+            "licenseExpression": None,
+            "licenseCoverage": "incomplete",
+            "artifacts": [],
+        }
+        metadata = package.get("metadata")
+        if isinstance(metadata, dict) and isinstance(metadata.get("reason"), str):
+            value["licenseReason"] = metadata["reason"][:500]
+        evidence_id = _evidence(db, job, subject, value, revision, environment, now)
         scope = {
             "productId": job["product_id"],
             "targetRevision": revision,
@@ -291,6 +323,7 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
                 ref=job["ref"],
                 selected_evidence_id=selected,
                 approved_license_use=approved is not None,
+                require_artifact_licenses=True,
             )
             evaluation_ids.append(evaluation["id"])
     snapshot = create_snapshot(

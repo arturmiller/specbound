@@ -132,11 +132,10 @@ class PyPIMetadataTest(unittest.TestCase):
         self.assertEqual(result["artifacts"][0]["licenseField"], "License")
         self.assertEqual(result["artifacts"][0]["declaredLicense"], "BSD-3-Clause")
 
-    def test_ambiguous_and_dynamic_legacy_metadata_remains_unknown(self):
+    def test_ambiguous_legacy_metadata_remains_unknown(self):
         for declaration in (
             b"License: Dual License",
             b"License: BSD",
-            b"License: MIT\nDynamic: License",
             b"License: MIT\nLicense: GPL-3.0-only",
             b"License: MIT\nClassifier: License :: OSI Approved :: GPL Version 3",
             b"License: MIT\nLicense-Expression: \n",
@@ -243,13 +242,60 @@ class PyPIMetadataTest(unittest.TestCase):
         result = read_pypi_license(package, fetch)
         self.assertEqual((result["status"], result["expression"]), ("OBSERVED", "MIT"))
         with patch("app.pypi_license_metadata.MAX_SDIST_UNPACKED", 128):
-            self.assertEqual(
-                read_pypi_license(package, fetch),
-                {"status": "UNKNOWN", "reason": "source archive exceeds size limit"},
-            )
+            unresolved = read_pypi_license(package, fetch)
+            self.assertEqual(unresolved["status"], "UNKNOWN")
+            self.assertEqual(unresolved["reason"], "source archive exceeds size limit")
         item["hashes"]["sha256"] = "a" * 64
         package = LockedPackage("uv.lock", "example", "1.2", "pypi", ("a" * 64,), ())
         self.assertEqual(read_pypi_license(package, fetch)["status"], "UNKNOWN")
+
+    def assert_source_license_unresolved(self, metadata, reason):
+        self.metadata = metadata
+        self.item["core-metadata"]["sha256"] = hashlib.sha256(metadata).hexdigest()
+        output = io.BytesIO()
+        with tarfile.open(fileobj=output, mode="w:gz") as archive:
+            info = tarfile.TarInfo("example-1.2/PKG-INFO")
+            info.size = len(metadata)
+            archive.addfile(info, io.BytesIO(metadata))
+        source = output.getvalue()
+        digest = hashlib.sha256(source).hexdigest()
+        source_url = "https://files.pythonhosted.org/packages/ab/example.tar.gz"
+        source_entry = {"url": source_url, "hashes": {"sha256": digest}}
+        package = LockedPackage(
+            "uv.lock",
+            "example",
+            "1.2",
+            "pypi",
+            tuple(sorted((self.artifact_hash, digest))),
+            (),
+        )
+
+        def fetch(url, **kwargs):
+            if url.startswith("https://pypi.org/simple/"):
+                return json.dumps({"files": [self.item, source_entry]}).encode()
+            if url == source_url:
+                return source
+            return self.fetch(url, **kwargs)
+
+        result = read_pypi_license(package, fetch)
+        self.assertEqual(result["status"], "UNKNOWN")
+        self.assertEqual(result["reason"], reason)
+        files = {item["artifactSha256"]: item for item in result["artifacts"]}
+        self.assertEqual(files[self.artifact_hash]["licenseExpression"], "MPL-2.0")
+        self.assertEqual(files[digest]["status"], "UNKNOWN")
+        self.assertNotIn("licenseExpression", files[digest])
+
+    def test_dynamic_license_in_wheel_is_preserved_when_source_is_unresolved(self):
+        self.assert_source_license_unresolved(
+            b"Metadata-Version: 2.4\nName: example\nVersion: 1.2\nLicense: MPL-2.0\nDynamic: License\n\n",
+            "dynamic license declaration",
+        )
+
+    def test_old_source_metadata_does_not_guarantee_the_license_of_a_build(self):
+        self.assert_source_license_unresolved(
+            b"Metadata-Version: 2.1\nName: example\nVersion: 1.2\nLicense: MPL-2.0\n\n",
+            "source metadata predates static license declarations",
+        )
 
 
 class LicenseScanTest(unittest.TestCase):
@@ -308,7 +354,7 @@ source = { git = "https://example.invalid/repository" }
         self.assertEqual(result["sourceCoverage"], "covered")
         self.assertEqual(result["files"], ["a/uv.lock"])
         self.assertEqual(
-            [p["status"] for p in result["packages"]], ["PASS", "FAIL", "UNKNOWN"]
+            [p["status"] for p in result["packages"]], ["PASS", "FAIL", "FAIL"]
         )
         self.assertTrue(all(p["path"] == "a/uv.lock" for p in result["packages"]))
 

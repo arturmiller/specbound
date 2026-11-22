@@ -68,14 +68,14 @@ def markdown_summary(report):
         "",
         "**Bereit zur Freigabe**" if report["ready"] else "**Freigabe offen**",
         "",
-        "| Artefakt | Erfüllt | Freigegeben | Verstöße | Ungeklärt |",
+        "| Artefakt | Erfüllt | Freigegeben | Blockierende Verstöße | Davon ungeklärt |",
         "| --- | ---: | ---: | ---: | ---: |",
     ]
     for name, artifact in artifacts.items():
         counts = Counter(item["status"] for item in artifact["components"])
         label = ARTIFACT_LABELS[name]
         lines.append(
-            f"| {label} | {counts['PASS']} | {counts['APPROVED']} | {counts['FAIL']} | {counts['UNKNOWN']} |"
+            f"| {label} | {counts['PASS']} | {counts['APPROVED']} | {counts['FAIL'] + counts['UNKNOWN']} | {counts['UNKNOWN']} |"
         )
     pending = []
     if not report["projectLicenseReviewed"]:

@@ -36,6 +36,12 @@ fehlgeschlagene Prüfung für denselben Commit neu eingeplant werden. Der gespei
 Bericht bleibt zeitbezogen abrufbar. Der GitHub-Check überprüft erfolgreiche
 Ergebnisse regelmäßig erneut und berücksichtigt dabei Ablauf und Widerruf.
 
+Der Lockfile-Scan bewertet alle referenzierten Dateien. Bei einem fertigen
+Wheel zählt die hash-geprüfte Lizenzangabe im Wheel. Eine dynamische Angabe
+im Quellarchiv lässt den Lizenznachweis für dessen Build offen. Ein offener
+Dateinachweis erzeugt einen blockierenden Verstoß. Für die Auslieferung sind
+die tatsächlich gebauten Artefakte maßgeblich.
+
 ## Gebaute Artefakte prüfen
 
 Erzeuge den Portal-Build mit `npm ci` und `npm run build` in `services/web`.
@@ -70,6 +76,7 @@ Der Bericht enthält für `portal`, `api-image` und `worker-image` je einen
 SHA-256-Digest und die gefundenen Komponenten. Wenn Syft eine Lizenzdatei oder
 Paketmetadaten im Image ermittelt, enthält der Bericht deren Fundstelle. Die
 Markdown-Zusammenfassung zeigt fehlende Freigaben und offene Komponenten.
+Ungeklärte Lizenzen zählen als blockierende Verstöße.
 Die freigebende Stelle bestätigt
 für jeden Digest die Vollständigkeit des Inventars einschließlich eingebetteter
 Bibliotheken und mitgelieferter Assets sowie die erfüllten Lizenzhinweise und

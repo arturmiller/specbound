@@ -29,6 +29,38 @@ function approvalOf(evidence) {
     : null;
 }
 
+/** @typedef {{artifactSha256: string, filename?: string, sourceUrl?: string, status?: string, licenseExpression?: string, reason?: string}} LicenseArtifact */
+
+const licenseReasons = /** @type {Record<string, string>} */ ({
+  'dynamic license declaration': 'Dynamische Lizenzangabe im Quellarchiv',
+  'source metadata predates static license declarations': 'Metadaten des Quellarchivs belegen keine feste Lizenz für den Build',
+  'artifact license metadata unavailable or invalid': 'Metadaten fehlen oder konnten nicht verifiziert werden',
+  'locked artifact missing in index': 'Paketdatei fehlt im PyPI-Index',
+  'source archive exceeds size limit': 'Quellarchiv überschreitet das Größenlimit',
+  'ambiguous legacy license declaration': 'Mehrdeutige ältere Lizenzangabe',
+  'ambiguous legacy license classifiers': 'Mehrdeutige Lizenzklassifikatoren',
+  'no static license declaration': 'Keine eindeutige Lizenzangabe vorhanden',
+  'artifact hashes missing': 'Artefakthashes im Lockfile fehlen',
+  'unsupported package source': 'Paketquelle wird nicht unterstützt',
+});
+
+/** @param {{artifacts: LicenseArtifact[]}} props */
+function LicenseArtifacts({ artifacts }) {
+  const [open, setOpen] = useState(false);
+  return <details className="assessment-disclosure" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>Lizenznachweise pro Paketdatei ({artifacts.length})</summary>
+    {open && <ul>{artifacts.map((artifact) => {
+      const label = artifact.filename || 'Paketdatei';
+      const url = artifact.sourceUrl?.startsWith('https://files.pythonhosted.org/packages/') ? artifact.sourceUrl : '';
+      return <li key={artifact.artifactSha256}>
+        {url ? <a href={url}>{label}</a> : label}
+        {' · '}{artifact.licenseExpression ? artifact.licenseExpression + ' belegt' : 'Ungeklärt'}
+        {artifact.reason && ' · ' + (licenseReasons[artifact.reason] || artifact.reason)}
+      </li>;
+    })}</ul>}
+  </details>;
+}
+
 /** @param {{evaluation: Evaluation, evidence: Evidence[], finding?: Finding, organizationId: string, sourceScan?: Report['sourceScan'], controlTitle?: string, productId: string, assessmentId: string, accessToken: string, licenseUse?: string | null, canApprove?: boolean}} props */
 function EvaluationRow({ evaluation, evidence, finding, organizationId, sourceScan, controlTitle, productId, assessmentId, accessToken, licenseUse, canApprove }) {
   const { labels, provenance } = evaluation.subject;
@@ -37,6 +69,10 @@ function EvaluationRow({ evaluation, evidence, finding, organizationId, sourceSc
     : controlTitle || 'Kontrolle';
   const license = licenseOf(evidence[0]);
   const approval = approvalOf(evidence[0]);
+  const licenseValue = /** @type {{artifacts?: LicenseArtifact[], licenseCoverage?: string, licenseReason?: string} | undefined} */ (evidence[0]?.value);
+  const missingLicense = licenseValue?.licenseCoverage === 'incomplete';
+  const licenseArtifacts = licenseValue?.licenseCoverage && Array.isArray(licenseValue.artifacts)
+    ? licenseValue.artifacts : [];
   const lockfile = labels?.lockfile;
   const lockfileUrl = lockfile && sourceScan?.sourceRevision
     ? 'https://github.com/' + sourceScan.repository + '/blob/' + sourceScan.sourceRevision + '/' + lockfile.split('/').map(encodeURIComponent).join('/')
@@ -49,8 +85,10 @@ function EvaluationRow({ evaluation, evidence, finding, organizationId, sourceSc
     </summary>
     <div className="assessment-item-body">
       <p>{evaluation.reason}</p>
+      {licenseValue?.licenseReason && <p>{licenseReasons[licenseValue.licenseReason] || licenseValue.licenseReason}</p>}
+      {licenseArtifacts.length > 0 && <LicenseArtifacts artifacts={licenseArtifacts} />}
       {approval && <ApprovalDetails approval={approval} productId={productId} accessToken={accessToken} canManage={Boolean(canApprove)} />}
-      {canApprove && licenseUse && evaluation.licenseApprovalEligible && <ApprovalForm productId={productId} assessmentId={assessmentId} evaluationId={evaluation.id} accessToken={accessToken} use={licenseUse} status={evaluation.status} />}
+      {canApprove && licenseUse && evaluation.licenseApprovalEligible && <ApprovalForm productId={productId} assessmentId={assessmentId} evaluationId={evaluation.id} accessToken={accessToken} use={licenseUse} status={missingLicense ? 'UNKNOWN' : evaluation.status} />}
       <nav className="assessment-links" aria-label="Nachweise und Quelle">
         {finding && <a href={'/findings?' + new URLSearchParams({ organization: organizationId, finding: finding.id })}>Finding ansehen</a>}
         {lockfileUrl && <a href={lockfileUrl}>Lockfile öffnen</a>}

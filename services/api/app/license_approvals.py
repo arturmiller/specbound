@@ -12,7 +12,9 @@ from sqlalchemy import insert, select, update
 
 from app.audit import record_event
 from app.authorization import organization_access
+from app.license_policy import artifact_license_outcomes
 from app.license_scope import (
+    approval_rule,
     approval_scope,
     current_license_configuration,
     license_decision,
@@ -23,6 +25,7 @@ from app.products import Db, Principal, _product
 from app.tables import (
     assessment_jobs,
     assessment_snapshots,
+    evidence_records,
     license_approvals,
     repo_bindings,
     rule_evaluations,
@@ -102,10 +105,23 @@ def approve_use(product_id: str, data: ApprovalRequest, principal: Principal, db
         raise HTTPException(
             409, "Für diese Bewertung ist keine neue Freigabe erforderlich"
         )
-    if data.kind == "conditions-met" and evaluation["status"] != "FAIL":
-        raise HTTPException(
-            422, "Erfüllte Auflagen erfordern eine festgestellte Lizenz"
+    if data.kind == "conditions-met":
+        value = db.execute(
+            select(evidence_records.c.value).where(
+                evidence_records.c.id.in_(evaluation["evidence_ids"]),
+                evidence_records.c.organization_id == org,
+                evidence_records.c.product_id == product_id,
+                evidence_records.c.subject_id == evaluation["subject_id"],
+            )
+        ).scalar_one_or_none()
+        outcomes = artifact_license_outcomes(
+            value, approval_rule(evaluation["control"])["allowed"]
         )
+        if evaluation["status"] != "FAIL" or "UNKNOWN" in outcomes:
+            raise HTTPException(
+                422,
+                "Erfüllte Auflagen erfordern festgestellte Lizenzen für alle Paketdateien",
+            )
     if db.execute(live_approvals(scope, now)).first():
         raise HTTPException(409, "Für diesen Einsatz gilt bereits eine Freigabe")
     row = (
