@@ -297,6 +297,89 @@ class PyPIMetadataTest(unittest.TestCase):
             "source metadata predates static license declarations",
         )
 
+    def test_old_source_metadata_is_corroborated_by_the_locked_archive_license(self):
+        text = b"Complete license text for this fixture."
+        normalized_digest = hashlib.sha256(text).hexdigest()
+        metadata = (
+            b"Metadata-Version: 2.1\nName: example\nVersion: 1.2\nLicense: Apache-2.0\n"
+            b"License-File: LICENSE\nLicense-File: NOTICE\n\n"
+        )
+        url = "https://files.pythonhosted.org/packages/ab/example-1.2.tar.gz"
+
+        def scan(entries, headers):
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode="w:gz") as archive:
+                for path, content in {
+                    "example-1.2/PKG-INFO": headers,
+                    **entries,
+                }.items():
+                    member = tarfile.TarInfo(path)
+                    member.size = len(content)
+                    archive.addfile(member, io.BytesIO(content))
+            artifact = output.getvalue()
+            digest = hashlib.sha256(artifact).hexdigest()
+            index = {
+                "files": [
+                    {
+                        "url": url,
+                        "hashes": {"sha256": digest},
+                        "core-metadata": {
+                            "sha256": hashlib.sha256(headers).hexdigest()
+                        },
+                    }
+                ]
+            }
+
+            def fetch(path, **kwargs):
+                if path.startswith("https://pypi.org/simple/"):
+                    return json.dumps(index).encode()
+                if path == url + ".metadata":
+                    return headers
+                self.assertEqual(path, url)
+                return artifact
+
+            package = LockedPackage("uv.lock", "example", "1.2", "pypi", (digest,), ())
+            return read_pypi_license(package, fetch)
+
+        with patch(
+            "app.pypi_license_metadata.SOURCE_LICENSE_TEXTS",
+            {normalized_digest: "Apache-2.0"},
+        ):
+            files = {"example-1.2/LICENSE": text, "example-1.2/NOTICE": b"copyright"}
+            observed = scan(files, metadata)
+            self.assertEqual(observed["expression"], "Apache-2.0")
+            evidence = observed["artifacts"][0]
+            self.assertEqual(evidence["sourceKind"], "source-archive-license-file")
+            self.assertEqual(evidence["sourceUrl"], url)
+            self.assertEqual(evidence["licenseFile"], "LICENSE")
+            self.assertEqual(
+                evidence["licenseFileSha256"], hashlib.sha256(text).hexdigest()
+            )
+            self.assertEqual(
+                _verified_metadata({"source": "pypi", "metadata": observed})[
+                    "licenseCoverage"
+                ],
+                "complete",
+            )
+            conflicting = scan(files, metadata.replace(b"Apache-2.0", b"MIT"))
+            self.assertEqual(
+                conflicting["reason"], "source license file conflicts with metadata"
+            )
+            for unverified in (
+                scan({"elsewhere/LICENSE": text}, metadata),
+                scan({**files, "example-1.2/LICENSE.extra": b"extra terms"}, metadata),
+                scan(
+                    {**files, "example-1.2/LICENSE": text + b" extra terms"}, metadata
+                ),
+                scan(
+                    files,
+                    metadata.replace(
+                        b"License-File: NOTICE", b"License-File: vendor/LICENSE"
+                    ),
+                ),
+            ):
+                self.assertEqual(unverified["status"], "UNKNOWN")
+
 
 class LicenseScanTest(unittest.TestCase):
     def test_repository_scan_pins_snapshot_and_does_not_re_fetch(self):

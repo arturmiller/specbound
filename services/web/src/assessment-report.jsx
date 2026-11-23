@@ -29,11 +29,12 @@ function approvalOf(evidence) {
     : null;
 }
 
-/** @typedef {{artifactSha256: string, filename?: string, sourceUrl?: string, status?: string, licenseExpression?: string, reason?: string}} LicenseArtifact */
+/** @typedef {{artifactSha256: string, filename?: string, sourceUrl?: string, status?: string, licenseExpression?: string, licenseFile?: string, reason?: string}} LicenseArtifact */
 
 const licenseReasons = /** @type {Record<string, string>} */ ({
   'dynamic license declaration': 'Dynamische Lizenzangabe im Quellarchiv',
   'source metadata predates static license declarations': 'Metadaten des Quellarchivs belegen keine feste Lizenz für den Build',
+  'source license file conflicts with metadata': 'Lizenzdatei und Metadaten des Quellarchivs widersprechen sich',
   'artifact license metadata unavailable or invalid': 'Metadaten fehlen oder konnten nicht verifiziert werden',
   'locked artifact missing in index': 'Paketdatei fehlt im PyPI-Index',
   'source archive exceeds size limit': 'Quellarchiv überschreitet das Größenlimit',
@@ -55,6 +56,7 @@ function LicenseArtifacts({ artifacts }) {
       return <li key={artifact.artifactSha256}>
         {url ? <a href={url}>{label}</a> : label}
         {' · '}{artifact.licenseExpression ? artifact.licenseExpression + ' belegt' : 'Ungeklärt'}
+        {artifact.licenseFile && ' · ' + artifact.licenseFile + ' im Quellarchiv'}
         {artifact.reason && ' · ' + (licenseReasons[artifact.reason] || artifact.reason)}
       </li>;
     })}</ul>}

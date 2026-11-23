@@ -29,6 +29,17 @@ MAX_SDIST_ENTRIES = 10000
 MAX_ARTIFACTS = 160
 SHA256 = re.compile(r"[0-9a-f]{64}")
 
+SOURCE_LICENSE_FILES = frozenset(
+    {"LICENSE", "LICENSE.txt", "LICENSE.md", "COPYING", "COPYING.txt"}
+)
+SOURCE_NOTICE_FILES = frozenset({"NOTICE", "NOTICE.txt", "NOTICE.md"})
+# SHA-256 of the whitespace-normalized Apache License text, with and without
+# the appendix. https://www.apache.org/licenses/LICENSE-2.0.txt
+SOURCE_LICENSE_TEXTS = {
+    "0ffddef9e48f8a09aed5caf2d44f7ba1c1be2d9b8e0a6f693b1635b2d5566645": "Apache-2.0",
+    "59d8f0ba87ad9a2f1a431123c8d16646e5b89ba53653e818f16d136d77263c99": "Apache-2.0",
+}
+
 LICENSE_CLASSIFIERS = {
     "MIT License": {"MIT"},
     "BSD License": {"BSD-2-Clause", "BSD-3-Clause", "BSD-4-Clause"},
@@ -39,6 +50,10 @@ LICENSE_CLASSIFIERS = {
 
 class _UnresolvedLicense(ValueError):
     """A known reason why an artifact's license could not be resolved."""
+
+
+class _SourceLicenseFileRequired(_UnresolvedLicense):
+    """PKG-INFO requires corroboration by a license file in the source archive."""
 
 
 def _fetch(client, url, *, accept, limit):
@@ -77,8 +92,8 @@ def _artifact_url(url):
     return url
 
 
-def _sdist_metadata(artifact):
-    """Read root PKG-INFO from bounded bytes without extracting archive paths."""
+def _sdist_files(artifact):
+    """Read root evidence files from bounded bytes without extracting archive paths."""
     with (
         gzip.GzipFile(fileobj=io.BytesIO(artifact)) as stream,
         SpooledTemporaryFile(max_size=MAX_METADATA_BYTES) as unpacked,
@@ -90,47 +105,59 @@ def _sdist_metadata(artifact):
                 raise _UnresolvedLicense("source archive exceeds size limit")
             unpacked.write(chunk)
         unpacked.seek(0)
-        return _read_pkg_info(unpacked)
+        return _read_source_files(unpacked)
 
 
-def _read_pkg_info(unpacked):
-    found = None
+def _read_source_files(unpacked):
+    metadata = None
+    license_members = []
     with tarfile.open(fileobj=unpacked, mode="r:") as archive:
         for index, member in enumerate(archive):
             if index >= MAX_SDIST_ENTRIES:
                 raise ValueError("source archive has too many entries")
             parts = member.name.split("/")
-            if len(parts) != 2 or parts[1] != "PKG-INFO":
+            if len(parts) != 2 or parts[0] in ("", ".", ".."):
                 continue
+            if parts[1] == "PKG-INFO":
+                if metadata is not None:
+                    raise ValueError("ambiguous source metadata")
+                metadata = member
+            elif re.fullmatch(r"(LICENSE|COPYING)([._-].*)?", parts[1], re.IGNORECASE):
+                license_members.append((parts[0], parts[1], member))
+        if metadata is None:
+            raise ValueError("source metadata unavailable")
+        root = metadata.name.split("/", 1)[0]
+        licenses = [
+            (name, member) for parent, name, member in license_members if parent == root
+        ]
+        license_file = None
+        if len(licenses) == 1:
+            name, member = licenses[0]
             if (
-                found is not None
-                or not member.isfile()
-                or member.size > MAX_METADATA_BYTES
+                name in SOURCE_LICENSE_FILES
+                and member.isfile()
+                and member.size <= MAX_METADATA_BYTES
             ):
-                raise ValueError("ambiguous or invalid source metadata")
-            stream = archive.extractfile(member)
-            if stream is None:
-                raise ValueError("source metadata unavailable")
-            found = stream.read(MAX_METADATA_BYTES + 1)
-    if found is None or len(found) > MAX_METADATA_BYTES:
-        raise ValueError("source metadata unavailable")
-    return found
+                license_file = (name, _read_source_member(archive, member))
+        return _read_source_member(archive, metadata), license_file
 
 
-def _metadata(content, name, version, *, wheel):
+def _read_source_member(archive, member):
+    if not member.isfile() or member.size > MAX_METADATA_BYTES:
+        raise ValueError("invalid source evidence file")
+    stream = archive.extractfile(member)
+    if stream is None:
+        raise ValueError("source evidence file unavailable")
+    with stream:
+        return stream.read(MAX_METADATA_BYTES + 1)
+
+
+def _metadata(content, name, version, *, wheel, license_file=None):
     message = BytesParser(policy=policy.compat32).parsebytes(content, headersonly=True)
     if message.defects:
         raise ValueError("invalid metadata")
     names = message.get_all("Name", [])
     versions = message.get_all("Version", [])
-    expressions = message.get_all("License-Expression", [])
-    # In a built wheel Dynamic describes how the value was produced. In a
-    # source distribution it says the value may change during its build.
-    dynamic = (
-        set()
-        if wheel
-        else {str(item).strip().lower() for item in message.get_all("Dynamic", [])}
-    )
     normalized_name = (
         re.sub(r"[-_.]+", "-", str(names[0])).lower() if len(names) == 1 else None
     )
@@ -141,10 +168,46 @@ def _metadata(content, name, version, *, wheel):
     )
     if len(message.get_all("Metadata-Version", [])) != 1 or not metadata_version:
         raise ValueError("invalid metadata version")
-    if not wheel and tuple(map(int, metadata_version.groups())) < (2, 2):
-        raise _UnresolvedLicense("source metadata predates static license declarations")
-    if "license-expression" in dynamic:
-        raise _UnresolvedLicense("dynamic license declaration")
+    if not wheel:
+        dynamic = {str(item).strip().lower() for item in message.get_all("Dynamic", [])}
+        if tuple(map(int, metadata_version.groups())) < (2, 2):
+            reason = "source metadata predates static license declarations"
+        elif "license-expression" in dynamic or (
+            "license" in dynamic and not message.get_all("License-Expression")
+        ):
+            reason = "dynamic license declaration"
+        else:
+            reason = None
+        if reason:
+            return _source_license_declaration(message, license_file, reason)
+    return _declared_license(message)
+
+
+def _source_license_declaration(message, license_file, reason):
+    # Old or dynamic PKG-INFO cannot establish the license of a future wheel.
+    # The license shipped in the archive can establish the archive's license.
+    if license_file is None:
+        raise _SourceLicenseFileRequired(reason)
+    filename, content = license_file
+    expression = SOURCE_LICENSE_TEXTS.get(
+        hashlib.sha256(b" ".join(content.split())).hexdigest()
+    )
+    license_files = set(message.get_all("License-File", []))
+    if not expression or license_files - {filename} - SOURCE_NOTICE_FILES:
+        raise _UnresolvedLicense(reason)
+    declaration = _declared_license(message)
+    if declaration["licenseExpression"] != expression:
+        raise _UnresolvedLicense("source license file conflicts with metadata")
+    return {
+        **declaration,
+        "sourceKind": "source-archive-license-file",
+        "licenseFile": filename,
+        "licenseFileSha256": hashlib.sha256(content).hexdigest(),
+    }
+
+
+def _declared_license(message):
+    expressions = message.get_all("License-Expression", [])
     if expressions:
         if (
             len(expressions) != 1
@@ -156,8 +219,6 @@ def _metadata(content, name, version, *, wheel):
             "licenseField": "License-Expression",
         }
     legacy = message.get_all("License", [])
-    if "license" in dynamic:
-        raise _UnresolvedLicense("dynamic license declaration")
     if len(legacy) != 1:
         raise _UnresolvedLicense("no static license declaration")
     declared = str(legacy[0]).strip()
@@ -234,32 +295,46 @@ def _read_artifact(package, item, digest, fetch):
         url = _artifact_url(item.get("url"))
         filename = urlsplit(url).path.rsplit("/", 1)[-1]
         wheel = filename.endswith(".whl")
+        source_archive = filename.endswith(".tar.gz")
         result.update(filename=filename, sourceUrl=url)
         metadata_hashes = item.get("core-metadata", item.get("dist-info-metadata"))
         metadata_hash = (
             metadata_hashes.get("sha256") if isinstance(metadata_hashes, dict) else None
         )
         if isinstance(metadata_hash, str) and SHA256.fullmatch(metadata_hash):
-            url = url + ".metadata"
-            source_kind = "distribution-metadata"
-            data = fetch(url, accept="text/plain", limit=MAX_METADATA_BYTES)
+            metadata_url = url + ".metadata"
+            data = fetch(metadata_url, accept="text/plain", limit=MAX_METADATA_BYTES)
             if hashlib.sha256(data).hexdigest() != metadata_hash:
                 raise ValueError("metadata hash mismatch")
-        elif filename.endswith(".tar.gz"):
-            source_kind = "source-archive-pkg-info"
-            artifact = fetch(
-                url, accept="application/octet-stream", limit=MAX_SDIST_BYTES
-            )
-            if hashlib.sha256(artifact).hexdigest() != digest:
-                raise ValueError("source archive hash mismatch")
-            data = _sdist_metadata(artifact)
-            metadata_hash = hashlib.sha256(data).hexdigest()
-        else:
+            try:
+                declaration = _metadata(
+                    data, package.name, package.version, wheel=wheel
+                )
+            except _SourceLicenseFileRequired:
+                if not source_archive:
+                    raise
+            else:
+                return {
+                    **result,
+                    **declaration,
+                    "sourceUrl": metadata_url,
+                    "metadataSha256": metadata_hash,
+                    "sourceKind": "distribution-metadata",
+                    "status": "OBSERVED",
+                }
+        if not source_archive:
             raise _UnresolvedLicense("verified distribution metadata unavailable")
+        artifact = fetch(url, accept="application/octet-stream", limit=MAX_SDIST_BYTES)
+        if hashlib.sha256(artifact).hexdigest() != digest:
+            raise ValueError("source archive hash mismatch")
+        data, license_file = _sdist_files(artifact)
         result.update(
-            metadataSha256=metadata_hash, sourceUrl=url, sourceKind=source_kind
+            metadataSha256=hashlib.sha256(data).hexdigest(),
+            sourceKind="source-archive-pkg-info",
         )
-        declaration = _metadata(data, package.name, package.version, wheel=wheel)
+        declaration = _metadata(
+            data, package.name, package.version, wheel=wheel, license_file=license_file
+        )
         return {**result, **declaration, "status": "OBSERVED"}
     except _UnresolvedLicense as exc:
         return {**result, "reason": str(exc)}

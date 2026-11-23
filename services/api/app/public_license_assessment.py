@@ -22,7 +22,7 @@ from app.license_scope import (
     live_approvals,
     locked_artifact_digest,
 )
-from app.pypi_license_metadata import MAX_ARTIFACTS
+from app.pypi_license_metadata import MAX_ARTIFACTS, SOURCE_LICENSE_FILES
 from app.rule_evaluation import evaluate_and_store
 from app.snapshots import COMMIT, create_snapshot
 from app.tables import evidence_records, scanner_coverage
@@ -108,16 +108,32 @@ def _verified_metadata(package):
         if status == "OBSERVED":
             expression = entry.get("licenseExpression")
             metadata_digest = entry.get("metadataSha256")
+            source_kind = entry.get("sourceKind")
             if (
                 not isinstance(expression, str)
                 or not 0 < len(expression) <= 2048
                 or not isinstance(metadata_digest, str)
                 or not SHA256.fullmatch(metadata_digest)
                 or not url
-                or entry.get("sourceKind")
-                not in ("distribution-metadata", "source-archive-pkg-info")
+                or source_kind
+                not in (
+                    "distribution-metadata",
+                    "source-archive-pkg-info",
+                    "source-archive-license-file",
+                )
             ):
                 return None
+            if source_kind == "source-archive-license-file":
+                license_file = entry.get("licenseFile")
+                license_digest = entry.get("licenseFileSha256")
+                if (
+                    not parsed.path.endswith(".tar.gz")
+                    or not isinstance(license_file, str)
+                    or license_file not in SOURCE_LICENSE_FILES
+                    or not isinstance(license_digest, str)
+                    or not SHA256.fullmatch(license_digest)
+                ):
+                    return None
         else:
             entry.pop("licenseExpression", None)
         verified.append(entry)

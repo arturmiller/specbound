@@ -37,8 +37,10 @@ Bericht bleibt zeitbezogen abrufbar. Der GitHub-Check überprüft erfolgreiche
 Ergebnisse regelmäßig erneut und berücksichtigt dabei Ablauf und Widerruf.
 
 Der Lockfile-Scan bewertet alle referenzierten Dateien. Bei einem fertigen
-Wheel zählt die hash-geprüfte Lizenzangabe im Wheel. Eine dynamische Angabe
-im Quellarchiv lässt den Lizenznachweis für dessen Build offen. Ein offener
+Wheel zählt die hash-geprüfte Lizenzangabe im Wheel. Bei alten oder dynamischen
+Metadaten kann der Scanner die Lizenz des Quellarchivs über eine mitgelieferte
+Lizenzdatei belegen, wenn ihr Text mit Apache-2.0 und den eigenen Metadaten des
+Archivs übereinstimmt. Der Befund gilt für dieses Archiv. Ein offener
 Dateinachweis erzeugt einen blockierenden Verstoß. Für die Auslieferung sind
 die tatsächlich gebauten Artefakte maßgeblich.
 
