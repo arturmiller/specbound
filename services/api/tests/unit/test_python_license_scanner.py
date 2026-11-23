@@ -380,6 +380,31 @@ class PyPIMetadataTest(unittest.TestCase):
             ):
                 self.assertEqual(unverified["status"], "UNKNOWN")
 
+            detection = {
+                "licenseExpression": "MIT",
+                "licenseDetection": {
+                    "tool": "scancode-toolkit",
+                    "version": "32.5.0",
+                    "rule": "mit.LICENSE",
+                    "startLine": 3,
+                    "endLine": 18,
+                },
+            }
+            with patch(
+                "app.pypi_license_metadata.detect_license", return_value=detection
+            ):
+                mit_files = {**files, "example-1.2/LICENSE": b"MIT fixture text"}
+                mismatch = scan(mit_files, metadata)
+                self.assertEqual(mismatch["status"], "UNKNOWN")
+                mit = scan(mit_files, metadata.replace(b"Apache-2.0", b"MIT"))
+                self.assertEqual(mit["expression"], "MIT")
+                verified = _verified_metadata({"source": "pypi", "metadata": mit})
+                self.assertEqual(verified["licenseCoverage"], "complete")
+                self.assertEqual(
+                    verified["artifacts"][0]["licenseDetection"],
+                    detection["licenseDetection"],
+                )
+
 
 class LicenseScanTest(unittest.TestCase):
     def test_repository_scan_pins_snapshot_and_does_not_re_fetch(self):

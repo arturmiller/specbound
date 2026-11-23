@@ -119,7 +119,9 @@ GitHub-Token; GitHub kann anonyme Aufrufe pro IP begrenzen.
 Der manuelle Scan-Worker verarbeitet ausdrücklich gestartete öffentliche
 Scans. Er liest erkannte Lockfiles der aufgelösten Git-Revision und Paketmetadaten
 von öffentlichem PyPI, ohne Pakete zu installieren oder Repository-Code
-auszuführen. Nur `uv.lock` wird derzeit ausgewertet. Andere Python-Lockfiles,
+auszuführen. Das Overlay baut den Worker mit ScanCode, um zusätzlich
+Lizenzdateien aus hashgeprüften Quellarchiven auszuwerten. Nur `uv.lock` wird
+derzeit ausgewertet. Andere Python-Lockfiles,
 private Paketquellen, fehlende oder widersprüchliche Angaben und überschrittene
 Limits bleiben unbekannt beziehungsweise werden als unvollständige Abdeckung
 angezeigt. Lockfiles können Pakete für andere Umgebungen enthalten; ein Scan ist
@@ -150,6 +152,8 @@ Produkt gebunden sein. Der Worker liest öffentliche Lockfiles am gespeicherten
 PR-Head und friert die Produktregeln bei Scanbeginn ein. Das gespeicherte
 Assessment steht am Produkt unter **Anforderungen → Prüfung**. Die Anzeige
 enthält PR-Nummer, Scan-Revision, Controls und Nachweise.
+Für ScanCode verwendet der PR-Worker das gleiche Image wie der manuelle Scan
+(`compose.license-scan.yaml` oder Docker-Buildziel `license-scan`).
 Für einen grünen Lizenzcheck braucht das Produkt ein explizit zugeordnetes
 Profil mit ausgeführten und bestandenen Controls. Ohne Profil dient die
 Beispielrichtlinie zur Anzeige des Scans.

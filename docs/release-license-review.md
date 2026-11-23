@@ -39,8 +39,11 @@ Ergebnisse regelmäßig erneut und berücksichtigt dabei Ablauf und Widerruf.
 Der Lockfile-Scan bewertet alle referenzierten Dateien. Bei einem fertigen
 Wheel zählt die hash-geprüfte Lizenzangabe im Wheel. Bei alten oder dynamischen
 Metadaten kann der Scanner die Lizenz des Quellarchivs über eine mitgelieferte
-Lizenzdatei belegen, wenn ihr Text mit Apache-2.0 und den eigenen Metadaten des
-Archivs übereinstimmt. Der Befund gilt für dieses Archiv. Ein offener
+Lizenzdatei belegen. Neben dem exakten Apache-2.0-Abgleich kann der Worker mit
+dem Buildziel `license-scan` ScanCode einsetzen. Ein einzelner vollständiger
+Lizenztext muss mit der Deklaration im selben Archiv übereinstimmen. Der
+Nachweis speichert Dateiname und SHA-256 sowie bei ScanCode Version, Regel
+und Zeilenbereich. Der Befund gilt für dieses Archiv. Ein offener
 Dateinachweis erzeugt einen blockierenden Verstoß. Für die Auslieferung sind
 die tatsächlich gebauten Artefakte maßgeblich.
 
@@ -53,6 +56,8 @@ die auszuliefernden Images mit `docker image save`. Der Release-Check katalogisi
 alle ausgelieferten Schichten der Archive mit [Syft](https://github.com/anchore/syft)
 und verifiziert den Portal-Build anhand seines Inventars. `uv` und die Lockfiles
 liegen in der Build-Stufe. Die finale Stufe übernimmt die installierten Abhängigkeiten.
+Bei einem Release des Workers mit ScanCode gehört das so gebaute Worker-Image
+in die Release-Prüfung.
 
 Beispiel für den Aufruf aus `services/api` mit installierten Projektabhängigkeiten
 und geprüft installiertem Syft.

@@ -20,6 +20,7 @@ from app.license_policy import (
     MAX_EXPRESSION,
     canonical_license_id,
 )
+from app.scancode_license import detect_license
 
 MAX_INDEX_BYTES = 32 * 1024 * 1024
 MAX_METADATA_BYTES = 1024 * 1024
@@ -189,17 +190,23 @@ def _source_license_declaration(message, license_file, reason):
     if license_file is None:
         raise _SourceLicenseFileRequired(reason)
     filename, content = license_file
+    license_files = set(message.get_all("License-File", []))
+    if license_files - {filename} - SOURCE_NOTICE_FILES:
+        raise _UnresolvedLicense(reason)
+    declaration = _declared_license(message)
     expression = SOURCE_LICENSE_TEXTS.get(
         hashlib.sha256(b" ".join(content.split())).hexdigest()
     )
-    license_files = set(message.get_all("License-File", []))
-    if not expression or license_files - {filename} - SOURCE_NOTICE_FILES:
+    detected = (
+        {"licenseExpression": expression} if expression else detect_license(content)
+    )
+    if not detected:
         raise _UnresolvedLicense(reason)
-    declaration = _declared_license(message)
-    if declaration["licenseExpression"] != expression:
+    if declaration["licenseExpression"] != detected["licenseExpression"]:
         raise _UnresolvedLicense("source license file conflicts with metadata")
     return {
         **declaration,
+        **detected,
         "sourceKind": "source-archive-license-file",
         "licenseFile": filename,
         "licenseFileSha256": hashlib.sha256(content).hexdigest(),

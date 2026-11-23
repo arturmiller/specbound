@@ -1,5 +1,7 @@
 # Explicit local preview. This does not configure private repository credentials.
 services:
   worker:
+    build:
+      target: license-scan
     environment:
       PUBLIC_LICENSE_SCAN_ENABLED: 'true'
