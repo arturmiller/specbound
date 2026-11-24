@@ -23,6 +23,7 @@ from app.license_scope import (
     locked_artifact_digest,
 )
 from app.pypi_license_metadata import MAX_ARTIFACTS, SOURCE_LICENSE_FILES
+from app.reviewed_python_licenses import REVIEWED_PYPI_ARTIFACTS
 from app.rule_evaluation import evaluate_and_store
 from app.snapshots import COMMIT, create_snapshot
 from app.tables import evidence_records, scanner_coverage
@@ -120,6 +121,7 @@ def _verified_metadata(package):
                     "distribution-metadata",
                     "source-archive-pkg-info",
                     "source-archive-license-file",
+                    "reviewed-artifact-license",
                 )
             ):
                 return None
@@ -132,6 +134,24 @@ def _verified_metadata(package):
                     or license_file not in SOURCE_LICENSE_FILES
                     or not isinstance(license_digest, str)
                     or not SHA256.fullmatch(license_digest)
+                ):
+                    return None
+            if source_kind == "reviewed-artifact-license":
+                reviewed = REVIEWED_PYPI_ARTIFACTS.get(
+                    (package.get("name"), package.get("version"), digest)
+                )
+                if not reviewed or (
+                    expression,
+                    metadata_digest,
+                    entry.get("licenseFile"),
+                    entry.get("licenseFileSha256"),
+                    entry.get("licenseReviewSource"),
+                ) != (
+                    reviewed.expression,
+                    reviewed.metadata_sha256,
+                    reviewed.license_file,
+                    reviewed.license_sha256,
+                    reviewed.source,
                 ):
                     return None
         else:

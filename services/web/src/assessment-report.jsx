@@ -29,7 +29,7 @@ function approvalOf(evidence) {
     : null;
 }
 
-/** @typedef {{artifactSha256: string, filename?: string, sourceUrl?: string, status?: string, licenseExpression?: string, licenseFile?: string, licenseDetection?: {tool: string, version: string, rule: string, startLine: number, endLine: number}, reason?: string}} LicenseArtifact */
+/** @typedef {{artifactSha256: string, filename?: string, sourceUrl?: string, status?: string, licenseExpression?: string, licenseFile?: string, licenseReviewSource?: string, licenseDetection?: {tool: string, version: string, rule: string, startLine: number, endLine: number}, reason?: string}} LicenseArtifact */
 
 const licenseReasons = /** @type {Record<string, string>} */ ({
   'dynamic license declaration': 'Dynamische Lizenzangabe im Quellarchiv',
@@ -53,10 +53,12 @@ function LicenseArtifacts({ artifacts }) {
     {open && <ul>{artifacts.map((artifact) => {
       const label = artifact.filename || 'Paketdatei';
       const url = artifact.sourceUrl?.startsWith('https://files.pythonhosted.org/packages/') ? artifact.sourceUrl : '';
+      const reviewSource = artifact.licenseReviewSource?.startsWith('https://pypi.org/project/') ? artifact.licenseReviewSource : '';
       return <li key={artifact.artifactSha256}>
         {url ? <a href={url}>{label}</a> : label}
         {' · '}{artifact.licenseExpression ? artifact.licenseExpression + ' belegt' : 'Ungeklärt'}
-        {artifact.licenseFile && ' · ' + artifact.licenseFile + ' im Quellarchiv'}
+        {artifact.licenseFile && ' · ' + artifact.licenseFile + (label.endsWith('.whl') ? ' im Wheel' : ' im Quellarchiv')}
+        {reviewSource && <> · <a href={reviewSource}>Lizenzangabe des Herausgebers</a></>}
         {artifact.licenseDetection?.tool === 'scancode-toolkit' &&
           ` · ScanCode ${artifact.licenseDetection.version}, Zeilen ${artifact.licenseDetection.startLine}–${artifact.licenseDetection.endLine}`}
         {artifact.reason && ' · ' + (licenseReasons[artifact.reason] || artifact.reason)}

@@ -20,7 +20,8 @@ from app.license_policy import (
     MAX_EXPRESSION,
     canonical_license_id,
 )
-from app.scancode_license import detect_license
+from app.reviewed_python_licenses import REVIEWED_PYPI_ARTIFACTS
+from app.scancode_license import detect_license, matches_mit_terms
 
 MAX_INDEX_BYTES = 32 * 1024 * 1024
 MAX_METADATA_BYTES = 1024 * 1024
@@ -200,6 +201,12 @@ def _source_license_declaration(message, license_file, reason):
     detected = (
         {"licenseExpression": expression} if expression else detect_license(content)
     )
+    if (
+        not detected
+        and declaration["licenseExpression"] == "MIT"
+        and matches_mit_terms(content)
+    ):
+        detected = {"licenseExpression": "MIT"}
     if not detected:
         raise _UnresolvedLicense(reason)
     if declaration["licenseExpression"] != detected["licenseExpression"]:
@@ -304,6 +311,23 @@ def _read_artifact(package, item, digest, fetch):
         wheel = filename.endswith(".whl")
         source_archive = filename.endswith(".tar.gz")
         result.update(filename=filename, sourceUrl=url)
+        reviewed = REVIEWED_PYPI_ARTIFACTS.get((package.name, package.version, digest))
+        if reviewed:
+            artifact = fetch(
+                url, accept="application/octet-stream", limit=MAX_SDIST_BYTES
+            )
+            if hashlib.sha256(artifact).hexdigest() != digest:
+                raise ValueError("reviewed artifact hash mismatch")
+            return {
+                **result,
+                "status": "OBSERVED",
+                "sourceKind": "reviewed-artifact-license",
+                "licenseExpression": reviewed.expression,
+                "metadataSha256": reviewed.metadata_sha256,
+                "licenseFile": reviewed.license_file,
+                "licenseFileSha256": reviewed.license_sha256,
+                "licenseReviewSource": reviewed.source,
+            }
         metadata_hashes = item.get("core-metadata", item.get("dist-info-metadata"))
         metadata_hash = (
             metadata_hashes.get("sha256") if isinstance(metadata_hashes, dict) else None

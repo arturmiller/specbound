@@ -1,5 +1,6 @@
 """Identify complete license texts in already verified package files."""
 
+import hashlib
 import logging
 import re
 import sys
@@ -15,6 +16,36 @@ MAX_LICENSE_BYTES = 128 * 1024
 logger = logging.getLogger(__name__)
 _scan_lock = Lock()
 _COPYRIGHT = re.compile(r"copyright\s+\(c\)\s+[0-9]{4}[0-9, -]*\s+.+", re.IGNORECASE)
+_MIT_HEADINGS = frozenset({"mit license", "the mit license (mit)"})
+# Whitespace-normalized SPDX MIT conditions, starting at the grant.
+# https://spdx.org/licenses/MIT.html
+_MIT_TERMS_SHA256 = "fe2a9817987f862eaced948f0468c7f51d2fedfc48c5c505b246a49a3870e9a5"
+
+
+def _standard_preamble(lines, license_id):
+    return all(
+        not line.strip()
+        or _COPYRIGHT.fullmatch(line.strip())
+        or (license_id == "MIT" and line.strip().casefold() in _MIT_HEADINGS)
+        for line in lines
+    )
+
+
+def matches_mit_terms(content):
+    if not content or len(content) > MAX_LICENSE_BYTES:
+        return False
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeError:
+        return False
+    heading, grant, remainder = text.partition("Permission is hereby granted")
+    if not grant or (heading and not heading.endswith(("\n", "\r"))):
+        return False
+    terms = " ".join((grant + remainder).split()).encode("utf-8")
+    return (
+        _standard_preamble(heading.splitlines(), "MIT")
+        and hashlib.sha256(terms).hexdigest() == _MIT_TERMS_SHA256
+    )
 
 
 @lru_cache(maxsize=1)
@@ -71,14 +102,12 @@ def _detect_license(content):
     lines = text.splitlines()
     start, end = match.start_line, match.end_line
     # A complete rule match may still be an excerpt of a file with additional
-    # terms. Only allow whitespace and copyright notices outside the match.
+    # terms. Allow only whitespace, copyright notices and standard MIT headings
+    # outside the match.
     if (
         not 1 <= start <= end <= len(lines)
         or any(line.strip() for line in lines[end:])
-        or any(
-            line.strip() and not _COPYRIGHT.fullmatch(line.strip())
-            for line in lines[: start - 1]
-        )
+        or not _standard_preamble(lines[: start - 1], license_id)
         or re.findall(r"[^\W_]+", "\n".join(lines[start - 1 : end]))
         != re.findall(r"[^\W_]+", matched_text)
     ):

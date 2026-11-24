@@ -1,10 +1,11 @@
 """Only a complete and unambiguous ScanCode license text becomes evidence."""
 
+import hashlib
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from app.scancode_license import _detect_license, detect_license
+from app.scancode_license import _detect_license, detect_license, matches_mit_terms
 
 
 class ScanCodeLicenseTest(unittest.TestCase):
@@ -62,7 +63,26 @@ class ScanCodeLicenseTest(unittest.TestCase):
         self.index.match.return_value = [self.match, self.match]
         self.assertIsNone(detect_license(self.content + b"\n\n"))
 
+    def test_conventional_mit_heading_is_part_of_the_same_license(self):
+        self.match.start_line, self.match.end_line = 4, 5
+        self.assertEqual(
+            detect_license(b"The MIT License (MIT)\n" + self.content)[
+                "licenseExpression"
+            ],
+            "MIT",
+        )
+        self.assertIsNone(detect_license(b"Restrictions apply.\n" + self.content))
+
     def test_unavailable_detector_keeps_the_license_unresolved(self):
         self.mock_scanner.return_value = None
         self.assertIsNone(detect_license(self.content))
         self.index.match.assert_not_called()
+
+    def test_mit_template_allows_whitespace_and_copyright_but_requires_all_terms(self):
+        terms = b"Permission is hereby granted, fixture terms."
+        digest = hashlib.sha256(terms).hexdigest()
+        content = b"MIT License\r\nCopyright (c) 2019, Example\r\n\r\n" + terms
+        with patch("app.scancode_license._MIT_TERMS_SHA256", digest):
+            self.assertTrue(matches_mit_terms(content))
+            self.assertFalse(matches_mit_terms(content + b" Additional terms apply."))
+            self.assertFalse(matches_mit_terms(b"Restrictions apply.\n" + content))

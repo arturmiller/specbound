@@ -13,6 +13,7 @@ from app.public_license_assessment import _verified_metadata
 from app.pypi_license_metadata import MAX_ARTIFACTS, read_pypi_license
 from app.python_license_scan import scan_python_licenses, scan_python_repository
 from app.python_lockfiles import LockedPackage, find_uv_locks, parse_uv_lock
+from app.reviewed_python_licenses import REVIEWED_PYPI_ARTIFACTS, ReviewedLicense
 
 
 class LicensePolicyTest(unittest.TestCase):
@@ -120,6 +121,46 @@ class PyPIMetadataTest(unittest.TestCase):
         self.assertEqual(result["status"], "OBSERVED")
         self.assertEqual(result["expression"], "MIT")
         self.assertEqual(result["artifacts"][0]["artifactSha256"], self.artifact_hash)
+
+    def test_reviewed_license_is_bound_to_the_downloaded_artifact(self):
+        artifact = b"previously reviewed distribution"
+        digest = hashlib.sha256(artifact).hexdigest()
+        package = LockedPackage("uv.lock", "example", "1.2", "pypi", (digest,), ())
+        self.item["hashes"]["sha256"] = digest
+        source = "https://pypi.org/project/example/1.2/"
+        reviewed = ReviewedLicense(
+            "BSD-3-Clause",
+            self.metadata_hash,
+            "example.dist-info/LICENSE",
+            "d" * 64,
+            source,
+        )
+
+        def fetch(url, **kwargs):
+            if url == self.item["url"]:
+                return artifact
+            return self.fetch(url, **kwargs)
+
+        with patch.dict(
+            REVIEWED_PYPI_ARTIFACTS, {("example", "1.2", digest): reviewed}
+        ):
+            result = read_pypi_license(package, fetch)
+            self.assertEqual(result["expression"], "BSD-3-Clause")
+            self.assertEqual(result["artifacts"][0]["licenseReviewSource"], source)
+            evidence = {
+                "name": "example",
+                "version": "1.2",
+                "source": "pypi",
+                "metadata": result,
+                "artifactHashes": [digest],
+            }
+            self.assertEqual(
+                _verified_metadata(evidence)["licenseCoverage"], "complete"
+            )
+            result["artifacts"][0]["licenseFileSha256"] = "e" * 64
+            self.assertIsNone(_verified_metadata(evidence))
+            artifact = b"modified distribution"
+            self.assertEqual(read_pypi_license(package, fetch)["status"], "UNKNOWN")
 
     def test_verified_legacy_license_preserves_the_original_declaration(self):
         self.metadata = (

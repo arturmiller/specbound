@@ -21,6 +21,8 @@ schon gebunden ist. In der Produktrevision bestimmt `spec.licenseUse` den Einsat
 Für `internal` oder `saas` kann das Produkt das
 [Profil für den Serverbetrieb](../contracts/phase4/examples/profiles/license-server.json)
 verwenden. Beide Profile sind Beispiele für Unternehmensregeln.
+Das Auslieferungsprofil 1.1.0 erlaubt zusätzlich `MIT-0` und `PSF-2.0`.
+Bei PSF-2.0 gehören Lizenztext und Copyright-Hinweise in die Auslieferung.
 
 Mit `allowApprovedUse: true` erlaubt die SPDX-Regel belegte Freigaben. Der
 Organisationseigentümer öffnet im Bericht die Paketbewertung und hinterlegt
@@ -39,13 +41,48 @@ Ergebnisse regelmäßig erneut und berücksichtigt dabei Ablauf und Widerruf.
 Der Lockfile-Scan bewertet alle referenzierten Dateien. Bei einem fertigen
 Wheel zählt die hash-geprüfte Lizenzangabe im Wheel. Bei alten oder dynamischen
 Metadaten kann der Scanner die Lizenz des Quellarchivs über eine mitgelieferte
-Lizenzdatei belegen. Neben dem exakten Apache-2.0-Abgleich kann der Worker mit
+Lizenzdatei belegen. Neben dem exakten Abgleich von Apache-2.0- und MIT-Texten kann der Worker mit
 dem Buildziel `license-scan` ScanCode einsetzen. Ein einzelner vollständiger
 Lizenztext muss mit der Deklaration im selben Archiv übereinstimmen. Der
 Nachweis speichert Dateiname und SHA-256 sowie bei ScanCode Version, Regel
 und Zeilenbereich. Der Befund gilt für dieses Archiv. Ein offener
 Dateinachweis erzeugt einen blockierenden Verstoß. Für die Auslieferung sind
 die tatsächlich gebauten Artefakte maßgeblich.
+
+### Geprüfte Paketdateien und Auslieferungsauflagen
+
+Die manuell geprüften Lizenznachweise gelten jeweils für eine bestimmte Datei
+aus PyPI. Specbound verifiziert deren SHA-256 und zeigt die Fundstelle.
+
+- [boolean.py 5.0](https://pypi.org/project/boolean.py/5.0/) deklariert
+  BSD-2-Clause. `LICENSE.txt` enthält die Bedingungen, `README.rst` nennt
+  dieselbe SPDX-Kennung und der Änderungsverlauf verweist auf die Dokumentation.
+- [python-dateutil 2.9.0.post0](https://pypi.org/project/python-dateutil/2.9.0.post0/)
+  erlaubt BSD-3-Clause für den gesamten Code. Die Datei `LICENSE` im Wheel
+  und im Quellarchiv nennt Apache-2.0 zusätzlich für einen Teil des Codes.
+- [certifi 2026.11.20](https://pypi.org/project/certifi/2026.11.20/) nennt
+  MPL-2.0 im Quellarchiv und im Wheel. Für die Kundenauslieferung sind
+  Lizenzhinweise und der Zugang zum passenden Quellcode des ausgelieferten
+  MPL-Bestandteils zu belegen. Das betrifft insbesondere das mitgelieferte
+  Zertifikatspaket. Siehe [Mozilla MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/).
+- `psycopg` und `psycopg-binary` können für die Kundenauslieferung freigegeben
+  werden, wenn die Auflagen für das konkrete Artefakt erfüllt sind. Dokumentiere
+  die mitgelieferten Lizenztexte und Hinweise, den passenden Bibliotheksquellcode
+  und den Weg, wie Empfänger eine geänderte Bibliothek mit der Anwendung
+  einsetzen können. Prüfe auch, dass die Auslieferungsbedingungen Änderungen
+  an den Bibliotheksteilen und Reverse Engineering zu deren Fehlersuche
+  zulassen. Beim Binary-Wheel gehören die mitgelieferten Bibliotheken ins
+  Inventar. Siehe [LGPL-3.0, Abschnitt 4](https://www.gnu.org/licenses/lgpl-3.0.html)
+  und [Psycopg-Dokumentation zur Binärinstallation](https://www.psycopg.org/psycopg3/docs/basic/install.html).
+- `pywin32` steht mit Windows-Marker im universellen Lockfile. Das untersuchte
+  Windows-Wheel enthält mehrere Lizenzdateien, darunter LGPL-2.1 für
+  `adodbapi`. Der universelle Scan führt den offenen Befund weiter. Für
+  Linux-Auslieferungen hält das Inventar der gebauten Artefakte fest, welche
+  Komponenten tatsächlich dazugehören.
+
+Die Lizenznachweise für `certifi` und `psycopg` ergänzen die Entscheidung
+über die Kundenauslieferung. Die dokumentierte Erfüllung der Auflagen muss
+für das jeweilige Paket und das freizugebende Artefakt hinterlegt werden.
 
 ## Gebaute Artefakte prüfen
 
@@ -74,7 +111,7 @@ Eine erste Prüfung kann mit dieser Richtlinie beginnen.
 ```json
 {
   "use": "customer-distribution",
-  "allowed": ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC"],
+  "allowed": ["MIT", "MIT-0", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0"],
   "reviewedArtifacts": {}
 }
 ```
