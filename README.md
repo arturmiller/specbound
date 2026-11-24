@@ -219,11 +219,14 @@ uv lock --project services/api --python 3.12
 uv lock --project services/worker --python 3.12
 ```
 
-Docker installiert die Gruppe `runtime` mit `uv sync --locked` aus dem
-Lockfile des jeweiligen Dienstes. Die API-Tests laden zusätzlich die Gruppe
-`dev` aus demselben Lockfile. Der Lizenzscanner prüft die versionierten
-Archive für beide Lockfiles, einschließlich der dort festgehaltenen
-Entwicklungsabhängigkeiten und Plattformvarianten.
+Docker installiert die Gruppen `runtime` und `postgres-system` mit
+`uv sync --locked` aus dem Lockfile des jeweiligen Dienstes. Die Images für API
+und Worker bauen `psycopg-c` aus dem Quellarchiv und laden zur Laufzeit
+`libpq5` aus Debian. Ein normales `uv sync` auf dem Entwicklungsrechner
+installiert die Gruppe `postgres-binary` zusammen mit `runtime`. Die API-Tests
+laden zusätzlich `dev`. Der Lizenzscanner prüft beide Lockfiles einschließlich
+Entwicklungsabhängigkeiten und Plattformvarianten. Für die Kundenauslieferung
+zählt das Inventar der tatsächlich ausgelieferten Images.
 
 ## Arbeitsstand sichern
 

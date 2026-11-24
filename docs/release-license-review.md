@@ -66,15 +66,18 @@ aus PyPI. Specbound verifiziert deren SHA-256 und zeigt die Fundstelle.
   Lizenzhinweise und der Zugang zum passenden Quellcode des ausgelieferten
   MPL-Bestandteils zu belegen. Das betrifft insbesondere das mitgelieferte
   Zertifikatspaket. Siehe [Mozilla MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/).
-- `psycopg` und `psycopg-binary` können für die Kundenauslieferung freigegeben
-  werden, wenn die Auflagen für das konkrete Artefakt erfüllt sind. Dokumentiere
+- `psycopg` und `psycopg-c` können für die Kundenauslieferung freigegeben
+  werden, wenn die Auflagen für das konkrete Artefakt erfüllt sind. API und
+  Worker bauen die C-Erweiterung aus dem versionierten Quellarchiv und
+  laden Debian-`libpq5`. Die Laufzeitpakete aus Debian gehören ins
+  Image-Inventar. Dokumentiere
   die mitgelieferten Lizenztexte und Hinweise, den passenden Bibliotheksquellcode
   und den Weg, wie Empfänger eine geänderte Bibliothek mit der Anwendung
   einsetzen können. Prüfe auch, dass die Auslieferungsbedingungen Änderungen
   an den Bibliotheksteilen und Reverse Engineering zu deren Fehlersuche
-  zulassen. Beim Binary-Wheel gehören die mitgelieferten Bibliotheken ins
-  Inventar. Siehe [LGPL-3.0, Abschnitt 4](https://www.gnu.org/licenses/lgpl-3.0.html)
-  und [Psycopg-Dokumentation zur Binärinstallation](https://www.psycopg.org/psycopg3/docs/basic/install.html).
+  zulassen. Das Binary-Wheel bleibt in der Entwicklungsgruppe und im
+  universellen Lockfile. Siehe [LGPL-3.0, Abschnitt 4](https://www.gnu.org/licenses/lgpl-3.0.html)
+  und [Psycopg-Dokumentation zur lokalen Installation](https://www.psycopg.org/psycopg3/docs/basic/install.html#local-installation).
 - `pywin32` steht mit Windows-Marker im universellen Lockfile. Das untersuchte
   Windows-Wheel enthält mehrere Lizenzdateien, darunter LGPL-2.1 für
   `adodbapi`. Der universelle Scan führt den offenen Befund weiter. Für

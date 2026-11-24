@@ -5,18 +5,22 @@ runtime = [
     "PyYAML==6.0.3",
     "rfc3339-validator==0.1.4",
     "SQLAlchemy==2.0.56",
-    "psycopg[binary]==3.3.3",
+    "psycopg==3.3.3",
     "httpx==0.28.1",
     "PyJWT[crypto]==2.15.1",
     "license-expression==30.4.4",
 ]
+postgres-system = ["psycopg[c]==3.3.3"]
+postgres-binary = ["psycopg[binary]==3.3.3"]
 
 [tool.uv]
-default-groups = ["runtime"]
+default-groups = ["runtime", "postgres-binary"]
 environments = ["python_version == '3.12'"]
 
 [tool.uv.dependency-groups]
 runtime = { requires-python = "==3.12.*" }
+postgres-system = { requires-python = "==3.12.*" }
+postgres-binary = { requires-python = "==3.12.*" }
 
 [tool.uv.workspace]
 members = []

@@ -11,12 +11,14 @@ supported-markers = [
 [manifest]
 
 [manifest.dependency-groups]
+postgres-binary = [{ name = "psycopg", extras = ["binary"], marker = "python_full_version == '3.12.*'", specifier = "==3.3.3" }]
+postgres-system = [{ name = "psycopg", extras = ["c"], marker = "python_full_version == '3.12.*'", specifier = "==3.3.3" }]
 runtime = [
     { name = "docker", marker = "python_full_version == '3.12.*'", specifier = "==7.1.0" },
     { name = "httpx", marker = "python_full_version == '3.12.*'", specifier = "==0.28.1" },
     { name = "jsonschema", marker = "python_full_version == '3.12.*'", specifier = "==4.26.0" },
     { name = "license-expression", marker = "python_full_version == '3.12.*'", specifier = "==30.4.4" },
-    { name = "psycopg", extras = ["binary"], marker = "python_full_version == '3.12.*'", specifier = "==3.3.3" },
+    { name = "psycopg", marker = "python_full_version == '3.12.*'", specifier = "==3.3.3" },
     { name = "pyjwt", extras = ["crypto"], marker = "python_full_version == '3.12.*'", specifier = "==2.15.1" },
     { name = "pyyaml", marker = "python_full_version == '3.12.*'", specifier = "==6.0.3" },
     { name = "rfc3339-validator", marker = "python_full_version == '3.12.*'", specifier = "==0.1.4" },
@@ -513,6 +515,9 @@ wheels = [
 binary = [
     { name = "psycopg-binary", marker = "python_full_version < '3.13' and implementation_name != 'pypy'" },
 ]
+c = [
+    { name = "psycopg-c", marker = "python_full_version < '3.13' and implementation_name != 'pypy'" },
+]
 
 [[package]]
 name = "psycopg-binary"
@@ -553,6 +558,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/60/e9/b7c29b56aa0b85a4e0c4d89db691c1ceef08f46a356369144430c155a2f5/psycopg_binary-3.3.3-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:e7800e6c6b5dc4b0ca7cc7370f770f53ac83886b76afda0848065a674231e856", size = 4254339, upload-time = "2026-02-18T16:52:10.444Z" },
     { url = "https://files.pythonhosted.org/packages/98/5a/291d89f44d3820fffb7a04ebc8f3ef5dda4f542f44a5daea0c55a84abf45/psycopg_binary-3.3.3-cp314-cp314-win_amd64.whl", hash = "sha256:165f22ab5a9513a3d7425ffb7fcc7955ed8ccaeef6d37e369d6cc1dff1582383", size = 3652796, upload-time = "2026-02-18T16:52:14.02Z" },
 ]
+
+[[package]]
+name = "psycopg-c"
+version = "3.3.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/a0/8feb0ca8c7c20a8b9ac4d46b335ddd57e48e593b714262f006880f34fee5/psycopg_c-3.3.3.tar.gz", hash = "sha256:86ef6f4424348247828e83fb0882c9f8acb33e64d0a5ce66c1b4a5107ee73edd", size = 631965, upload-time = "2026-02-18T16:52:18.084Z" }
 
 [[package]]
 name = "pycparser"
