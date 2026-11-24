@@ -10,7 +10,7 @@ from app.example_license_pack import POLICY_REVISION, load_example_license_pack
 from app.git_source import GitSnapshot
 from app.governance_pack import load_governance_pack
 from app.license_policy import evaluate_license
-from app.resource_contracts import resolve_profile
+from app.resource_contracts import compile_bindings, resolve_profile
 
 ROOT = next(
     parent
@@ -25,7 +25,7 @@ class LicensePolicyPackTest(unittest.TestCase):
     ):
         examples = ROOT / "contracts" / "phase4" / "examples"
         profile_path = "profiles/license-distribution.json"
-        catalog_path = "catalogs/application.json"
+        catalog_path = "catalogs/license-controls.json"
         profile = json.loads((examples / profile_path).read_text(encoding="utf-8"))
         product = json.loads(
             (examples / "products/specbound-license.json").read_text(encoding="utf-8")
@@ -37,7 +37,12 @@ class LicensePolicyPackTest(unittest.TestCase):
         self.assertEqual(
             product["spec"]["profile"]["version"], resolved["profile"]["version"]
         )
-        allowed = resolved["parameters"]["license-allowlist"]
+        bindings = json.loads(
+            (examples / resolved["bindingPath"]).read_text(encoding="utf-8")
+        )
+        rule = compile_bindings(bindings, resolved)[0]["assertions"][0]
+        self.assertTrue(rule["allowApprovedUse"])
+        allowed = rule["allowed"]
         for license_id in ("MIT-0", "MIT AND PSF-2.0", "PSF-2.0", "BSD-3-Clause"):
             self.assertEqual(evaluate_license(license_id, allowed), "PASS", license_id)
         for license_id in ("MPL-2.0", "LGPL-3.0-only"):

@@ -8,7 +8,7 @@
       "oscal-version": "1.2.3",
       "props": [{"name": "resource-id", "ns": "https://specbound.example/ns/resource", "value": "license-distribution"}]
     },
-    "imports": [{"href": "../catalogs/application.json", "include-controls": [{"with-ids": ["PY-LIC-001"]}]}],
+    "imports": [{"href": "../catalogs/license-controls.json", "include-controls": [{"with-ids": ["PY-LIC-001"]}]}],
     "merge": {"as-is": true},
     "modify": {
       "set-parameters": [{

@@ -13,13 +13,14 @@ wird als `projectLicenseEvidence` in der Release-Prüfung hinterlegt.
 
 ## PR-Prüfung und Freigabe
 
-Registriere den [Beispielkatalog](../contracts/phase4/examples/catalogs/application.json),
+Registriere den [Lizenzkatalog](../contracts/phase4/examples/catalogs/license-controls.json),
 das [Profil für Kundenauslieferung](../contracts/phase4/examples/profiles/license-distribution.json)
 und das [Specbound-Produktmanifest](../contracts/phase4/examples/products/specbound-license.json)
 als Quellen. Übernimm das Manifest am vorhandenen Produkt, falls das Repository
 schon gebunden ist. In der Produktrevision bestimmt `spec.licenseUse` den Einsatz.
 Für `internal` oder `saas` kann das Produkt das
 [Profil für den Serverbetrieb](../contracts/phase4/examples/profiles/license-server.json)
+mit dem [Anwendungskatalog](../contracts/phase4/examples/catalogs/application.json)
 verwenden. Beide Profile sind Beispiele für Unternehmensregeln.
 Das Auslieferungsprofil 1.1.0 erlaubt zusätzlich `MIT-0` und `PSF-2.0`.
 Bei PSF-2.0 gehören Lizenztext und Copyright-Hinweise in die Auslieferung.
