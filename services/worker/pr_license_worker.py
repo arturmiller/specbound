@@ -5,7 +5,7 @@ from functools import partial
 from uuid import uuid4
 
 from app.frozen_governance import freeze_product_governance
-from app.product_governance import load_product
+from app.product_manifest import load_product
 from app.product_scope import freeze_declaration, product_paths, scope_to_product
 from app.public_github_source import PublicGitHubSource
 from app.public_license_assessment import create_public_license_assessment

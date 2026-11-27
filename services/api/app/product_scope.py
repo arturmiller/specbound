@@ -8,7 +8,7 @@ request commit, so a change can be checked in the pull request that makes it.
 
 import copy
 
-from app.product_governance import check_implemented_requirements
+from app.product_manifest import check_implemented_requirements
 
 
 def _registered(context):
