@@ -1,10 +1,10 @@
 {
   "catalog": {
-    "uuid": "04c0aaf3-0df0-4476-9951-dc60540a28be",
+    "uuid": "8f4b2c1e-6d3a-4e5f-9a7b-2c1d0e9f8a6b",
     "metadata": {
       "title": "Softwarelizenzen",
-      "last-modified": "2026-11-24T00:00:00Z",
-      "version": "1.0.0",
+      "last-modified": "2026-11-27T00:00:00Z",
+      "version": "1.1.0",
       "oscal-version": "1.2.3",
       "props": [{"name": "resource-id", "ns": "https://specbound.example/ns/resource", "value": "license-controls"}],
       "links": [{"href": "../checks/license-controls.json", "rel": "specbound-control-bindings"}]
@@ -13,7 +13,16 @@
       "id": "PY-LIC-001",
       "title": "Zulässige Paketlizenzen",
       "params": [{"id": "license-allowlist", "values": ["MIT", "Apache-2.0"]}],
-      "parts": [{"name": "statement", "prose": "Für jede Paketdatei muss eine im Profil zugelassene Lizenz oder eine belegte Freigabe vorliegen."}]
+      "parts": [{"name": "statement", "prose": "Für jede Paketdatei muss eine im Profil zugelassene Lizenz oder eine belegte Freigabe vorliegen."}],
+      "controls": [{
+        "id": "PY-LIC-001.1",
+        "title": "Schwache Copyleft-Lizenzen bei unveränderter Bibliotheksnutzung",
+        "params": [{"id": "license-library-allowlist"}],
+        "parts": [
+          {"name": "statement", "prose": "Pakete unter {{ insert: param, license-library-allowlist }} sind zulässig, wenn das Produkt sie als unveränderte Bibliotheken nutzt: aus dem Paketindex installiert, nicht verändert und nicht in den eigenen Quellcode kopiert."},
+          {"name": "guidance", "prose": "Lizenztexte und Hinweise liegen der Auslieferung bei. Der Quellcode der ausgelieferten Bibliotheksversion ist zugänglich. Empfänger können die Bibliothek ersetzen. Die Auslieferungsbedingungen erlauben Änderungen an den Bibliotheksteilen und Reverse Engineering zu deren Fehlersuche."}
+        ]
+      }]
     }]
   }
 }

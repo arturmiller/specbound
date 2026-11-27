@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from app.product_scope import product_paths, scope_to_product
 from app.public_license_assessment import create_public_license_assessment
 from app.tables import products, public_license_scans, repo_bindings, teams
 from sqlalchemy import and_, func, or_, select, update
@@ -155,6 +156,9 @@ def finish(db, lease, response, *, now, clock=_clock):
         response = {"status": "error", "errorCode": "source-changed"}
     result = response.get("result")
     if response.get("status") == "ok" and isinstance(result, dict):
+        result = scope_to_product(
+            result, product_paths(row["governance_context"], row["repository"])
+        )
         assessment_id = None
         try:
             with db.begin_nested():

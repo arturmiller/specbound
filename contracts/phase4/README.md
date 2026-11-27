@@ -8,7 +8,7 @@ Grundlage: [ADR 0035](../../docs/adr/0035-oscal-resources-and-workspace.md). Die
 |---|---|
 | Katalog | Natives OSCAL 1.2.3 `catalog`, offizielles unverändertes JSON Schema. |
 | Profil | Natives OSCAL 1.2.3 `profile`, offizielles unverändertes JSON Schema und der unten beschriebene unterstützte Verarbeitungsumfang. |
-| Produkt | `product.schema.json`, `apiVersion: specbound.example/v1alpha1`, `kind: Product`. Produktquellen und genau eine Profil-ID/-Version. |
+| Produkt | `product.schema.json`, `apiVersion: specbound.example/v1alpha1`, `kind: Product`. Produktquellen mit optionalen Produktpfaden, genau eine Profil-ID/-Version und optionale Umsetzungserklärungen (`implementedRequirements`). |
 | Ausführbare Bindungen | `control-bindings.schema.json`, `kind: ControlBindings`. Referenz auf Katalog-ID/-Version und bestehende Governance-Control-Strukturen. Internes Konfigurationsartefakt, kein zusätzlicher Ressourcen-Tab. |
 | Evidence Pack | Weiterhin `v1/evidence-provider-pack.schema.json`, `kind: EvidenceProviderPack`, einschließlich `approved-container`, unveränderlichem Image-Digest, Capabilities, Input-/Output-Schemas und Permissions. |
 | Quellregistrierung | `resource-source.schema.json`, `kind: ResourceSource`. GitHub-Provider, Repository, gewünschter Ref, sicherer Manifestpfad, Ressourcentyp sowie erwartete ID/Version. Das ist die API-/Registrierungsbeschreibung, kein notwendiger zusätzlicher Wrapper um die native OSCAL-Datei. |
@@ -38,8 +38,8 @@ Vor einem Profil wird seine Katalogversion registriert. Der Profilimport liest K
 
 - JSON-Inhalte und JSON-kompatibles YAML werden gegen die gepinnten JSON-Schemas validiert; der Offline-Beispielchecker liest JSON. Die vorhandenen Größen-/YAML-Schutzmaßnahmen gelten für den späteren Import weiter.
 - Ein Profil importiert genau einen Katalog aus demselben gepinnten Repository-Snapshot. `href` ist ein relativer Dateipfad. `../catalogs/application.json` ist zulässig, sofern die normalisierte Auflösung innerhalb der Repository-Wurzel bleibt. Absolute URLs, Abfragen, Fragmente, Prozentkodierung und das Verlassen des Repositories werden nicht unterstützt.
-- Auswahl ausschließlich über eine nichtleere `include-controls`-Auswahl mit eindeutigen `with-ids`. Keine stillschweigende Gesamtauswahl. Profile als Importquelle, mehrere Imports, Regex-Selektoren, `include-all`, `exclude-controls` und Child-Control-Auswahl werden zunächst explizit zurückgewiesen.
-- `merge` ist ausdrücklich `as-is: true`, ohne weitere Kombinationsregeln. Gruppen und narrative Anforderungsinhalte stammen aus dem Katalog. Verschachtelte Gruppen sind zulässig; verschachtelte Controls werden vorerst zurückgewiesen.
+- Auswahl ausschließlich über eine nichtleere `include-controls`-Auswahl mit eindeutigen `with-ids`. Keine stillschweigende Gesamtauswahl. Profile als Importquelle, mehrere Imports, Regex-Selektoren, `include-all` und `exclude-controls` werden zunächst explizit zurückgewiesen. Eine Control-Erweiterung (OSCAL-Enhancement) wird mit ihrer ID ausgewählt und nur zusammen mit ihrem Eltern-Control.
+- `merge` ist ausdrücklich `as-is: true`, ohne weitere Kombinationsregeln. Gruppen und narrative Anforderungsinhalte stammen aus dem Katalog. Verschachtelte Gruppen sind zulässig. Controls dürfen eine Ebene von Erweiterungen enthalten, etwa `PY-LIC-001.1` unter `PY-LIC-001`; tiefere Verschachtelung wird zurückgewiesen. Erweiterungen haben eigene Parameter und eine eigene Bindung.
 - `modify` unterstützt ausschließlich `set-parameters` mit `param-id` und `values`. Nur eindeutige Control-lokale Parameter mit Werten werden verarbeitet; global/gruppenlokal definierte Parameter, Constraints, Selections und sonstige semantische Modifikationen werden zunächst zurückgewiesen. Parameter nicht ausgewählter Controls werden nicht importiert.
 - Doppelte oder fehlende Control-/Parameter-IDs, unbekannte Auswahlziele, nach Anwendung des Profils noch wertlose ausgewählte Parameter und Bindungswidersprüche sind Fehler. Ein Profil darf fehlende Katalogstandardwerte ergänzen. Ein ausgewähltes Control ohne verfügbare ausführbare Bindung bleibt sichtbar und nicht automatisiert bewertet; es wird nicht als PASS ausgegeben.
 
@@ -57,8 +57,18 @@ Bindings referenzieren die exakte fachliche Katalog-ID/-Version; eine Bindung ve
 
 - `expectedParameter` an `equals` liest genau einen OSCAL-Parameterwert als JSON-Skalar und ersetzt ihn durch `expected`. Beispiel: OSCAL-Wert `"true"` wird zu Boolean `true`. Gleichzeitig `expected` und `expectedParameter` ist ein Fehler.
 - `allowedParameter` an `spdx-allowlist` übernimmt die OSCAL-Werteliste als `allowed`. Gleichzeitig `allowed` und `allowedParameter` ist ein Fehler. Der SPDX-Operator kommt aus dem separaten Lizenzscan-Branch/PR #179; der Basiskern wird hier nicht um diesen Operator erweitert.
+- `libraryUse` an `spdx-allowlist` verweist auf eine Erweiterung des gebundenen Controls und deren Werteliste (`control`, `allowedParameter`). Ist die Erweiterung im Profil ausgewählt, erlaubt die Regel diese Lizenzen zusätzlich, aber nur, wenn das Produkt die Erweiterung in `implementedRequirements` erklärt und die Paketdateien nachweislich unverändert aus PyPI stammen. Ist sie nicht ausgewählt, entfällt der Verweis beim Kompilieren.
+- `spdx-library-use` ist die Bindung der Erweiterung selbst (`control`, `allowedParameter`, `baseAllowedParameter`). Sie bewertet je Paket: nicht anwendbar, wenn die Basisliste genügt oder die Lizenz auch mit der Ausnahme nicht zulässig ist; sonst PASS oder FAIL nach denselben Bedingungen. Ein Control ohne anwendbare Pakete blockiert den PR-Check nicht.
 
-Unterstützte Operatoren sind `equals`, `exists`, `all`, `any` und der genannte SPDX-Operator nach Integration seiner Grundlage. Neue Bindungen mit unbekannten Operatoren, fehlerhaften Operanden, mehrdeutigen Parameterreferenzen oder ungültigen Feldpfaden werden abgelehnt. Auch die expandierten Parameterwerte werden erneut gegen das Bindungsschema geprüft. Das Verhalten alter Legacy-Packs wird nicht rückwirkend umgedeutet. Erwartungswerte in Profilen sind Konfigurationswerte und keine selbst erhobenen Nachweise.
+Unterstützte Operatoren sind `equals`, `exists`, `all`, `any`, der genannte SPDX-Operator nach Integration seiner Grundlage und `spdx-library-use`. Neue Bindungen mit unbekannten Operatoren, fehlerhaften Operanden, mehrdeutigen Parameterreferenzen oder ungültigen Feldpfaden werden abgelehnt. Auch die expandierten Parameterwerte werden erneut gegen das Bindungsschema geprüft. Das Verhalten alter Legacy-Packs wird nicht rückwirkend umgedeutet. Erwartungswerte in Profilen sind Konfigurationswerte und keine selbst erhobenen Nachweise.
+
+## Produkterklärungen
+
+Ein Produkt beschreibt in `spec.repositories[].paths`, welche Ordner eines Repositorys zu ihm gehören. Nur Lockfiles unter diesen Ordnern werden bewertet; andere werden im Bericht als außerhalb der Produktpfade ausgewiesen. Ohne `paths` gehört das ganze Repository zum Produkt.
+
+`spec.implementedRequirements` beschreibt nach dem Vorbild der OSCAL Component Definition, wie das Produkt Controls seines Profils umsetzt (`controlId`, `description`). Jede `controlId` muss im referenzierten Profil ausgewählt sein. Profile und Kataloge bleiben Ressourcen der Organisation; das Produkt kann keine eigenen Regeln oder Parameterwerte setzen.
+
+Liegt das Produktmanifest im Repository eines Pull Requests, liest der PR-Check `paths` und `implementedRequirements` am Head-Commit des Pull Requests. Produkt-ID und Profilreferenz müssen der registrierten Revision entsprechen; sonst und bei einem ungültigen Manifest gelten keine Erklärungen aus dem Pull Request, und die registrierten Produktpfade bleiben maßgeblich. Der gelesene Stand wird im eingefrorenen Governance-Kontext des Assessments festgehalten (`productDeclaration`).
 
 ## Ein Arbeitsbereich, bestehende Autorisierung
 

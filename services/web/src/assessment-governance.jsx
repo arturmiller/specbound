@@ -1,9 +1,10 @@
 import React from 'react';
 import { ManifestProvenance } from './manifest-source.jsx';
 
-/** @typedef {{mode: string, product?: import('./resources.jsx').Resource, profile?: import('./resources.jsx').Resource, catalog?: import('./resources.jsx').Resource, policy?: {revision: string}, producer?: {kind: string, version: string | null}}} FrozenContext */
+/** @typedef {{source: string, repository: string, manifestPath: string, commit: string, implementedRequirements: {controlId: string, description: string}[], error?: string}} ProductDeclaration */
+/** @typedef {{mode: string, product?: import('./resources.jsx').Resource, profile?: import('./resources.jsx').Resource, catalog?: import('./resources.jsx').Resource, policy?: {revision: string}, producer?: {kind: string, version: string | null}, productDeclaration?: ProductDeclaration}} FrozenContext */
 /** @typedef {{controlId: string, title: string, status: string, executionStatus: string, reason: string, evaluationIds: string[], evidenceIds: string[]}} ControlResult */
-/** @typedef {{id: string, repository: string, ref: string, sourceRevision: string | null, coverage: string, files: string[], unsupportedFiles: string[], reason?: string}} SourceScan */
+/** @typedef {{id: string, repository: string, ref: string, sourceRevision: string | null, coverage: string, files: string[], unsupportedFiles: string[], outsideProductPaths?: string[], reason?: string}} SourceScan */
 
 /** @param {{sourceScan: SourceScan}} props */
 export function ScanSource({ sourceScan }) {
@@ -18,6 +19,17 @@ export function ScanSource({ sourceScan }) {
     <p className="break-value">Prüfquelle: {sourceRevision ? <a href={`${baseUrl}/commit/${sourceRevision}`}>{repository} · {sourceRevision.slice(0, 12)}</a> : <>{repository} · Revision nicht beobachtet</>} · Ref: {ref}</p>
     {sourceRevision && files.length > 0 && <ul>{files.map((path) => <li key={path}><a href={`${baseUrl}/blob/${sourceRevision}/${path.split('/').map(encodeURIComponent).join('/')}`}>{path}</a></li>)}</ul>}
     {unsupportedFiles.length > 0 && <p className="break-value">Nicht unterstützte Dateien: {unsupportedFiles.join(', ')}</p>}
+    {Boolean(sourceScan.outsideProductPaths?.length) && <p className="break-value">Außerhalb der Produktpfade, nicht bewertet: {sourceScan.outsideProductPaths?.join(', ')}</p>}
+  </>;
+}
+/** @param {{declaration: ProductDeclaration}} props */
+function DeclarationSource({ declaration }) {
+  const origin = declaration.source === 'pull-request' ? 'Pull-Request-Commit' : 'registrierte Produktrevision';
+  const url = `https://github.com/${declaration.repository}/blob/${declaration.commit}/${declaration.manifestPath.split('/').map(encodeURIComponent).join('/')}`;
+  return <>
+    <p className="break-value">Produkterklärung: <a href={url}>{origin} · {declaration.commit.slice(0, 12)}</a></p>
+    {declaration.error && <p role="status">Produkterklärung aus dem Pull Request nicht übernommen: {declaration.error}</p>}
+    {declaration.implementedRequirements.length > 0 && <ul aria-label="Umsetzungserklärungen">{declaration.implementedRequirements.map((item) => <li key={item.controlId}><strong>{item.controlId}</strong>: {item.description}</li>)}</ul>}
   </>;
 }
 /** @param {{context?: FrozenContext | null, controls?: ControlResult[] | null, sourceScan?: SourceScan | null}} props */
@@ -28,6 +40,7 @@ export function AssessmentGovernance({ context, controls, sourceScan }) {
     {!context ? <p>Für diesen historischen Stand wurde kein Produkt-/Profilabschluss gespeichert. Fehlende Angaben bleiben unbekannt.</p> : context.mode === 'profile' && context.product && context.profile ? <>
       <p>Produkt: {context.product.name} · {context.product.version}</p><p>Profil: <strong>{context.profile.name} · {context.profile.version}</strong></p>
       <ManifestProvenance source={context.product.source} defaultPath={context.product.source.manifestPath} />
+      {context.productDeclaration && <DeclarationSource declaration={context.productDeclaration} />}
       <ManifestProvenance source={context.profile.source} defaultPath={context.profile.source.manifestPath} />
       <p>Katalogdefinition: {context.catalog?.name} · {context.catalog?.version}</p>
       <ul>{context.profile.source.files.filter((file) => file.path !== context.profile?.source.manifestPath).map((file) => <li key={file.path}><a href={file.url}>{file.path}</a></li>)}</ul>

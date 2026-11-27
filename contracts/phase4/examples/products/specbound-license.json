@@ -3,12 +3,20 @@
   "kind": "Product",
   "metadata": {
     "id": "specbound-license",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "name": "Specbound"
   },
   "spec": {
     "licenseUse": "customer-distribution",
-    "repositories": [{ "provider": "github", "repository": "arturmiller/specbound" }],
-    "profile": { "id": "license-distribution", "version": "1.1.0" }
+    "repositories": [{
+      "provider": "github",
+      "repository": "arturmiller/specbound",
+      "paths": ["services/api", "services/worker"]
+    }],
+    "profile": { "id": "license-distribution", "version": "1.2.0" },
+    "implementedRequirements": [{
+      "controlId": "PY-LIC-001.1",
+      "description": "API und Worker installieren Python-Pakete unverändert aus PyPI und importieren sie nur. Lizenztexte, Hinweise und der Zugang zum Quellcode der ausgelieferten Bibliotheken sind in docs/release-license-review.md beschrieben."
+    }]
   }
 }

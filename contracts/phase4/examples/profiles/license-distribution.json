@@ -1,19 +1,22 @@
 {
   "profile": {
-    "uuid": "76d50711-927e-49a0-b763-61dc0fac4cc3",
+    "uuid": "3e9d7a51-0b8c-4f2e-a6d4-91c5b7e2f0a3",
     "metadata": {
       "title": "Lizenzprüfung für Kundenauslieferung (Beispiel)",
-      "last-modified": "2026-11-24T00:00:00Z",
-      "version": "1.1.0",
+      "last-modified": "2026-11-27T00:00:00Z",
+      "version": "1.2.0",
       "oscal-version": "1.2.3",
       "props": [{"name": "resource-id", "ns": "https://specbound.example/ns/resource", "value": "license-distribution"}]
     },
-    "imports": [{"href": "../catalogs/license-controls.json", "include-controls": [{"with-ids": ["PY-LIC-001"]}]}],
+    "imports": [{"href": "../catalogs/license-controls.json", "include-controls": [{"with-ids": ["PY-LIC-001", "PY-LIC-001.1"]}]}],
     "merge": {"as-is": true},
     "modify": {
       "set-parameters": [{
         "param-id": "license-allowlist",
         "values": ["MIT", "MIT-0", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0"]
+      }, {
+        "param-id": "license-library-allowlist",
+        "values": ["LGPL-3.0-only", "MPL-2.0"]
       }]
     }
   }

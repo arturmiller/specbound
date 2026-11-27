@@ -29,6 +29,10 @@ def load_product(snapshot, manifest_path):
     names = [item["repository"].lower() for item in repositories]
     if len(set(names)) != len(names) or any(len(name) > 200 for name in names):
         raise ValueError("Duplicate or oversized product repository")
+    implemented = document["spec"].get("implementedRequirements", [])
+    control_ids = [item["controlId"] for item in implemented]
+    if len(set(control_ids)) != len(control_ids):
+        raise ValueError("A control implementation is declared more than once")
     return {
         **document["metadata"],
         "document": document,
@@ -40,10 +44,23 @@ def load_product(snapshot, manifest_path):
                 if "licenseUse" in document["spec"]
                 else {}
             ),
+            **({"implementedRequirements": implemented} if implemented else {}),
         },
         "dependencies": [manifest_path],
         "contentDigest": content_digest({"product": snapshot.files[manifest_path]}),
     }
+
+
+def check_implemented_requirements(resolved, selected_control_ids):
+    """A product may only describe controls that its organization's profile selects."""
+    selected = set(selected_control_ids)
+    if any(
+        item["controlId"] not in selected
+        for item in resolved.get("implementedRequirements", [])
+    ):
+        raise ValueError(
+            "Implemented requirement is not part of the referenced profile"
+        )
 
 
 def resolve_product(
@@ -72,6 +89,9 @@ def resolve_product(
     if len({profile["content_digest"] for profile in profiles}) != 1:
         raise ValueError("Referenced profile version is ambiguous")
     profile = sorted(profiles, key=lambda item: item["revision_id"])[0]
+    check_implemented_requirements(
+        loaded["resolved"], profile["resolved"]["selectedControlIds"]
+    )
     current = (
         db.execute(
             select(product_governance).where(
