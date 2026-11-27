@@ -14,11 +14,7 @@ STATUSES = (
 )
 
 
-def render_comment(counts, portal_url, snapshot_id):
-    if not isinstance(counts, dict) or set(counts) != {key for _, key in STATUSES}:
-        raise ValueError("Invalid assessment counts")
-    if any(type(value) is not int or value < 0 for value in counts.values()):
-        raise ValueError("Invalid assessment counts")
+def assessment_url(portal_url, snapshot_id):
     if not isinstance(snapshot_id, str) or not re.fullmatch(
         r"[A-Za-z0-9_-]{1,100}", snapshot_id
     ):
@@ -40,7 +36,15 @@ def render_comment(counts, portal_url, snapshot_id):
         "::1",
     ):
         raise ValueError("Non-local portal URLs must use HTTPS")
-    link = portal_url.rstrip("/") + "/assessments/" + quote(snapshot_id, safe="")
+    return portal_url.rstrip("/") + "/assessments/" + quote(snapshot_id, safe="")
+
+
+def render_comment(counts, portal_url, snapshot_id):
+    if not isinstance(counts, dict) or set(counts) != {key for _, key in STATUSES}:
+        raise ValueError("Invalid assessment counts")
+    if any(type(value) is not int or value < 0 for value in counts.values()):
+        raise ValueError("Invalid assessment counts")
+    link = assessment_url(portal_url, snapshot_id)
     return (
         MARKER
         + "\n"

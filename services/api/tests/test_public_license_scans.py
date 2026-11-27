@@ -1,6 +1,8 @@
 """Portal scan requests and worker leases use real scoped PostgreSQL data."""
 
 import copy
+import hashlib
+import hmac
 import json
 import os
 import sys
@@ -15,7 +17,9 @@ from app.database import get_engine
 from app.identity import get_current_principal
 from app.main import app
 from app.pack_catalog import github_source_factory
+from app.pr_check import publish_check_once
 from app.tables import (
+    assessment_jobs,
     assessment_snapshots,
     evidence_records,
     findings,
@@ -28,7 +32,9 @@ from sqlalchemy import func, insert, select, update
 from tests.test_resource_registry import ResourceFixtureSource
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "worker"))
+from pr_license_worker import prepare_pr_license_scan  # noqa: E402
 from public_license_worker import claim, finish, poll_once  # noqa: E402
+from queue_worker import poll_once as poll_pr_once  # noqa: E402
 
 
 class PublicLicenseScansTest(unittest.TestCase):
@@ -68,9 +74,38 @@ class PublicLicenseScansTest(unittest.TestCase):
         app.dependency_overrides.clear()
 
     def configure_native_product(
-        self, *, allowed=None, unbound=False, license_controls=1, attach_existing=False
+        self,
+        *,
+        allowed=None,
+        unbound=False,
+        license_controls=1,
+        attach_existing=False,
+        repository="example/public",
+        license_only=False,
+        license_use=None,
     ):
         self.source = ResourceFixtureSource("example/governance")
+        if license_use:
+            product = json.loads(self.source.files["products/audio-visualizer.json"])
+            product["spec"]["licenseUse"] = license_use
+            self.source.files["products/audio-visualizer.json"] = json.dumps(
+                product
+            ).encode()
+            bindings = json.loads(self.source.files["checks/application.json"])
+            for control in bindings["spec"]["controls"]:
+                if control["id"] == "PY-LIC-001":
+                    control["assertions"][0]["allowApprovedUse"] = True
+            self.source.files["checks/application.json"] = json.dumps(bindings).encode()
+        if license_only:
+            profile = json.loads(
+                self.source.files["profiles/application-baseline.json"]
+            )
+            profile["profile"]["imports"][0]["include-controls"][0]["with-ids"] = [
+                "PY-LIC-001"
+            ]
+            self.source.files["profiles/application-baseline.json"] = json.dumps(
+                profile
+            ).encode()
         if allowed:
             profile = json.loads(
                 self.source.files["profiles/application-baseline.json"]
@@ -182,7 +217,7 @@ class PublicLicenseScansTest(unittest.TestCase):
                     409,
                 )
                 product["spec"]["repositories"] = [
-                    {"provider": "github", "repository": "example/public"}
+                    {"provider": "github", "repository": repository}
                 ]
                 self.source.files[path] = json.dumps(product).encode()
                 self.assertEqual(self.client.post(root, json=config).status_code, 422)
@@ -229,6 +264,7 @@ class PublicLicenseScansTest(unittest.TestCase):
                     "version": "1.0",
                     "source": "pypi",
                     "markers": [],
+                    "artifactHashes": ["a" * 64],
                     "licenseExpression": expression,
                     "status": "FAIL",
                     "metadata": {
@@ -260,6 +296,429 @@ class PublicLicenseScansTest(unittest.TestCase):
         stored = self.client.get(self.url).json()[0]
         self.assertIsNotNone(stored["assessmentId"], stored)
         return self.client.get("/assessments/" + stored["assessmentId"]).json()
+
+    def test_signed_pr_scan_publishes_commit_check_and_portal_evidence(self):
+        repository = f"example/{self.binding}"
+        response = self.client.patch(
+            f"/products/{self.product}/repositories/{self.binding}",
+            json={"provider": "github", "repository": repository},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.configure_native_product(
+            allowed=["MIT"],
+            attach_existing=True,
+            repository=repository,
+            license_only=True,
+            license_use="customer-distribution",
+        )
+
+        class Checks:
+            app_id = "456"
+
+            def __init__(self, repository, head):
+                self.repository = repository
+                self.head = head
+                self.published = []
+
+            def _token(self, *, permissions):
+                return "fixture-token"
+
+            def _request(self, method, path, token, **kwargs):
+                if method == "GET" and path.endswith("/pulls/17"):
+                    return {"head": {"sha": self.head}}
+                if method == "GET" and path.endswith("/check-runs"):
+                    return {
+                        "check_runs": [
+                            {
+                                "name": "Specbound assessment",
+                                "external_id": self.published[0]["external_id"],
+                                "app": {"id": self.app_id},
+                                "id": 1,
+                            }
+                        ]
+                        if self.published
+                        else []
+                    }
+                if method == "POST" and path.endswith("/check-runs"):
+                    self.published.append(kwargs["json"])
+                    return {"id": 1}
+                if method == "PATCH" and path.endswith("/check-runs/1"):
+                    self.published.append(kwargs["json"])
+                    return {"id": 1}
+                raise AssertionError((method, path))
+
+            def close(self):
+                pass
+
+        engine = get_engine()
+        for index, (expression, scenario, verdict) in enumerate(
+            [
+                ("LGPL-3.0-only", "complete", "failure"),
+                ("MIT", "complete", "success"),
+                ("MIT", "partial", "failure"),
+                ("MIT", "no-lockfile", "failure"),
+                ("MIT", "wrong-commit", "failure"),
+                ("MIT", "timeout", "failure"),
+            ]
+        ):
+            with self.subTest(scenario=scenario, expression=expression):
+                head = f"{index + 1:040x}"
+                body = json.dumps(
+                    {
+                        "action": "opened" if index == 0 else "synchronize",
+                        "installation": {"id": 12345},
+                        "number": 17,
+                        "repository": {"id": 123, "full_name": repository},
+                        "pull_request": {
+                            "id": 100,
+                            "number": 17,
+                            "head": {"sha": head},
+                            "base": {"repo": {"id": 123}},
+                        },
+                    }
+                ).encode()
+                mac = hmac.new(b"test-only", body, hashlib.sha256).hexdigest()
+                with patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_WEBHOOK_SECRET": "test-only",
+                        "GITHUB_INSTALLATION_ID": "12345",
+                        "GITHUB_ORGANIZATION_ID": self.org,
+                    },
+                ):
+                    response = self.client.post(
+                        "/webhooks/github",
+                        content=body,
+                        headers={
+                            "X-Hub-Signature-256": "sha256=" + mac,
+                            "X-GitHub-Delivery": str(uuid4()),
+                            "X-GitHub-Event": "pull_request",
+                        },
+                    )
+                self.assertEqual(response.status_code, 202, response.text)
+
+                def execute(source, ref):
+                    self.assertEqual((source, ref), (repository, head))
+                    if scenario == "timeout":
+                        return {"status": "error", "errorCode": "timeout"}
+                    result = self.observed_result(
+                        expression, partial=scenario == "partial"
+                    )
+                    if expression == "LGPL-3.0-only":
+                        result["packages"][0].update(
+                            name="psycopg-binary", version="3.3.3"
+                        )
+                    result["sourceRevision"] = (
+                        "f" * 40 if scenario == "wrong-commit" else head
+                    )
+                    if scenario == "no-lockfile":
+                        result.update(
+                            sourceCoverage="UNKNOWN",
+                            coverage="UNKNOWN",
+                            files=[],
+                            packages=[],
+                        )
+                    return {"status": "ok", "result": result}
+
+                self.assertTrue(
+                    poll_pr_once(
+                        engine,
+                        self.org,
+                        lambda lease: prepare_pr_license_scan(
+                            engine, lease, execute=execute
+                        ),
+                    )
+                )
+                with engine.connect() as db:
+                    job = (
+                        db.execute(
+                            select(assessment_jobs).where(
+                                assessment_jobs.c.organization_id == self.org,
+                                assessment_jobs.c.head_sha == head,
+                            )
+                        )
+                        .mappings()
+                        .one()
+                    )
+                self.assertEqual(job["status"], "completed")
+                snapshot = job["result_snapshot_id"]
+                response = self.client.get(f"/assessments/{snapshot}")
+                self.assertEqual(response.status_code, 200, response.text)
+                result = response.json()
+                self.assertEqual(result["assessment"]["pullRequestNumber"], 17)
+                self.assertEqual(result["assessment"]["gitSha"], head)
+                self.assertEqual(
+                    result["pullRequestUrl"], f"https://github.com/{repository}/pull/17"
+                )
+                if scenario in {"wrong-commit", "timeout", "no-lockfile"}:
+                    self.assertEqual(result["evidence"], [])
+                    self.assertEqual(result["sourceScan"]["files"], [])
+                    if scenario != "no-lockfile":
+                        self.assertIsNone(result["sourceScan"]["sourceRevision"])
+                else:
+                    self.assertEqual(result["sourceScan"]["sourceRevision"], head)
+                    self.assertEqual(result["sourceScan"]["files"], ["uv.lock"])
+                    self.assertEqual(len(result["evidence"]), 1)
+                if expression == "LGPL-3.0-only":
+                    self.assertEqual(result["findings"][0]["outcome"], "FAIL")
+
+                requirements = self.client.get(
+                    f"/products/{self.product}/requirements",
+                    params={"assessment": snapshot},
+                ).json()
+                option = next(
+                    option
+                    for option in requirements["options"]
+                    if option["id"] == snapshot
+                )
+                self.assertEqual(
+                    (option["context"], option["pullRequestNumber"]),
+                    ("pull_request", 17),
+                )
+                github = Checks(repository, head)
+                self.assertTrue(
+                    publish_check_once(
+                        engine,
+                        self.org,
+                        lambda _: github,
+                        "https://portal.example",
+                        clock=lambda: datetime.now(timezone.utc),
+                    )
+                )
+                self.assertEqual(len(github.published), 1)
+                self.assertEqual(github.published[0]["head_sha"], head)
+                self.assertEqual(github.published[0]["conclusion"], verdict)
+                self.assertEqual(
+                    github.published[0]["details_url"],
+                    f"https://portal.example/assessments/{snapshot}",
+                )
+                self.assertIn(
+                    f"[Specbound-Ergebnis öffnen](<https://portal.example/assessments/{snapshot}>)",
+                    github.published[0]["output"]["summary"],
+                )
+                if expression == "LGPL-3.0-only":
+                    proof = "https://proof.example.test/protected/psycopg-release"
+                    endpoint = f"/products/{self.product}/license-approvals"
+                    grant = {
+                        "assessmentId": snapshot,
+                        "evaluationId": result["evaluations"][0]["id"],
+                        "kind": "conditions-met",
+                        "reason": "Reviewed distribution of LGPL library.",
+                        "conditions": "Include notices and permit replacement.",
+                        "proofUrl": proof,
+                    }
+                    self.client.post(
+                        f"/teams/{self.team}/members",
+                        json={
+                            "principalId": self.viewer,
+                            "role": "maintainer",
+                        },
+                    )
+                    app.dependency_overrides[get_current_principal] = lambda: (
+                        self.viewer
+                    )
+                    self.assertEqual(
+                        self.client.post(endpoint, json=grant).status_code, 403
+                    )
+                    app.dependency_overrides[get_current_principal] = lambda: self.owner
+                    approved = self.client.post(endpoint, json=grant)
+                    self.assertEqual(approved.status_code, 201, approved.text)
+                    approval_id = approved.json()["id"]
+                    self.assertEqual(
+                        self.client.get(endpoint + "/" + approval_id).json()[
+                            "proofUrl"
+                        ],
+                        proof,
+                    )
+                    with patch.dict(os.environ, {"PR_LICENSE_SCAN_ENABLED": "true"}):
+                        recheck = self.client.post(
+                            f"/assessments/{snapshot}/license-recheck"
+                        )
+                        self.assertEqual(recheck.status_code, 202, recheck.text)
+                        self.assertEqual(
+                            self.client.post(
+                                f"/assessments/{snapshot}/license-recheck"
+                            ).status_code,
+                            409,
+                        )
+                    self.assertTrue(
+                        poll_pr_once(
+                            engine,
+                            self.org,
+                            lambda lease: prepare_pr_license_scan(
+                                engine, lease, execute=execute
+                            ),
+                        )
+                    )
+                    self.assertTrue(
+                        publish_check_once(
+                            engine,
+                            self.org,
+                            lambda _: github,
+                            "https://portal.example",
+                            clock=lambda: datetime.now(timezone.utc),
+                        )
+                    )
+                    self.assertEqual(github.published[-1]["conclusion"], "success")
+                    with engine.begin() as db:
+                        updated = (
+                            db.execute(
+                                select(assessment_jobs).where(
+                                    assessment_jobs.c.id == job["id"]
+                                )
+                            )
+                            .mappings()
+                            .one()
+                        )
+                    latest = self.client.get(
+                        "/assessments/" + updated["result_snapshot_id"]
+                    )
+                    self.assertNotIn(proof, latest.text)
+                    value = latest.json()["evidence"][0]["value"]
+                    self.assertEqual(value["licenseExpression"], "LGPL-3.0-only")
+                    self.assertEqual(value["licenseApproval"]["id"], approval_id)
+                    self.assertEqual(
+                        self.client.get(f"/assessments/{snapshot}").json()[
+                            "assessment"
+                        ]["counts"]["FAIL"],
+                        1,
+                    )
+                    self.assertEqual(
+                        self.client.get(f"/assessments/{snapshot}").json()[
+                            "pullRequestUrl"
+                        ],
+                        f"https://github.com/{repository}/pull/17",
+                    )
+                    self.assertTrue(
+                        self.client.post(
+                            endpoint + "/" + approval_id + "/revoke"
+                        ).json()["revoked"]
+                    )
+                    self.assertTrue(
+                        publish_check_once(
+                            engine,
+                            self.org,
+                            lambda _: github,
+                            "https://portal.example",
+                            clock=lambda: (
+                                datetime.now(timezone.utc) + timedelta(minutes=6)
+                            ),
+                        )
+                    )
+                    self.assertEqual(github.published[-1]["conclusion"], "failure")
+
+    def test_contract_for_internal_use_does_not_grant_saas_or_replaced_artifacts(self):
+        self.configure_native_product(license_only=True, license_use="internal")
+        package_result = self.observed_result(None)
+        package_result["packages"][0].update(
+            source="unsupported:registry",
+            status="UNKNOWN",
+            metadata={"status": "UNKNOWN"},
+        )
+        first = self.finish_profile_scan(package_result)
+        self.assertEqual(first["assessment"]["counts"]["FAIL"], 1)
+        self.assertEqual(first["findings"][0]["outcome"], "FAIL")
+        endpoint = f"/products/{self.product}/license-approvals"
+        grant = self.client.post(
+            endpoint,
+            json={
+                "assessmentId": first["assessment"]["id"],
+                "evaluationId": first["evaluations"][0]["id"],
+                "kind": "license-rights",
+                "reason": "Vendor contract grants internal use.",
+                "conditions": "Internal use by this entity only.",
+                "proofUrl": "https://proof.example.test/protected/contract",
+            },
+        )
+        self.assertEqual(grant.status_code, 201, grant.text)
+        self.assertEqual(
+            self.finish_profile_scan(package_result)["assessment"]["counts"]["PASS"], 1
+        )
+        changed = copy.deepcopy(package_result)
+        changed["packages"][0]["artifactHashes"] = ["c" * 64]
+        self.assertEqual(
+            self.finish_profile_scan(changed)["assessment"]["counts"]["FAIL"], 1
+        )
+
+        # Adopt the same control and repository under a new use; only the
+        # manifest's current scope changes, not the artifact or policy rule.
+        governance = self.client.get(f"/products/{self.product}/governance").json()
+        revision_id = governance["product"]["id"]
+        path = "products/audio-visualizer.json"
+        document = json.loads(self.source.files[path])
+        document["spec"]["licenseUse"] = "saas"
+        document["metadata"]["version"] = "1.1.0"
+        self.source.files[path] = json.dumps(document).encode()
+        self.source.commit = "c" * 40
+        check_url = f"/organizations/{self.org}/resources/{revision_id}"
+        check = self.client.post(check_url + "/check", json={})
+        self.assertEqual(check.status_code, 200, check.text)
+        candidate = check.json()["candidate"]
+        adoption = self.client.post(
+            check_url + "/adopt",
+            json={
+                "commit": candidate["source"]["commit"],
+                "reviewDigest": check.json()["reviewDigest"],
+            },
+        )
+        self.assertEqual(adoption.status_code, 201, adoption.text)
+        current = self.finish_profile_scan(package_result)
+        self.assertEqual(current["licenseUse"], "saas")
+        self.assertEqual(current["assessment"]["counts"]["FAIL"], 1)
+
+    def test_unresolved_source_blocks_a_package_with_an_allowed_wheel(self):
+        self.configure_native_product(
+            allowed=["MPL-2.0"], license_only=True, license_use="customer-distribution"
+        )
+        scan = self.observed_result("MPL-2.0")
+        package = scan["packages"][0]
+        package.update(
+            name="certifi",
+            version="2026.11.20",
+            licenseExpression=None,
+            artifactHashes=["a" * 64, "c" * 64],
+        )
+        wheel = {
+            **package["metadata"]["artifacts"][0],
+            "filename": "certifi.whl",
+            "status": "OBSERVED",
+        }
+        package["metadata"] = {
+            "status": "UNKNOWN",
+            "reason": "dynamic license declaration",
+            "artifacts": [
+                wheel,
+                {
+                    "artifactSha256": "c" * 64,
+                    "filename": "certifi.tar.gz",
+                    "status": "UNKNOWN",
+                    "reason": "dynamic license declaration",
+                },
+            ],
+        }
+        report = self.finish_profile_scan(scan)
+        snapshot = report["assessment"]
+        evaluation = report["evaluations"][0]
+        self.assertEqual(snapshot["counts"]["FAIL"], 1)
+        self.assertEqual(snapshot["counts"]["UNKNOWN"], 0)
+        self.assertIn("Paketdatei", evaluation["reason"])
+        self.assertEqual(report["findings"][0]["outcome"], "FAIL")
+        evidence = report["evidence"][0]["value"]
+        self.assertEqual(evidence["licenseCoverage"], "incomplete")
+        self.assertEqual(evidence["artifacts"][0]["licenseExpression"], "MPL-2.0")
+        self.assertEqual(evidence["artifacts"][1]["status"], "UNKNOWN")
+        refused = self.client.post(
+            f"/products/{self.product}/license-approvals",
+            json={
+                "assessmentId": snapshot["id"],
+                "evaluationId": evaluation["id"],
+                "kind": "conditions-met",
+                "reason": "Wheel checked.",
+                "conditions": "Publish notice.",
+                "proofUrl": "https://proof.example.test/wheel",
+            },
+        )
+        self.assertEqual(refused.status_code, 422, refused.text)
 
     def test_adopting_a_manifest_keeps_existing_product_repository_and_report(self):
         before = self.finish_profile_scan(self.observed_result("GPL-3.0-only"))
@@ -598,18 +1057,17 @@ class PublicLicenseScansTest(unittest.TestCase):
                 ).scalar_one(),
                 "open",
             )
-            self.assertEqual(
-                db.execute(
-                    select(func.count())
-                    .select_from(evidence_records)
-                    .where(evidence_records.c.producer_scan_id == unknown_job["id"])
-                ).scalar_one(),
-                0,
-            )
+            evidence = db.execute(
+                select(evidence_records.c.value).where(
+                    evidence_records.c.producer_scan_id == unknown_job["id"]
+                )
+            ).scalar_one()
+            self.assertEqual(evidence["licenseCoverage"], "incomplete")
+            self.assertIsNone(evidence["licenseExpression"])
         self.assertEqual(
             self.client.get(f"/assessments/{unknown['assessmentId']}").json()[
                 "assessment"
-            ]["counts"]["UNKNOWN"],
+            ]["counts"]["FAIL"],
             1,
         )
         run_scan("MIT")

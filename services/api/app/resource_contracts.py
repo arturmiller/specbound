@@ -4,10 +4,10 @@ import copy
 import hashlib
 import json
 import posixpath
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import regex
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import ValidationError
 from jsonschema.validators import extend, validator_for
@@ -20,6 +20,7 @@ ROOT = next(
 )
 HERE = ROOT / "phase4"
 NS = "https://specbound.example/ns/resource"
+OSCAL_TOKEN_PATTERN = r"^(\p{L}|_)(\p{L}|\p{N}|[.\-_])*$"
 
 
 def read(path):
@@ -44,15 +45,32 @@ def schema_registry():
 
 def validate(value, path):
     schema = read(path)
+    base = validator_for(schema)
 
-    def unicode_pattern(_validator, pattern, instance, _schema):
-        if isinstance(instance, str) and not regex.search(pattern, instance):
+    def unicode_pattern(validator, pattern, instance, pattern_schema):
+        if pattern != OSCAL_TOKEN_PATTERN:
+            yield from base.VALIDATORS["pattern"](
+                validator, pattern, instance, pattern_schema
+            )
+        elif isinstance(instance, str) and not _oscal_token(instance):
             yield ValidationError(f"{instance!r} does not match {pattern!r}")
 
-    validator = extend(validator_for(schema), {"pattern": unicode_pattern})
+    validator = extend(base, {"pattern": unicode_pattern})
     validator(
         schema, registry=schema_registry(), format_checker=FormatChecker()
     ).validate(value)
+
+
+def _oscal_token(value):
+    name = value.removesuffix("\n")
+    return (
+        bool(name)
+        and (name[0] == "_" or unicodedata.category(name[0]).startswith("L"))
+        and all(
+            char in ".-_" or unicodedata.category(char).startswith(("L", "N"))
+            for char in name[1:]
+        )
+    )
 
 
 def verify_vendor():

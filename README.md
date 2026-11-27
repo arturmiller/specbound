@@ -116,19 +116,22 @@ den Git-Ref angeben und den Scan starten. Für einen ersten Versuch eignet sich
 Der Zugriff benötigt kein
 GitHub-Token; GitHub kann anonyme Aufrufe pro IP begrenzen.
 
-Der Worker verarbeitet ausschließlich ausdrücklich gestartete öffentliche
+Der manuelle Scan-Worker verarbeitet ausdrücklich gestartete öffentliche
 Scans. Er liest erkannte Lockfiles der aufgelösten Git-Revision und Paketmetadaten
 von öffentlichem PyPI, ohne Pakete zu installieren oder Repository-Code
-auszuführen. Nur `uv.lock` wird derzeit ausgewertet. Andere Python-Lockfiles,
+auszuführen. Das Overlay baut den Worker mit ScanCode, um zusätzlich
+Lizenzdateien aus hashgeprüften Quellarchiven auszuwerten. Nur `uv.lock` wird
+derzeit ausgewertet. Andere Python-Lockfiles,
 private Paketquellen, fehlende oder widersprüchliche Angaben und überschrittene
 Limits bleiben unbekannt beziehungsweise werden als unvollständige Abdeckung
 angezeigt. Lockfiles können Pakete für andere Umgebungen enthalten; ein Scan ist
 kein Inventar der tatsächlich installierten Pakete.
 
 Das versionierte Beispiel-Governance-Pack erlaubt MIT, Apache-2.0, BSD-2-Clause,
-BSD-3-Clause und ISC; andere bekannte Lizenzen, darunter GPL, ergeben `FAIL`,
-unklare Informationen `UNKNOWN`. Für belegte Paketmetadaten entstehen Evidence,
-ein Repository-Assessment und bei `FAIL` Findings; diese sind im Scanbericht und
+BSD-3-Clause und ISC. Eine Lizenz außerhalb der Richtlinie oder ein ungeklärter
+Dateinachweis ergibt `FAIL`. Der Bericht zeigt den Befund und die Nachweise
+pro Paketdatei, auch bei teilweise belegten Lizenzen. Für Bewertungen entstehen
+Evidence, ein Repository-Assessment und bei `FAIL` Findings; diese sind im Scanbericht und
 unter **Findings → Repository-Scans** sichtbar. Das Beispiel-Pack ist keine
 unternehmensspezifische Rechtsfreigabe. Auch Open-Source-Lizenzen außerhalb
 dieser kurzen Allowlist werden als nicht freigegeben angezeigt. Ältere Scans ohne Assessment können
@@ -140,6 +143,38 @@ Allgemeine Image-, Secret- und Egress-Freigaben bleiben separat.
 Die Scanansicht speichert Aufträge und Ergebnisse in den bestehenden lokalen
 Compose-Volumes. Wird das Overlay nicht verwendet, bleiben neue Aufträge wartend,
 bis ein entsprechender Worker aktiviert wird.
+
+### Öffentliche Lizenzscans für Pull Requests
+
+Mit `PR_LICENSE_SCAN_ENABLED=true` verarbeitet der Worker auch signierte
+PR-Ereignisse der konfigurierten GitHub-Installation. Das Repository muss am
+Produkt gebunden sein. Der Worker liest öffentliche Lockfiles am gespeicherten
+PR-Head und friert die Produktregeln bei Scanbeginn ein. Das gespeicherte
+Assessment steht am Produkt unter **Anforderungen → Prüfung**. Die Anzeige
+enthält PR-Nummer, Scan-Revision, Controls und Nachweise.
+Für ScanCode verwendet der PR-Worker das gleiche Image wie der manuelle Scan
+(`compose.license-scan.yaml` oder Docker-Buildziel `license-scan`).
+Für einen grünen Lizenzcheck braucht das Produkt ein explizit zugeordnetes
+Profil mit ausgeführten und bestandenen Controls. Ohne Profil dient die
+Beispielrichtlinie zur Anzeige des Scans.
+
+Der [Lizenzcheck für Unternehmensnutzung und Releases](docs/release-license-review.md)
+beschreibt Nutzungsprofile, belegte Freigaben und die Prüfung der gebauten Artefakte.
+
+Für einen lokalen Test kann die API mit einem eigenen Test-Secret signierte
+Zustellungen auf `/webhooks/github` annehmen. Der Test
+`test_signed_pr_scan_publishes_commit_check_and_portal_evidence` prüft diese
+Kette mit PostgreSQL und einer simulierten GitHub-Checks-API. Eine echte
+Zustellung benötigt eine erreichbare HTTPS-Webhook-Adresse und das zur App
+passende Secret. Zum Veröffentlichen des Checks benötigt die App
+`checks: write` und `pull_requests: read`. Ergänze dafür
+`-f compose.github-publishing.yaml` beim Compose-Start. Dieses Overlay
+aktiviert den Check-Publisher und bindet den App-Schlüssel für ihn lesend ein.
+Für einen Link zum lokalen Assessment im GitHub-Check setze
+`PORTAL_PUBLIC_URL=http://127.0.0.1:5173`. Der Link öffnet das Portal auf dem
+Rechner, auf dem dieser Stack läuft.
+Ein roter Check blockiert den Merge, wenn er
+in den Repository-Regeln als Pflichtcheck eingerichtet ist.
 
 Für den regulären Anbieter wieder die `OIDC_*`-Variablen wie oben beschrieben
 setzen und `docker compose up --build` ohne das lokale Overlay starten. Ohne
@@ -172,6 +207,26 @@ npm run check
 
 Prüft Build, JavaScript-Syntax, Originaldaten, Referenzen, Task-Abhängigkeiten
 und Zustandsimport. `npm run build` erzeugt die statisch hostbare Site in `dist/`.
+
+## Python-Abhängigkeiten
+
+API und Worker haben jeweils ein `pyproject.toml` und eine versionierte
+`uv.lock`. Ändere die direkten Abhängigkeiten im jeweiligen
+`pyproject.toml` und aktualisiere die zugehörige Lockdatei mit Python 3.12.
+
+```sh
+uv lock --project services/api --python 3.12
+uv lock --project services/worker --python 3.12
+```
+
+Docker installiert die Gruppen `runtime` und `postgres-system` mit
+`uv sync --locked` aus dem Lockfile des jeweiligen Dienstes. Die Images für API
+und Worker bauen `psycopg-c` aus dem Quellarchiv und laden zur Laufzeit
+`libpq5` aus Debian. Ein normales `uv sync` auf dem Entwicklungsrechner
+installiert die Gruppe `postgres-binary` zusammen mit `runtime`. Die API-Tests
+laden zusätzlich `dev`. Der Lizenzscanner prüft beide Lockfiles einschließlich
+Entwicklungsabhängigkeiten und Plattformvarianten. Für die Kundenauslieferung
+zählt das Inventar der tatsächlich ausgelieferten Images.
 
 ## Arbeitsstand sichern
 

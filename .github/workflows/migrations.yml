@@ -22,10 +22,14 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
+          version: '0.11.7'
           python-version: '3.12'
-      - run: pip install -r services/api/requirements-dev.txt
+      - name: Install locked API and integration test dependencies
+        run: |
+          uv sync --project services/api --locked --group dev
+          echo "$PWD/services/api/.venv/bin" >> "$GITHUB_PATH"
       - name: Migrate a fresh database and start the API
         working-directory: services/api
         env:
@@ -141,9 +145,6 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://specbound:test-only@127.0.0.1:5432/specbound_test
         run: python -m unittest discover -s tests -p 'test_public_license_scans.py' -v
-      - name: Install collector runner dependencies
-        # Product requirements reuse the same real worker and authorized reports.
-        run: pip install -r services/worker/requirements.txt
       - name: Verify complete product requirements and evidence history
         working-directory: services/api
         env:

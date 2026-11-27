@@ -192,6 +192,9 @@
             "operator": {
               "const": "spdx-allowlist"
             },
+            "allowApprovedUse": {
+              "type": "boolean"
+            },
             "path": {
               "type": "string",
               "maxLength": 500,

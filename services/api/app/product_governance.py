@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import insert, select, update
 
 from app.audit import record_event
-from app.authorization import team_access
+from app.authorization import organization_access, team_access
 from app.manifest_io import read_yaml
 from app.manifest_source import checked_manifest_path, content_digest
 from app.resource_contracts import HERE, validate
@@ -35,6 +35,11 @@ def load_product(snapshot, manifest_path):
         "resolved": {
             "repositories": repositories,
             "profile": document["spec"]["profile"],
+            **(
+                {"licenseUse": document["spec"]["licenseUse"]}
+                if "licenseUse" in document["spec"]
+                else {}
+            ),
         },
         "dependencies": [manifest_path],
         "contentDigest": content_digest({"product": snapshot.files[manifest_path]}),
@@ -163,6 +168,16 @@ def attach_product(
     principal,
     target_id=None,
 ):
+    previous_use = None
+    if current:
+        resolved = db.execute(
+            select(resource_documents.c.resolved).where(
+                resource_documents.c.revision_id == current["revision_id"]
+            )
+        ).scalar_one()
+        previous_use = resolved.get("licenseUse")
+    if previous_use or loaded["resolved"].get("licenseUse"):
+        organization_access(db, organization_id, principal, write=True)
     if current:
         if current["revision_id"] == revision_id:
             return

@@ -1,0 +1,10 @@
+services:
+  worker:
+    environment:
+      GITHUB_CHECK_PUBLISHING: 'true'
+      GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github-app.pem
+    volumes:
+      - type: bind
+        source: ${GITHUB_APP_PRIVATE_KEY_PATH:?Set GITHUB_APP_PRIVATE_KEY_PATH to the local PEM file}
+        target: /run/secrets/github-app.pem
+        read_only: true

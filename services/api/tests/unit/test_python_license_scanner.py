@@ -5,12 +5,15 @@ import io
 import json
 import tarfile
 import unittest
+from unittest.mock import patch
 
 from app.git_source import GitSnapshot
 from app.license_policy import evaluate_license
-from app.pypi_license_metadata import read_pypi_license
+from app.public_license_assessment import _verified_metadata
+from app.pypi_license_metadata import MAX_ARTIFACTS, read_pypi_license
 from app.python_license_scan import scan_python_licenses, scan_python_repository
 from app.python_lockfiles import LockedPackage, find_uv_locks, parse_uv_lock
+from app.reviewed_python_licenses import REVIEWED_PYPI_ARTIFACTS, ReviewedLicense
 
 
 class LicensePolicyTest(unittest.TestCase):
@@ -119,6 +122,113 @@ class PyPIMetadataTest(unittest.TestCase):
         self.assertEqual(result["expression"], "MIT")
         self.assertEqual(result["artifacts"][0]["artifactSha256"], self.artifact_hash)
 
+    def test_reviewed_license_is_bound_to_the_downloaded_artifact(self):
+        artifact = b"previously reviewed distribution"
+        digest = hashlib.sha256(artifact).hexdigest()
+        package = LockedPackage("uv.lock", "example", "1.2", "pypi", (digest,), ())
+        self.item["hashes"]["sha256"] = digest
+        source = "https://pypi.org/project/example/1.2/"
+        reviewed = ReviewedLicense(
+            "BSD-3-Clause",
+            self.metadata_hash,
+            "example.dist-info/LICENSE",
+            "d" * 64,
+            source,
+        )
+
+        def fetch(url, **kwargs):
+            if url == self.item["url"]:
+                return artifact
+            return self.fetch(url, **kwargs)
+
+        with patch.dict(
+            REVIEWED_PYPI_ARTIFACTS, {("example", "1.2", digest): reviewed}
+        ):
+            result = read_pypi_license(package, fetch)
+            self.assertEqual(result["expression"], "BSD-3-Clause")
+            self.assertEqual(result["artifacts"][0]["licenseReviewSource"], source)
+            evidence = {
+                "name": "example",
+                "version": "1.2",
+                "source": "pypi",
+                "metadata": result,
+                "artifactHashes": [digest],
+            }
+            self.assertEqual(
+                _verified_metadata(evidence)["licenseCoverage"], "complete"
+            )
+            result["artifacts"][0]["licenseFileSha256"] = "e" * 64
+            self.assertIsNone(_verified_metadata(evidence))
+            artifact = b"modified distribution"
+            self.assertEqual(read_pypi_license(package, fetch)["status"], "UNKNOWN")
+
+    def test_verified_legacy_license_preserves_the_original_declaration(self):
+        self.metadata = (
+            b"Metadata-Version: 2.3\nName: example\nVersion: 1.2\n"
+            b"License: BSD-3-Clause\nClassifier: License :: OSI Approved :: BSD License\n\n"
+        )
+        self.item["core-metadata"]["sha256"] = hashlib.sha256(self.metadata).hexdigest()
+        result = read_pypi_license(self.package, self.fetch)
+        self.assertEqual(result["expression"], "BSD-3-Clause")
+        self.assertEqual(result["artifacts"][0]["licenseField"], "License")
+        self.assertEqual(result["artifacts"][0]["declaredLicense"], "BSD-3-Clause")
+
+    def test_ambiguous_legacy_metadata_remains_unknown(self):
+        for declaration in (
+            b"License: Dual License",
+            b"License: BSD",
+            b"License: MIT\nLicense: GPL-3.0-only",
+            b"License: MIT\nClassifier: License :: OSI Approved :: GPL Version 3",
+            b"License: MIT\nLicense-Expression: \n",
+        ):
+            with self.subTest(declaration=declaration):
+                self.metadata = (
+                    b"Metadata-Version: 2.3\nName: example\nVersion: 1.2\n"
+                    + declaration
+                    + b"\n\n"
+                )
+                self.item["core-metadata"]["sha256"] = hashlib.sha256(
+                    self.metadata
+                ).hexdigest()
+                self.assertEqual(
+                    read_pypi_license(self.package, self.fetch)["status"], "UNKNOWN"
+                )
+
+    def test_explicit_spdx_expression_has_priority_over_legacy_text(self):
+        self.metadata = self.metadata.replace(
+            b"License-Expression: MIT\n",
+            b"License-Expression: GPL-3.0-only\nLicense: MIT\n",
+        )
+        self.item["core-metadata"]["sha256"] = hashlib.sha256(self.metadata).hexdigest()
+        result = read_pypi_license(self.package, self.fetch)
+        self.assertEqual(result["expression"], "GPL-3.0-only")
+        self.assertEqual(evaluate_license(result["expression"]), "FAIL")
+
+    def test_large_release_is_read_and_accepted_by_assessment(self):
+        digests = tuple(f"{index:064x}" for index in range(MAX_ARTIFACTS))
+        items = [{**self.item, "hashes": {"sha256": digest}} for digest in digests]
+        package = LockedPackage("uv.lock", "example", "1.2", "pypi", digests, ())
+
+        def fetch(url, **kwargs):
+            if url.startswith("https://pypi.org/simple/"):
+                return json.dumps({"files": items}).encode()
+            return self.fetch(url, **kwargs)
+
+        result = read_pypi_license(package, fetch)
+        self.assertEqual(result["status"], "OBSERVED")
+        self.assertEqual(len(result["artifacts"]), MAX_ARTIFACTS)
+        self.assertIsNotNone(
+            _verified_metadata(
+                {
+                    "source": "pypi",
+                    "licenseExpression": result["expression"],
+                    "metadata": result,
+                }
+            )
+        )
+        items.pop()
+        self.assertEqual(read_pypi_license(package, fetch)["status"], "UNKNOWN")
+
     def test_missing_hash_wrong_metadata_and_untrusted_source_are_unknown(self):
         self.item["core-metadata"]["sha256"] = "b" * 64
         self.assertEqual(
@@ -172,9 +282,169 @@ class PyPIMetadataTest(unittest.TestCase):
 
         result = read_pypi_license(package, fetch)
         self.assertEqual((result["status"], result["expression"]), ("OBSERVED", "MIT"))
+        with patch("app.pypi_license_metadata.MAX_SDIST_UNPACKED", 128):
+            unresolved = read_pypi_license(package, fetch)
+            self.assertEqual(unresolved["status"], "UNKNOWN")
+            self.assertEqual(unresolved["reason"], "source archive exceeds size limit")
         item["hashes"]["sha256"] = "a" * 64
         package = LockedPackage("uv.lock", "example", "1.2", "pypi", ("a" * 64,), ())
         self.assertEqual(read_pypi_license(package, fetch)["status"], "UNKNOWN")
+
+    def assert_source_license_unresolved(self, metadata, reason):
+        self.metadata = metadata
+        self.item["core-metadata"]["sha256"] = hashlib.sha256(metadata).hexdigest()
+        output = io.BytesIO()
+        with tarfile.open(fileobj=output, mode="w:gz") as archive:
+            info = tarfile.TarInfo("example-1.2/PKG-INFO")
+            info.size = len(metadata)
+            archive.addfile(info, io.BytesIO(metadata))
+        source = output.getvalue()
+        digest = hashlib.sha256(source).hexdigest()
+        source_url = "https://files.pythonhosted.org/packages/ab/example.tar.gz"
+        source_entry = {"url": source_url, "hashes": {"sha256": digest}}
+        package = LockedPackage(
+            "uv.lock",
+            "example",
+            "1.2",
+            "pypi",
+            tuple(sorted((self.artifact_hash, digest))),
+            (),
+        )
+
+        def fetch(url, **kwargs):
+            if url.startswith("https://pypi.org/simple/"):
+                return json.dumps({"files": [self.item, source_entry]}).encode()
+            if url == source_url:
+                return source
+            return self.fetch(url, **kwargs)
+
+        result = read_pypi_license(package, fetch)
+        self.assertEqual(result["status"], "UNKNOWN")
+        self.assertEqual(result["reason"], reason)
+        files = {item["artifactSha256"]: item for item in result["artifacts"]}
+        self.assertEqual(files[self.artifact_hash]["licenseExpression"], "MPL-2.0")
+        self.assertEqual(files[digest]["status"], "UNKNOWN")
+        self.assertNotIn("licenseExpression", files[digest])
+
+    def test_dynamic_license_in_wheel_is_preserved_when_source_is_unresolved(self):
+        self.assert_source_license_unresolved(
+            b"Metadata-Version: 2.4\nName: example\nVersion: 1.2\nLicense: MPL-2.0\nDynamic: License\n\n",
+            "dynamic license declaration",
+        )
+
+    def test_old_source_metadata_does_not_guarantee_the_license_of_a_build(self):
+        self.assert_source_license_unresolved(
+            b"Metadata-Version: 2.1\nName: example\nVersion: 1.2\nLicense: MPL-2.0\n\n",
+            "source metadata predates static license declarations",
+        )
+
+    def test_old_source_metadata_is_corroborated_by_the_locked_archive_license(self):
+        text = b"Complete license text for this fixture."
+        normalized_digest = hashlib.sha256(text).hexdigest()
+        metadata = (
+            b"Metadata-Version: 2.1\nName: example\nVersion: 1.2\nLicense: Apache-2.0\n"
+            b"License-File: LICENSE\nLicense-File: NOTICE\n\n"
+        )
+        url = "https://files.pythonhosted.org/packages/ab/example-1.2.tar.gz"
+
+        def scan(entries, headers):
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode="w:gz") as archive:
+                for path, content in {
+                    "example-1.2/PKG-INFO": headers,
+                    **entries,
+                }.items():
+                    member = tarfile.TarInfo(path)
+                    member.size = len(content)
+                    archive.addfile(member, io.BytesIO(content))
+            artifact = output.getvalue()
+            digest = hashlib.sha256(artifact).hexdigest()
+            index = {
+                "files": [
+                    {
+                        "url": url,
+                        "hashes": {"sha256": digest},
+                        "core-metadata": {
+                            "sha256": hashlib.sha256(headers).hexdigest()
+                        },
+                    }
+                ]
+            }
+
+            def fetch(path, **kwargs):
+                if path.startswith("https://pypi.org/simple/"):
+                    return json.dumps(index).encode()
+                if path == url + ".metadata":
+                    return headers
+                self.assertEqual(path, url)
+                return artifact
+
+            package = LockedPackage("uv.lock", "example", "1.2", "pypi", (digest,), ())
+            return read_pypi_license(package, fetch)
+
+        with patch(
+            "app.pypi_license_metadata.SOURCE_LICENSE_TEXTS",
+            {normalized_digest: "Apache-2.0"},
+        ):
+            files = {"example-1.2/LICENSE": text, "example-1.2/NOTICE": b"copyright"}
+            observed = scan(files, metadata)
+            self.assertEqual(observed["expression"], "Apache-2.0")
+            evidence = observed["artifacts"][0]
+            self.assertEqual(evidence["sourceKind"], "source-archive-license-file")
+            self.assertEqual(evidence["sourceUrl"], url)
+            self.assertEqual(evidence["licenseFile"], "LICENSE")
+            self.assertEqual(
+                evidence["licenseFileSha256"], hashlib.sha256(text).hexdigest()
+            )
+            self.assertEqual(
+                _verified_metadata({"source": "pypi", "metadata": observed})[
+                    "licenseCoverage"
+                ],
+                "complete",
+            )
+            conflicting = scan(files, metadata.replace(b"Apache-2.0", b"MIT"))
+            self.assertEqual(
+                conflicting["reason"], "source license file conflicts with metadata"
+            )
+            for unverified in (
+                scan({"elsewhere/LICENSE": text}, metadata),
+                scan({**files, "example-1.2/LICENSE.extra": b"extra terms"}, metadata),
+                scan(
+                    {**files, "example-1.2/LICENSE": text + b" extra terms"}, metadata
+                ),
+                scan(
+                    files,
+                    metadata.replace(
+                        b"License-File: NOTICE", b"License-File: vendor/LICENSE"
+                    ),
+                ),
+            ):
+                self.assertEqual(unverified["status"], "UNKNOWN")
+
+            detection = {
+                "licenseExpression": "MIT",
+                "licenseDetection": {
+                    "tool": "scancode-toolkit",
+                    "version": "32.5.0",
+                    "rule": "mit.LICENSE",
+                    "startLine": 3,
+                    "endLine": 18,
+                },
+            }
+            with patch(
+                "app.pypi_license_metadata.detect_license", return_value=detection
+            ):
+                mit_files = {**files, "example-1.2/LICENSE": b"MIT fixture text"}
+                mismatch = scan(mit_files, metadata)
+                self.assertEqual(mismatch["status"], "UNKNOWN")
+                mit = scan(mit_files, metadata.replace(b"Apache-2.0", b"MIT"))
+                self.assertEqual(mit["expression"], "MIT")
+                verified = _verified_metadata({"source": "pypi", "metadata": mit})
+                self.assertEqual(verified["licenseCoverage"], "complete")
+                self.assertEqual(
+                    verified["artifacts"][0]["licenseDetection"],
+                    detection["licenseDetection"],
+                )
 
 
 class LicenseScanTest(unittest.TestCase):
@@ -203,7 +473,6 @@ class LicenseScanTest(unittest.TestCase):
 
         result = scan_python_repository(Source(), "main")
         self.assertEqual(result["sourceRevision"], "a" * 40)
-
 
     def test_realistic_mixed_results_remain_scoped_to_lockfile(self):
         lock = b"""version = 1
@@ -234,7 +503,7 @@ source = { git = "https://example.invalid/repository" }
         self.assertEqual(result["sourceCoverage"], "covered")
         self.assertEqual(result["files"], ["a/uv.lock"])
         self.assertEqual(
-            [p["status"] for p in result["packages"]], ["PASS", "FAIL", "UNKNOWN"]
+            [p["status"] for p in result["packages"]], ["PASS", "FAIL", "FAIL"]
         )
         self.assertTrue(all(p["path"] == "a/uv.lock" for p in result["packages"]))
 
@@ -242,6 +511,29 @@ source = { git = "https://example.invalid/repository" }
         self.assertEqual(scan_python_licenses({})["coverage"], "UNKNOWN")
         self.assertEqual(
             scan_python_licenses({"uv.lock": b"garbage"})["coverage"], "UNKNOWN"
+        )
+
+    def test_reuses_metadata_for_shared_artifacts_and_preserves_each_lockfile(self):
+        lock = b"""version = 1
+[[package]]
+name = "example"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [{ hash = "sha256:DIGEST" }]
+"""
+        shared = lock.replace(b"DIGEST", b"a" * 64)
+        other = lock.replace(b"DIGEST", b"b" * 64)
+        with patch(
+            "app.python_license_scan.read_pypi_license",
+            return_value={"status": "OBSERVED", "expression": "MIT"},
+        ) as read:
+            result = scan_python_licenses(
+                {"api/uv.lock": shared, "worker/uv.lock": shared, "test/uv.lock": other}
+            )
+        self.assertEqual(read.call_count, 2)
+        self.assertEqual(
+            [package["path"] for package in result["packages"]],
+            ["api/uv.lock", "test/uv.lock", "worker/uv.lock"],
         )
 
     def test_unsupported_lockfile_prevents_full_coverage(self):

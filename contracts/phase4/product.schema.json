@@ -39,6 +39,9 @@
     "spec": {
       "type": "object",
       "properties": {
+        "licenseUse": {
+          "enum": ["internal", "saas", "customer-distribution"]
+        },
         "repositories": {
           "type": "array",
           "minItems": 1,

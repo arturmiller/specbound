@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { ScanSource } from './assessment-governance.jsx';
+import { runDate } from './run-list.jsx';
 
 /** @typedef {{sourceUrl?: string, sourceKind?: string, artifactSha256?: string}} Artifact */
 /** @typedef {{name: string, version: string, path: string, status: string, licenseExpression: string | null, metadata?: {status?: string, reason?: string, artifacts?: Artifact[]}}} PackageResult */
@@ -50,18 +52,39 @@ export function PublicLicenseScans({ organizationId, productId, bindingId, repos
   const errors = /** @type {Record<string, string>} */ ({ 'rate-limited': 'GitHub-Anfragelimit erreicht.', 'source-not-found': 'Öffentliches Repository oder Ref nicht gefunden.', 'source-unavailable': 'GitHub oder die Quelle ist nicht verfügbar.', 'source-changed': 'Die Repository-Zuordnung wurde geändert.', 'scanner-failed': 'Der Scanner konnte nicht abgeschlossen werden.', timeout: 'Zeitlimit erreicht.', 'attempts-exhausted': 'Wiederholungsversuche ausgeschöpft.' });
   return <section className="panel public-license-scan" aria-label={`Lizenzscan für ${repository}`}>
     <h2>Öffentlicher Python-Lizenzscan</h2>
-    <p>Nur öffentliche GitHub-Quellen und <code>uv.lock</code>. Der manuelle Scan bewertet die Repository-Revision, keinen Pull Request und keine Produktionsumgebung.</p>
-    <p>{profileManaged ? 'Der Scan fixiert das geltende Produktprofil beim Start. Nicht unterstützte Controls bleiben als Lücke sichtbar.' : 'Expliziter Legacy-Beispielstand: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause und ISC sind freigegeben. Weitere erkannte Lizenzen sind nicht freigegeben; unklare Angaben bleiben UNKNOWN.'}</p>
     {canEdit && <form onSubmit={start}><label className="field">Git-Ref<input required maxLength={200} value={ref} onChange={(event) => setRef(event.target.value)} /></label><button type="submit" disabled={busy || !runs || Boolean(active)}>Öffentlichen Lizenzscan starten</button></form>}
+    <details className="assessment-disclosure scan-scope">
+      <summary>Scanumfang und Richtlinie</summary>
+      <p>Der manuelle Scan prüft <code>uv.lock</code> in einer Revision eines öffentlichen GitHub-Repositories.</p>
+      <p>{profileManaged ? 'Der Scan fixiert das geltende Produktprofil beim Start. Nicht unterstützte Controls bleiben als Lücke sichtbar.' : 'Die Beispielrichtlinie erlaubt MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause und ISC. Andere erkannte Lizenzen führen zu einem Verstoß. Mehrdeutige Angaben bleiben ungeklärt.'}</p>
+    </details>
     {error && <p role="alert" className="alert">{error}</p>}
-    {runs === null ? !error && <p role="status">Scans werden geladen …</p> : !latest ? <p>Noch kein Lizenzscan gestartet.</p> : <div aria-live="polite"><h3>Letzter Scan</h3><p>Status: <strong>{states[latest.status] || latest.status}</strong> · Ref: {latest.ref}</p>
-      {profile && <p>Fixiertes Profil: <strong>{profile.name} · {profile.version}</strong></p>}{latest.governanceContext?.mode === 'legacy-example' && <p>Dieser Lauf verwendet die fixierte Beispielrichtlinie.</p>}
+    {runs === null ? !error && <p role="status">Scans werden geladen …</p> : !latest ? <p>Noch kein Lizenzscan gestartet.</p> : <div><p aria-live="polite">Letzter Scan · <time dateTime={latest.createdAt}>{runDate(latest.createdAt)}</time> · <strong>{states[latest.status] || latest.status}</strong></p>
       {latest.errorCode && <p>{errors[latest.errorCode] || 'Scan nicht verfügbar.'}</p>}
       {latest.assessmentId ? <p><a href={`/products?${new URLSearchParams({ organization: organizationId, product: productId, view: 'requirements', assessment: latest.assessmentId })}`}>Assessment und Findings ansehen →</a></p> : latest.status === 'completed' && <p>Für diesen Scan ist kein Assessment verfügbar.</p>}
       {latest.result?.assessmentError && <p role="alert" className="alert">Das Assessment konnte nicht erstellt werden; die Scanvorschau bleibt erhalten.</p>}
-      {latest.result && <><p className="break-value">Git-Commit: {latest.result.sourceRevision}</p><p>Abdeckung: {latest.result.coverage} · Lockfiles: {latest.result.files.join(', ') || 'Keine'}</p><p>{latest.result.reason}</p>{latest.result.unsupportedFiles.length > 0 && <p>Nicht unterstützte Lockfiles: {latest.result.unsupportedFiles.join(', ')}</p>}
-        <div className="team-table-scroll"><table className="team-table"><thead><tr><th>PAKET</th><th>LIZENZ</th><th>{profile ? 'METADATEN' : 'ERGEBNIS'}</th><th>QUELLE</th></tr></thead><tbody>{latest.result.packages.map((pkg, index) => <tr key={`${pkg.path}-${pkg.name}-${pkg.version}-${index}`}><td>{pkg.name} · {pkg.version}<small>{pkg.path}</small></td><td>{pkg.licenseExpression || 'UNKNOWN'}</td><td>{profile ? pkg.metadata?.status || 'UNKNOWN' : pkg.status}</td><td className="break-value">{pkg.metadata?.artifacts?.map((a) => a.sourceUrl).filter(Boolean).join(', ') || pkg.metadata?.reason || 'UNKNOWN'}</td></tr>)}</tbody></table></div>
-      </>}
+      <details className="assessment-disclosure" key={latest.id}>
+        <summary>Details zum letzten Lauf</summary>
+        {profile && <p>Fixiertes Profil: <strong>{profile.name} · {profile.version}</strong></p>}
+        {latest.governanceContext?.mode === 'legacy-example' && <p>Dieser Lauf verwendet die fixierte Beispielrichtlinie.</p>}
+        {latest.result ? <>
+          <ScanSource sourceScan={{ id: latest.id, repository, ref: latest.ref, ...latest.result }} />
+          {latest.result.packages.length > 0 && <div className="team-table-scroll">
+            <table className="team-table">
+              <thead><tr><th>PAKET</th><th>LIZENZ</th><th>{profile ? 'METADATEN' : 'ERGEBNIS'}</th><th>QUELLE</th></tr></thead>
+              <tbody>{latest.result.packages.map((pkg, index) => {
+                const sources = pkg.metadata?.artifacts?.flatMap(({ sourceUrl }) => sourceUrl && /^https?:\/\//i.test(sourceUrl) ? [sourceUrl] : []) || [];
+                return <tr key={`${pkg.path}-${pkg.name}-${pkg.version}-${index}`}>
+                  <td>{pkg.name} · {pkg.version}<small>{pkg.path}</small></td>
+                  <td>{pkg.licenseExpression || 'UNKNOWN'}</td>
+                  <td>{profile ? pkg.metadata?.status || 'UNKNOWN' : pkg.status}</td>
+                  <td>{sources.length ? sources.map((url, i) => <div key={i}><a href={url}>{sources.length === 1 ? 'Metadaten öffnen' : `Metadaten ${i + 1} öffnen`}</a></div>) : pkg.metadata?.reason || 'UNKNOWN'}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>}
+        </> : <p>Git-Ref: {latest.ref}</p>}
+      </details>
     </div>}
   </section>;
 }

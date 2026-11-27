@@ -16,6 +16,7 @@ from app.evidence_registry import router as evidence_registry_router
 from app.github_repositories import router as github_repositories_router
 from app.github_webhook import router as github_webhook_router
 from app.identity import router as auth_router
+from app.license_approvals import router as license_approvals_router
 from app.metrics import render_metrics
 from app.overview import router as overview_router
 from app.pack_catalog import router as pack_catalog_router
@@ -42,6 +43,7 @@ app.include_router(github_webhook_router)
 app.include_router(github_repositories_router)
 app.include_router(pack_catalog_router)
 app.include_router(public_license_scans_router)
+app.include_router(license_approvals_router)
 app.include_router(schemas_router)
 app.include_router(resource_registry_router)
 app.include_router(resource_lifecycle_router)

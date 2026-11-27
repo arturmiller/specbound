@@ -1,0 +1,7 @@
+# Dependencies of the isolated public license runner.
+httpx==0.28.1
+PyJWT==2.15.1
+license-expression==30.4.4
+scancode-toolkit==32.5.0
+# ScanCode 32.5.0's plugin registration does not work with Pluggy 1.7.
+pluggy==1.6.0

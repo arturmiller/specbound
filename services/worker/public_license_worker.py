@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from app.public_license_assessment import create_public_license_assessment
@@ -17,6 +18,7 @@ LEASE_SECONDS = 180
 PROCESS_TIMEOUT = 120
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_ATTEMPTS = 3
+LICENSE_SCANNER_PYTHON = Path("/opt/specbound-license-scan/bin/python")
 
 
 def _clock():
@@ -74,11 +76,16 @@ def claim(db, *, now, job_id=None):
     return {**dict(row), "lease_token": token, "attempts": row["attempts"] + 1}
 
 
-def _run(repository, ref):
+def run_scan(repository, ref):
+    python = (
+        str(LICENSE_SCANNER_PYTHON)
+        if LICENSE_SCANNER_PYTHON.is_file()
+        else sys.executable
+    )
     try:
         with tempfile.TemporaryFile() as output:
             process = subprocess.run(
-                [sys.executable, "-m", "app.public_license_runner", repository, ref],
+                [python, "-m", "app.public_license_runner", repository, ref],
                 stdout=output,
                 stderr=subprocess.DEVNULL,
                 timeout=PROCESS_TIMEOUT,
@@ -205,7 +212,7 @@ def finish(db, lease, response, *, now, clock=_clock):
     return True
 
 
-def poll_once(engine, *, execute=_run, clock=_clock, processing=None, job_id=None):
+def poll_once(engine, *, execute=run_scan, clock=_clock, processing=None, job_id=None):
     with engine.begin() as db:
         lease = claim(db, now=clock(), job_id=job_id)
     if lease is None:

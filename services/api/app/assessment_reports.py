@@ -10,20 +10,91 @@ from app.database import get_connection
 from app.evidence_records import _serialize as serialize_evidence
 from app.findings import _serialize as serialize_finding
 from app.findings import get_history
+from app.github_source import REPOSITORY
 from app.identity import get_current_principal
+from app.license_scope import approval_scope, license_use
 from app.products import _product
+from app.pull_request_events import parse_pr_event
 from app.snapshots import _serialize as serialize_snapshot
 from app.tables import (
+    assessment_jobs,
     assessment_snapshots,
     evidence_records,
     finding_history,
     findings,
+    github_events,
+    organizations,
     public_license_scans,
     rule_evaluations,
     scanner_coverage,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_principal)])
+
+
+def _pull_request_url(db, snapshot):
+    if snapshot["context"] != "pull_request":
+        return None
+    delivery = db.execute(
+        select(github_events.c.payload, assessment_jobs.c.pull_request_id)
+        .join(
+            assessment_jobs,
+            github_events.c.delivery_id == assessment_jobs.c.delivery_id,
+        )
+        .where(
+            assessment_jobs.c.result_snapshot_id == snapshot["id"],
+            assessment_jobs.c.organization_id == snapshot["organization_id"],
+            assessment_jobs.c.product_id == snapshot["product_id"],
+            assessment_jobs.c.binding_id == snapshot["binding_id"],
+            assessment_jobs.c.pull_request_number == snapshot["pull_request_number"],
+            assessment_jobs.c.head_sha == snapshot["git_sha"],
+            github_events.c.organization_id == snapshot["organization_id"],
+            github_events.c.event_type == "pull_request",
+        )
+    ).one_or_none()
+    if delivery is None:
+        # A recheck replaces the job's current result. Its signed delivery
+        # still proves the identity of the previous assessment's PR head.
+        candidates = db.execute(
+            select(github_events.c.payload, assessment_jobs.c.pull_request_id)
+            .join(
+                assessment_jobs,
+                github_events.c.delivery_id == assessment_jobs.c.delivery_id,
+            )
+            .where(
+                assessment_jobs.c.organization_id == snapshot["organization_id"],
+                assessment_jobs.c.product_id == snapshot["product_id"],
+                assessment_jobs.c.binding_id == snapshot["binding_id"],
+                assessment_jobs.c.pull_request_number
+                == snapshot["pull_request_number"],
+                assessment_jobs.c.head_sha == snapshot["git_sha"],
+                assessment_jobs.c.created_at <= snapshot["created_at"],
+                github_events.c.organization_id == snapshot["organization_id"],
+                github_events.c.event_type == "pull_request",
+            )
+            .limit(2)
+        ).all()
+        delivery = candidates[0] if len(candidates) == 1 else None
+    if delivery is None:
+        return None
+    payload, pull_request_id = delivery
+    try:
+        event = parse_pr_event(payload)
+    except ValueError:
+        return None
+    if (
+        event is None
+        or event["pr_id"] != pull_request_id
+        or event["number"] != snapshot["pull_request_number"]
+        or event["head"] != snapshot["git_sha"]
+    ):
+        return None
+    repository = event["repository"]
+    if not REPOSITORY.fullmatch(repository) or any(
+        part in (".", "..") for part in repository.split("/")
+    ):
+        return None
+    return f"https://github.com/{repository}/pull/{event['number']}"
 
 
 @router.get("/organizations/{organization_id}/findings/{finding_id}/history")
@@ -179,7 +250,16 @@ def assessment_report(
     source_scan = None
     if public_scan is not None:
         result = public_scan["result"] or {}
-        if result.get("sourceRevision") != snapshot["git_sha"]:
+        observed = result.get("sourceRevision")
+        unavailable = (
+            snapshot["context"] == "pull_request"
+            and public_scan["status"] == "failed"
+            and public_scan["ref"] == snapshot["git_sha"]
+            and observed is None
+            and result.get("sourceCoverage") == "UNKNOWN"
+            and not result.get("files")
+        )
+        if not unavailable and observed != snapshot["git_sha"]:
             raise HTTPException(
                 status_code=409, detail="Scan provenance does not match assessment"
             )
@@ -187,7 +267,7 @@ def assessment_report(
             "id": public_scan["id"],
             "repository": public_scan["repository"],
             "ref": public_scan["ref"],
-            "sourceRevision": result["sourceRevision"],
+            "sourceRevision": observed,
             "coverage": result.get("sourceCoverage"),
             "files": result.get("files", []),
             "unsupportedFiles": result.get("unsupportedFiles", []),
@@ -195,7 +275,18 @@ def assessment_report(
         }
     return {
         "assessment": serialize_snapshot(snapshot),
+        "pullRequestUrl": _pull_request_url(db, snapshot),
         "sourceScan": source_scan,
+        "licenseUse": license_use(snapshot["governance_context"]),
+        "canApproveLicenses": bool(
+            license_use(snapshot["governance_context"])
+            and db.execute(
+                select(organizations.c.id).where(
+                    organizations.c.id == snapshot["organization_id"],
+                    organizations.c.owner_principal_id == principal,
+                )
+            ).first()
+        ),
         "evaluations": [
             {
                 "id": row["id"],
@@ -204,6 +295,15 @@ def assessment_report(
                 "status": row["status"],
                 "reason": row["reason"],
                 "evidenceIds": row["evidence_ids"],
+                "licenseApprovalEligible": row["status"] in ("FAIL", "UNKNOWN")
+                and bool(
+                    approval_scope(
+                        snapshot["governance_context"],
+                        snapshot["binding_id"],
+                        row["subject"],
+                        row["control"],
+                    )
+                ),
                 "coverage": (
                     {
                         "status": scan_by_id[row["scan_id"]]["status"],

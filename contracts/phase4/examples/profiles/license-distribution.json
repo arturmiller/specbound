@@ -1,0 +1,20 @@
+{
+  "profile": {
+    "uuid": "76d50711-927e-49a0-b763-61dc0fac4cc3",
+    "metadata": {
+      "title": "Lizenzprüfung für Kundenauslieferung (Beispiel)",
+      "last-modified": "2026-11-24T00:00:00Z",
+      "version": "1.1.0",
+      "oscal-version": "1.2.3",
+      "props": [{"name": "resource-id", "ns": "https://specbound.example/ns/resource", "value": "license-distribution"}]
+    },
+    "imports": [{"href": "../catalogs/license-controls.json", "include-controls": [{"with-ids": ["PY-LIC-001"]}]}],
+    "merge": {"as-is": true},
+    "modify": {
+      "set-parameters": [{
+        "param-id": "license-allowlist",
+        "values": ["MIT", "MIT-0", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0"]
+      }]
+    }
+  }
+}

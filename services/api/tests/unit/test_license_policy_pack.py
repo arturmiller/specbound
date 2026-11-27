@@ -1,5 +1,6 @@
 """The bundled example is a valid governance pack, not an implicit approval."""
 
+import json
 import shutil
 import tempfile
 import unittest
@@ -8,6 +9,8 @@ from pathlib import Path
 from app.example_license_pack import POLICY_REVISION, load_example_license_pack
 from app.git_source import GitSnapshot
 from app.governance_pack import load_governance_pack
+from app.license_policy import evaluate_license
+from app.resource_contracts import compile_bindings, resolve_profile
 
 ROOT = next(
     parent
@@ -17,6 +20,34 @@ ROOT = next(
 
 
 class LicensePolicyPackTest(unittest.TestCase):
+    def test_distribution_profile_accepts_permissive_licenses_and_keeps_copyleft_review(
+        self,
+    ):
+        examples = ROOT / "contracts" / "phase4" / "examples"
+        profile_path = "profiles/license-distribution.json"
+        catalog_path = "catalogs/license-controls.json"
+        profile = json.loads((examples / profile_path).read_text(encoding="utf-8"))
+        product = json.loads(
+            (examples / "products/specbound-license.json").read_text(encoding="utf-8")
+        )
+        catalog = json.loads((examples / catalog_path).read_text(encoding="utf-8"))
+        resolved = resolve_profile(
+            profile, {catalog_path: catalog}, profile_path=profile_path
+        )
+        self.assertEqual(
+            product["spec"]["profile"]["version"], resolved["profile"]["version"]
+        )
+        bindings = json.loads(
+            (examples / resolved["bindingPath"]).read_text(encoding="utf-8")
+        )
+        rule = compile_bindings(bindings, resolved)[0]["assertions"][0]
+        self.assertTrue(rule["allowApprovedUse"])
+        allowed = rule["allowed"]
+        for license_id in ("MIT-0", "MIT AND PSF-2.0", "PSF-2.0", "BSD-3-Clause"):
+            self.assertEqual(evaluate_license(license_id, allowed), "PASS", license_id)
+        for license_id in ("MPL-2.0", "LGPL-3.0-only"):
+            self.assertEqual(evaluate_license(license_id, allowed), "FAIL", license_id)
+
     def test_bundle_is_pinned_and_modified_files_are_rejected(self):
         loaded = load_example_license_pack()
         self.assertEqual(loaded["revision"], POLICY_REVISION)

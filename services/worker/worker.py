@@ -1,4 +1,4 @@
-"""Idle worker process; job execution will be introduced by a later task."""
+"""Run the configured scan and GitHub publisher loops."""
 
 import json
 import logging
@@ -110,6 +110,20 @@ def main() -> None:
         license_worker.start()
     server.license_worker = license_worker
     server.license_processing = license_processing
+    pr_worker = None
+    if os.environ.get("PR_LICENSE_SCAN_ENABLED", "").lower() == "true":
+        from app.database import get_engine
+        from pr_license_worker import run_pr_license_queue
+
+        organization = os.environ.get("GITHUB_ORGANIZATION_ID", "")
+        if organization:
+            pr_worker = threading.Thread(
+                target=run_pr_license_queue, args=(get_engine(), organization, stop), daemon=True
+            )
+            pr_worker.start()
+            logger.info("PR license scan worker started")
+        else:
+            logger.warning("PR license scans require a GitHub organization")
     logger.info("Worker started; public license preview enabled" if license_worker else "Worker started; no job queue configured")
     stop.wait()
     server.shutdown()
@@ -119,6 +133,8 @@ def main() -> None:
         publisher.join()
     if license_worker:
         license_worker.join(timeout=130)
+    if pr_worker:
+        pr_worker.join(timeout=130)
     logger.info("Worker stopped")
 
 

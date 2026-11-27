@@ -1,17 +1,31 @@
 """Scan versioned uv lockfile data without installing or executing packages."""
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 
-from app.license_policy import DEFAULT_ALLOWED, evaluate_license
+from app.license_policy import (
+    DEFAULT_ALLOWED,
+    artifact_license_outcomes,
+    evaluate_license,
+)
 from app.pypi_license_metadata import read_pypi_license
 from app.python_lockfiles import find_uv_locks
 
 MAX_TOTAL_PACKAGES = 200
+METADATA_WORKERS = 4
 
 
-def scan_python_repository(
-    source, ref, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_license
-):
+def _artifact_key(package):
+    return (
+        package.source,
+        package.name,
+        package.version,
+        package.artifact_hashes,
+        package.has_unhashed_artifacts,
+    )
+
+
+def scan_python_repository(source, ref, *, policy=DEFAULT_ALLOWED, resolve=None):
     """Resolve a Git reference once and scan only the resulting pinned snapshot."""
     fetch = getattr(source, "fetch_python_lockfiles", source.fetch)
     snapshot = fetch(ref)
@@ -22,7 +36,7 @@ def scan_python_repository(
     }
 
 
-def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_license):
+def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=None):
     """Analyze all supported lockfiles; disclose incomplete coverage explicitly."""
     unsupported = sorted(
         path
@@ -70,13 +84,48 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
             "unsupportedFiles": unsupported,
             "packages": [],
         }
+    observations = {}
+    if resolve is None:
+        artifacts = {
+            _artifact_key(package): package
+            for entries in locks.values()
+            for package in entries
+        }
+        # Shared artifacts need one lookup per run. Each lockfile still has
+        # its own package entries and evidence provenance.
+        with ThreadPoolExecutor(max_workers=METADATA_WORKERS) as executor:
+            observations = dict(
+                zip(
+                    artifacts,
+                    executor.map(read_pypi_license, artifacts.values()),
+                    strict=True,
+                )
+            )
     packages = []
+    unresolved = False
     for path, entries in locks.items():
         for package in entries:
-            metadata = resolve(package)
+            metadata = (
+                resolve(package)
+                if resolve is not None
+                else observations[_artifact_key(package)]
+            )
             observed = metadata.get("status") == "OBSERVED"
             expression = metadata.get("expression") if observed else None
-            result = evaluate_license(expression, policy) if observed else "UNKNOWN"
+            if observed and "artifacts" in metadata:
+                outcomes = artifact_license_outcomes(
+                    {
+                        "licenseCoverage": "complete",
+                        "artifacts": [
+                            {**item, "status": item.get("status", "OBSERVED")}
+                            for item in metadata["artifacts"]
+                        ],
+                    },
+                    policy,
+                )
+            else:
+                outcomes = {evaluate_license(expression, policy)}
+            unresolved = unresolved or "UNKNOWN" in outcomes
             packages.append(
                 {
                     "path": path,
@@ -84,16 +133,19 @@ def scan_python_licenses(files, *, policy=DEFAULT_ALLOWED, resolve=read_pypi_lic
                     "version": package.version,
                     "source": package.source,
                     "markers": list(package.markers),
+                    "artifactHashes": []
+                    if package.has_unhashed_artifacts
+                    else list(package.artifact_hashes),
                     "licenseExpression": expression,
-                    "status": result,
+                    "status": "PASS" if outcomes == {"PASS"} else "FAIL",
                     "metadata": metadata,
                 }
             )
     return {
-        "coverage": "partial"
-        if unsupported or any(item["status"] == "UNKNOWN" for item in packages)
+        "coverage": "partial" if unsupported or unresolved else "covered",
+        "sourceCoverage": "partial"
+        if unsupported or any(not entries for entries in locks.values())
         else "covered",
-        "sourceCoverage": "partial" if unsupported or any(not entries for entries in locks.values()) else "covered",
         "reason": "Lockfile entries may include dependencies for other environments; this is not an installed inventory.",
         "files": sorted(locks),
         "unsupportedFiles": unsupported,

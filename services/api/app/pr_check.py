@@ -6,9 +6,20 @@ from sqlalchemy import select
 
 from app.coverage import scan_covers
 from app.git_source import SourceUnavailable
-from app.pr_comment import STATUSES
+from app.license_scope import (
+    approval_scope,
+    current_license_configuration,
+    license_use,
+    live_approvals,
+)
+from app.pr_comment import STATUSES, assessment_url
 from app.pr_comment_delivery import deliver_once
-from app.tables import evidence_records, rule_evaluations, scanner_coverage
+from app.tables import (
+    evidence_records,
+    license_approvals,
+    rule_evaluations,
+    scanner_coverage,
+)
 
 CHECK_NAME = "Specbound assessment"
 
@@ -16,6 +27,8 @@ CHECK_NAME = "Specbound assessment"
 def assess_snapshot(db, snapshot, now):
     """Return a conservative conclusion and the earliest evidence expiration."""
     counts, evaluations = snapshot["counts"], snapshot["evaluations"]
+    governance = snapshot.get("governance_context") or {}
+    use = license_use(governance)
     if (
         not isinstance(counts, dict)
         or set(counts) != {key for _, key in STATUSES}
@@ -25,6 +38,18 @@ def assess_snapshot(db, snapshot, now):
         or counts["FAIL"]
         or counts["UNKNOWN"]
         or not counts["PASS"]
+        or governance.get("mode") == "legacy-example"
+        or (
+            use
+            and (
+                snapshot["environment"] != use
+                or not current_license_configuration(db, governance)
+            )
+        )
+        or any(
+            control["status"] != "PASS"
+            for control in snapshot.get("control_results") or []
+        )
     ):
         return "failure", None
     expected_ids = snapshot["evaluation_ids"]
@@ -86,6 +111,7 @@ def assess_snapshot(db, snapshot, now):
             ref=scan["ref"],
             expected_commit=snapshot["git_sha"],
             not_after=now,
+            scanner=scan["scanner"],
         ):
             return "failure", None
         ids = row["evidence_ids"]
@@ -96,22 +122,60 @@ def assess_snapshot(db, snapshot, now):
         except (TypeError, KeyError):
             return "failure", None
         for evidence_id in ids:
-            evidence = db.execute(
-                select(evidence_records.c.expires_at).where(
-                    evidence_records.c.id == evidence_id,
-                    evidence_records.c.organization_id == snapshot["organization_id"],
-                    evidence_records.c.product_id == snapshot["product_id"],
-                    evidence_records.c.subject_id == row["subject_id"],
-                    evidence_records.c.environment == snapshot["environment"],
-                    evidence_records.c.target_revision == snapshot["git_sha"],
-                    evidence_records.c.capability == capability,
-                    evidence_records.c.observed_at <= now,
-                    evidence_records.c.expires_at > now,
+            evidence = (
+                db.execute(
+                    select(
+                        evidence_records.c.expires_at,
+                        evidence_records.c.value,
+                        evidence_records.c.producer_kind,
+                    ).where(
+                        evidence_records.c.id == evidence_id,
+                        evidence_records.c.organization_id
+                        == snapshot["organization_id"],
+                        evidence_records.c.product_id == snapshot["product_id"],
+                        evidence_records.c.subject_id == row["subject_id"],
+                        evidence_records.c.environment == snapshot["environment"],
+                        evidence_records.c.target_revision == snapshot["git_sha"],
+                        evidence_records.c.capability == capability,
+                        evidence_records.c.observed_at <= now,
+                        evidence_records.c.expires_at > now,
+                    )
                 )
-            ).scalar_one_or_none()
+                .mappings()
+                .one_or_none()
+            )
             if evidence is None:
                 return "failure", None
-            expiry = min(expiry, evidence) if expiry else evidence
+            expiry = (
+                min(expiry, evidence["expires_at"])
+                if expiry
+                else evidence["expires_at"]
+            )
+            value = evidence["value"]
+            approval = value.get("licenseApproval") if isinstance(value, dict) else None
+            if approval is not None:
+                scope = approval_scope(
+                    governance, snapshot["binding_id"], row["subject"], row["control"]
+                )
+                if (
+                    scope is None
+                    or evidence["producer_kind"] != "public-license-scan"
+                    or not isinstance(approval, dict)
+                ):
+                    return "failure", None
+                active = (
+                    db.execute(
+                        live_approvals(scope, now)
+                        .where(license_approvals.c.id == approval.get("id"))
+                        .with_for_update(read=True)
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+                if active is None:
+                    return "failure", None
+                if active["expires_at"] is not None:
+                    expiry = min(expiry, active["expires_at"])
     if observed != counts or expiry is None:
         return "failure", None
     if expiry.tzinfo is None:
@@ -119,7 +183,7 @@ def assess_snapshot(db, snapshot, now):
     return "success", min(expiry, now + timedelta(minutes=5))
 
 
-def publish_check(db, source, job, snapshot, _portal, now):
+def publish_check(db, source, job, snapshot, portal, now):
     token = source._token(permissions={"pull_requests": "read", "checks": "write"})
     prefix = f"/repos/{source.repository}"
     pull = source._request("GET", f"{prefix}/pulls/{job['pull_request_number']}", token)
@@ -179,17 +243,24 @@ def publish_check(db, source, job, snapshot, _portal, now):
             )
         return None
     conclusion, expires = assess_snapshot(db, snapshot, now)
+    summary = (
+        "Evidence and coverage are current."
+        if conclusion == "success"
+        else "Assessment failed or evidence and coverage are insufficient."
+    )
     body = {
         "name": CHECK_NAME,
         "status": "completed",
         "conclusion": conclusion,
         "output": {
             "title": "Assessment " + conclusion,
-            "summary": "Evidence and coverage are current."
-            if conclusion == "success"
-            else "Assessment failed or evidence and coverage are insufficient.",
+            "summary": summary,
         },
     }
+    if portal:
+        details_url = assessment_url(portal, snapshot["id"])
+        body["details_url"] = details_url
+        body["output"]["summary"] += f"\n\n[Specbound-Ergebnis öffnen](<{details_url}>)"
     if matches:
         source._request("PATCH", f"{prefix}/check-runs/{matches[0]}", token, json=body)
     else:

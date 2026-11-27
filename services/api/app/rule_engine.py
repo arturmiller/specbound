@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
-from app.license_policy import evaluate_license
+from app.license_policy import artifact_license_outcomes, evaluate_license
 
 
 class RuleTruth(str, Enum):
@@ -70,7 +70,7 @@ def _combine(operator, decisions):
     )
 
 
-def evaluate_assertions(assertions, value):
+def evaluate_assertions(assertions, value, *, require_artifact_licenses=False):
     """Root assertions are combined with all; unknown input never becomes PASS."""
     budget = [256]
 
@@ -112,16 +112,35 @@ def evaluate_assertions(assertions, value):
             )
         if operator == "spdx-allowlist":
             allowed = rule.get("allowed")
-            if not isinstance(allowed, list) or not 0 < len(allowed) <= 100 or any(
-                not isinstance(item, str) or not item or len(item) > 200 for item in allowed
+            if (
+                not isinstance(allowed, list)
+                or not 0 < len(allowed) <= 100
+                or any(
+                    not isinstance(item, str) or not item or len(item) > 200
+                    for item in allowed
+                )
             ):
-                return RuleDecision(RuleTruth.UNKNOWN, "Lizenzfreigabeliste ist ungültig")
-            outcome = evaluate_license(current, allowed)
-            return RuleDecision(RuleTruth(outcome), {
-                "PASS": "Lizenzausdruck ist durch die Richtlinie freigegeben",
-                "FAIL": "Lizenzausdruck ist durch die Richtlinie nicht freigegeben",
-                "UNKNOWN": "Lizenzausdruck oder Ausnahme ist nicht eindeutig bewertbar",
-            }[outcome])
+                return RuleDecision(
+                    RuleTruth.UNKNOWN, "Lizenzfreigabeliste ist ungültig"
+                )
+            if require_artifact_licenses and path == "licenseExpression":
+                outcomes = artifact_license_outcomes(value, allowed)
+                if "UNKNOWN" in outcomes:
+                    return RuleDecision(
+                        RuleTruth.FAIL,
+                        "Lizenznachweis für mindestens eine Paketdatei fehlt oder ist ungeklärt",
+                    )
+                outcome = "FAIL" if "FAIL" in outcomes else "PASS"
+            else:
+                outcome = evaluate_license(current, allowed)
+            return RuleDecision(
+                RuleTruth(outcome),
+                {
+                    "PASS": "Lizenzausdruck ist durch die Richtlinie freigegeben",
+                    "FAIL": "Lizenzausdruck ist durch die Richtlinie nicht freigegeben",
+                    "UNKNOWN": "Lizenzausdruck oder Ausnahme ist nicht eindeutig bewertbar",
+                }[outcome],
+            )
         try:
             equal = _same_json(current, rule["expected"])
         except (RecursionError, ValueError):
