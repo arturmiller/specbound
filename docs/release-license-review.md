@@ -22,8 +22,42 @@ Für `internal` oder `saas` kann das Produkt das
 [Profil für den Serverbetrieb](../contracts/phase4/examples/profiles/license-server.json)
 mit dem [Anwendungskatalog](../contracts/phase4/examples/catalogs/application.json)
 verwenden. Beide Profile sind Beispiele für Unternehmensregeln.
-Das Auslieferungsprofil 1.1.0 erlaubt zusätzlich `MIT-0` und `PSF-2.0`.
+Das Auslieferungsprofil erlaubt zusätzlich `MIT-0` und `PSF-2.0`.
 Bei PSF-2.0 gehören Lizenztext und Copyright-Hinweise in die Auslieferung.
+
+### Schwache Copyleft-Lizenzen bei unveränderter Bibliotheksnutzung
+
+Der Lizenzkatalog enthält die Control-Erweiterung `PY-LIC-001.1`. Das
+Auslieferungsprofil 1.2.0 wählt sie aus und erlaubt darüber `LGPL-3.0-only` und
+`MPL-2.0`, sofern das Produkt diese Pakete als unveränderte Bibliotheken nutzt.
+Die Regel legt die Organisation im Profil fest. Das Produkt erklärt in
+`spec.implementedRequirements`, dass es die Bedingung erfüllt. Es kann nur
+Controls erklären, die sein Profil auswählt. Eine Lizenz außerhalb der
+Profilparameter kann es also nicht selbst freigeben.
+
+Für ein betroffenes Paket ergibt `PY-LIC-001` nur dann PASS, wenn
+
+- das Produkt `PY-LIC-001.1` erklärt,
+- das Paket im Lockfile aus PyPI stammt und
+- jede gesperrte Paketdatei per SHA-256 mit der Datei auf PyPI übereinstimmt.
+
+Die Begründung im Bericht nennt das Control, das Produkt, den Commit der
+Produktdefinition und die Profilversion. `PY-LIC-001.1` wird je Paket bewertet.
+Für Pakete, die die Ausnahme nicht brauchen, ist das Ergebnis „nicht anwendbar“.
+Ob Dateien dieser Lizenzen direkt in den eigenen Quellcode kopiert wurden,
+prüft der Lockfile-Scan noch nicht.
+
+In `spec.repositories[].paths` legt das Produkt fest, welche Ordner zu ihm
+gehören. Nur Lockfiles unter diesen Ordnern werden bewertet. Andere Lockfiles im
+Repository zeigt der Bericht als außerhalb der Produktpfade an. Ohne `paths`
+gehört das ganze Repository zum Produkt.
+
+Liegt das Produktmanifest im Repository des Pull Requests, liest der PR-Check
+`paths` und `implementedRequirements` am Commit des Pull Requests. Eine Änderung
+wirkt also schon im Pull Request, der sie einführt. Profil und Katalog kommen
+immer aus den registrierten Versionen der Organisation. Ändert der Pull Request
+die Produkt-ID oder verweist er auf eine andere Profilversion, oder ist das
+Manifest ungültig, gelten keine Erklärungen aus dem Pull Request.
 
 Mit `allowApprovedUse: true` erlaubt die SPDX-Regel belegte Freigaben. Der
 Organisationseigentümer öffnet im Bericht die Paketbewertung und hinterlegt
@@ -66,8 +100,8 @@ aus PyPI. Specbound verifiziert deren SHA-256 und zeigt die Fundstelle.
   Lizenzhinweise und der Zugang zum passenden Quellcode des ausgelieferten
   MPL-Bestandteils zu belegen. Das betrifft insbesondere das mitgelieferte
   Zertifikatspaket. Siehe [Mozilla MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/).
-- `psycopg` und `psycopg-c` können für die Kundenauslieferung freigegeben
-  werden, wenn die Auflagen für das konkrete Artefakt erfüllt sind. API und
+- `psycopg` und `psycopg-c` (LGPL-3.0-only) sind über `PY-LIC-001.1` zulässig,
+  wenn die Auflagen für das konkrete Artefakt erfüllt sind. API und
   Worker bauen die C-Erweiterung aus dem versionierten Quellarchiv und
   laden Debian-`libpq5`. Die Laufzeitpakete aus Debian gehören ins
   Image-Inventar. Dokumentiere

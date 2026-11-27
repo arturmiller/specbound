@@ -74,6 +74,7 @@ def evaluate_and_store(
     selected_evidence_id=_AUTO_EVIDENCE,
     approved_license_use=False,
     require_artifact_licenses=False,
+    library_use=None,
 ):
     """Only trusted scanner output and a pinned, validated control are accepted."""
     if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
@@ -186,6 +187,7 @@ def evaluate_and_store(
                     control["assertions"],
                     evidence[0]["value"],
                     require_artifact_licenses=require_artifact_licenses,
+                    library_use=library_use,
                 )
                 evidence_ids = (evidence[0]["id"],)
                 if (
@@ -197,6 +199,13 @@ def evaluate_and_store(
                         AssessmentStatus.PASS,
                         "Nutzung mit belegter Freigabe",
                         evidence_ids,
+                    )
+                elif decision.truth is RuleTruth.NOT_APPLICABLE:
+                    result = AssessmentResult(
+                        AssessmentStatus.NOT_APPLICABLE,
+                        decision.reason,
+                        evidence_ids,
+                        scope_reason=decision.reason,
                     )
                 elif decision.truth is RuleTruth.UNKNOWN:
                     result = AssessmentResult(

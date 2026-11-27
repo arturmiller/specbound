@@ -8,9 +8,11 @@ from sqlalchemy import insert, select, update
 
 from app.audit import record_event
 from app.authorization import organization_access, team_access
-from app.manifest_io import read_yaml
-from app.manifest_source import checked_manifest_path, content_digest
-from app.resource_contracts import HERE, validate
+from app.manifest_source import content_digest
+from app.product_manifest import (  # noqa: F401 - load_product is re-exported
+    check_implemented_requirements,
+    load_product,
+)
 from app.tables import (
     product_governance,
     products,
@@ -19,31 +21,6 @@ from app.tables import (
     teams,
 )
 from app.workspace import configured_workspace
-
-
-def load_product(snapshot, manifest_path):
-    checked_manifest_path(manifest_path)
-    document = read_yaml(snapshot.files, manifest_path)
-    validate(document, HERE / "product.schema.json")
-    repositories = document["spec"]["repositories"]
-    names = [item["repository"].lower() for item in repositories]
-    if len(set(names)) != len(names) or any(len(name) > 200 for name in names):
-        raise ValueError("Duplicate or oversized product repository")
-    return {
-        **document["metadata"],
-        "document": document,
-        "resolved": {
-            "repositories": repositories,
-            "profile": document["spec"]["profile"],
-            **(
-                {"licenseUse": document["spec"]["licenseUse"]}
-                if "licenseUse" in document["spec"]
-                else {}
-            ),
-        },
-        "dependencies": [manifest_path],
-        "contentDigest": content_digest({"product": snapshot.files[manifest_path]}),
-    }
 
 
 def resolve_product(
@@ -72,6 +49,9 @@ def resolve_product(
     if len({profile["content_digest"] for profile in profiles}) != 1:
         raise ValueError("Referenced profile version is ambiguous")
     profile = sorted(profiles, key=lambda item: item["revision_id"])[0]
+    check_implemented_requirements(
+        loaded["resolved"], profile["resolved"]["selectedControlIds"]
+    )
     current = (
         db.execute(
             select(product_governance).where(

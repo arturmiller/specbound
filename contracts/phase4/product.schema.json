@@ -55,6 +55,18 @@
               "repository": {
                 "type": "string",
                 "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+              },
+              "paths": {
+                "description": "Repository folders whose dependency lockfiles belong to this product. Without paths, the whole repository belongs to it.",
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "pattern": "^(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+)*$"
+                }
               }
             },
             "required": [
@@ -82,6 +94,34 @@
             "version"
           ],
           "additionalProperties": false
+        },
+        "implementedRequirements": {
+          "description": "How this product implements controls of its profile, modelled on OSCAL component-definition implemented-requirements.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "properties": {
+              "controlId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "\\S"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "controlId",
+              "description"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [

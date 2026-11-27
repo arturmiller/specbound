@@ -50,9 +50,21 @@ def load_catalog(snapshot, manifest_path):
                     raise ValueError(
                         "Binding rule complexity exceeds the supported limit"
                     )
-                for field in ("expectedParameter", "allowedParameter"):
-                    if field in rule and rule[field] not in indexed["parameters"]:
+                library = rule.get("libraryUse", {})
+                for owner, field in (
+                    (rule, "expectedParameter"),
+                    (rule, "allowedParameter"),
+                    (rule, "baseAllowedParameter"),
+                    (library, "allowedParameter"),
+                ):
+                    if field in owner and owner[field] not in indexed["parameters"]:
                         raise ValueError("Binding refers to an unknown parameter")
+                parents = indexed["controlParents"]
+                if (library and parents.get(library.get("control")) != control_id) or (
+                    rule.get("operator") == "spdx-library-use"
+                    and (rule.get("control") != control_id or control_id not in parents)
+                ):
+                    raise ValueError("Library use must name a control enhancement")
                 pending.extend(
                     (child, depth + 1) for child in rule.get("assertions", [])
                 )
@@ -66,6 +78,7 @@ def load_catalog(snapshot, manifest_path):
             "parts": control.get("parts", []),
             "parameters": control.get("params", []),
             "groupKey": indexed["controlGroups"][control["id"]],
+            "parentId": indexed["controlParents"].get(control["id"]),
             "binding": bindings.get(control["id"]),
             "methodStatus": "configured"
             if control["id"] in bindings

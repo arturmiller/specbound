@@ -213,6 +213,56 @@
             "allowedParameter": {
               "type": "string",
               "minLength": 1
+            },
+            "libraryUse": {
+              "type": "object",
+              "properties": {
+                "control": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "allowed": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 100,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "allowedParameter": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "control"
+              ],
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "required": [
+                    "allowed"
+                  ],
+                  "not": {
+                    "required": [
+                      "allowedParameter"
+                    ]
+                  }
+                },
+                {
+                  "required": [
+                    "allowedParameter"
+                  ],
+                  "not": {
+                    "required": [
+                      "allowed"
+                    ]
+                  }
+                }
+              ]
             }
           },
           "required": [
@@ -240,6 +290,108 @@
                   "allowed"
                 ]
               }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operator": {
+              "const": "spdx-library-use"
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 500,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*$"
+            },
+            "control": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "allowed": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "allowedParameter": {
+              "type": "string",
+              "minLength": 1
+            },
+            "baseAllowed": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "baseAllowedParameter": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "operator",
+            "path",
+            "control"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "oneOf": [
+                {
+                  "required": [
+                    "allowed"
+                  ],
+                  "not": {
+                    "required": [
+                      "allowedParameter"
+                    ]
+                  }
+                },
+                {
+                  "required": [
+                    "allowedParameter"
+                  ],
+                  "not": {
+                    "required": [
+                      "allowed"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "oneOf": [
+                {
+                  "required": [
+                    "baseAllowed"
+                  ],
+                  "not": {
+                    "required": [
+                      "baseAllowedParameter"
+                    ]
+                  }
+                },
+                {
+                  "required": [
+                    "baseAllowedParameter"
+                  ],
+                  "not": {
+                    "required": [
+                      "baseAllowed"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         }

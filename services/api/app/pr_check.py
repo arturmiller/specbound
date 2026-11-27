@@ -47,7 +47,9 @@ def assess_snapshot(db, snapshot, now):
             )
         )
         or any(
-            control["status"] != "PASS"
+            # A control without applicable subjects (e.g. an unused license
+            # exception) does not block; at least one PASS is still required.
+            control["status"] not in ("PASS", "NOT_APPLICABLE")
             for control in snapshot.get("control_results") or []
         )
     ):

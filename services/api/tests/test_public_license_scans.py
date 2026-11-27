@@ -14,10 +14,12 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from app.database import get_engine
+from app.git_source import GitSnapshot
 from app.identity import get_current_principal
 from app.main import app
 from app.pack_catalog import github_source_factory
 from app.pr_check import publish_check_once
+from app.product_governance import load_product
 from app.tables import (
     assessment_jobs,
     assessment_snapshots,
@@ -35,6 +37,45 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "worker"))
 from pr_license_worker import prepare_pr_license_scan  # noqa: E402
 from public_license_worker import claim, finish, poll_once  # noqa: E402
 from queue_worker import poll_once as poll_pr_once  # noqa: E402
+
+
+class Checks:
+    app_id = "456"
+
+    def __init__(self, repository, head):
+        self.repository = repository
+        self.head = head
+        self.published = []
+
+    def _token(self, *, permissions):
+        return "fixture-token"
+
+    def _request(self, method, path, token, **kwargs):
+        if method == "GET" and path.endswith("/pulls/17"):
+            return {"head": {"sha": self.head}}
+        if method == "GET" and path.endswith("/check-runs"):
+            return {
+                "check_runs": [
+                    {
+                        "name": "Specbound assessment",
+                        "external_id": self.published[0]["external_id"],
+                        "app": {"id": self.app_id},
+                        "id": 1,
+                    }
+                ]
+                if self.published
+                else []
+            }
+        if method == "POST" and path.endswith("/check-runs"):
+            self.published.append(kwargs["json"])
+            return {"id": 1}
+        if method == "PATCH" and path.endswith("/check-runs/1"):
+            self.published.append(kwargs["json"])
+            return {"id": 1}
+        raise AssertionError((method, path))
+
+    def close(self):
+        pass
 
 
 class PublicLicenseScansTest(unittest.TestCase):
@@ -83,8 +124,12 @@ class PublicLicenseScansTest(unittest.TestCase):
         repository="example/public",
         license_only=False,
         license_use=None,
+        library_use=False,
+        governance_repository="example/governance",
     ):
-        self.source = ResourceFixtureSource("example/governance")
+        self.source = ResourceFixtureSource(governance_repository)
+        if library_use:
+            self.add_library_use_enhancement()
         if license_use:
             product = json.loads(self.source.files["products/audio-visualizer.json"])
             product["spec"]["licenseUse"] = license_use
@@ -101,7 +146,8 @@ class PublicLicenseScansTest(unittest.TestCase):
                 self.source.files["profiles/application-baseline.json"]
             )
             profile["profile"]["imports"][0]["include-controls"][0]["with-ids"] = [
-                "PY-LIC-001"
+                "PY-LIC-001",
+                *(["PY-LIC-001.1"] if library_use else []),
             ]
             self.source.files["profiles/application-baseline.json"] = json.dumps(
                 profile
@@ -249,6 +295,93 @@ class PublicLicenseScansTest(unittest.TestCase):
             f"/products/{self.product}/repositories/{self.binding}/public-license-scans"
         )
 
+    def add_library_use_enhancement(self):
+        """The organization permits LGPL for declared, unmodified library use."""
+        catalog = json.loads(self.source.files["catalogs/application.json"])
+        base = next(
+            control
+            for control in catalog["catalog"]["groups"][0]["controls"]
+            if control["id"] == "PY-LIC-001"
+        )
+        base["controls"] = [
+            {
+                "id": "PY-LIC-001.1",
+                "title": "Weak copyleft for unmodified library use",
+                "params": [{"id": "license-library-allowlist"}],
+                "parts": [{"name": "statement", "prose": "Unmodified libraries."}],
+            }
+        ]
+        self.source.files["catalogs/application.json"] = json.dumps(catalog).encode()
+        profile = json.loads(self.source.files["profiles/application-baseline.json"])
+        profile["profile"]["imports"][0]["include-controls"][0]["with-ids"].append(
+            "PY-LIC-001.1"
+        )
+        profile["profile"]["modify"]["set-parameters"].append(
+            {"param-id": "license-library-allowlist", "values": ["LGPL-3.0-only"]}
+        )
+        self.source.files["profiles/application-baseline.json"] = json.dumps(
+            profile
+        ).encode()
+        bindings = json.loads(self.source.files["checks/application.json"])
+        for control in bindings["spec"]["controls"]:
+            if control["id"] == "PY-LIC-001":
+                control["assertions"][0]["libraryUse"] = {
+                    "control": "PY-LIC-001.1",
+                    "allowedParameter": "license-library-allowlist",
+                }
+        bindings["spec"]["controls"].append(
+            {
+                "id": "PY-LIC-001.1",
+                "target": {"kind": "python.package"},
+                "requiredEvidence": {"capability": "python.package-license/v1"},
+                "assertions": [
+                    {
+                        "operator": "spdx-library-use",
+                        "path": "licenseExpression",
+                        "control": "PY-LIC-001.1",
+                        "allowedParameter": "license-library-allowlist",
+                        "baseAllowedParameter": "license-allowlist",
+                    }
+                ],
+            }
+        )
+        self.source.files["checks/application.json"] = json.dumps(bindings).encode()
+
+    def send_pull_request(self, repository, head, *, action="synchronize"):
+        body = json.dumps(
+            {
+                "action": action,
+                "installation": {"id": 12345},
+                "number": 17,
+                "repository": {"id": 123, "full_name": repository},
+                "pull_request": {
+                    "id": 100,
+                    "number": 17,
+                    "head": {"sha": head},
+                    "base": {"repo": {"id": 123}},
+                },
+            }
+        ).encode()
+        mac = hmac.new(b"test-only", body, hashlib.sha256).hexdigest()
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_WEBHOOK_SECRET": "test-only",
+                "GITHUB_INSTALLATION_ID": "12345",
+                "GITHUB_ORGANIZATION_ID": self.org,
+            },
+        ):
+            response = self.client.post(
+                "/webhooks/github",
+                content=body,
+                headers={
+                    "X-Hub-Signature-256": "sha256=" + mac,
+                    "X-GitHub-Delivery": str(uuid4()),
+                    "X-GitHub-Event": "pull_request",
+                },
+            )
+        self.assertEqual(response.status_code, 202, response.text)
+
     @staticmethod
     def observed_result(expression, *, partial=False):
         return {
@@ -311,44 +444,6 @@ class PublicLicenseScansTest(unittest.TestCase):
             license_only=True,
             license_use="customer-distribution",
         )
-
-        class Checks:
-            app_id = "456"
-
-            def __init__(self, repository, head):
-                self.repository = repository
-                self.head = head
-                self.published = []
-
-            def _token(self, *, permissions):
-                return "fixture-token"
-
-            def _request(self, method, path, token, **kwargs):
-                if method == "GET" and path.endswith("/pulls/17"):
-                    return {"head": {"sha": self.head}}
-                if method == "GET" and path.endswith("/check-runs"):
-                    return {
-                        "check_runs": [
-                            {
-                                "name": "Specbound assessment",
-                                "external_id": self.published[0]["external_id"],
-                                "app": {"id": self.app_id},
-                                "id": 1,
-                            }
-                        ]
-                        if self.published
-                        else []
-                    }
-                if method == "POST" and path.endswith("/check-runs"):
-                    self.published.append(kwargs["json"])
-                    return {"id": 1}
-                if method == "PATCH" and path.endswith("/check-runs/1"):
-                    self.published.append(kwargs["json"])
-                    return {"id": 1}
-                raise AssertionError((method, path))
-
-            def close(self):
-                pass
 
         engine = get_engine()
         for index, (expression, scenario, verdict) in enumerate(
@@ -606,6 +701,155 @@ class PublicLicenseScansTest(unittest.TestCase):
                         )
                     )
                     self.assertEqual(github.published[-1]["conclusion"], "failure")
+
+    def test_library_use_declared_at_the_pull_request_commit_permits_lgpl(self):
+        repository = f"example/{self.binding}"
+        response = self.client.patch(
+            f"/products/{self.product}/repositories/{self.binding}",
+            json={"provider": "github", "repository": repository},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        # The product manifest lives in the pull request's own repository; the
+        # registered revision does not declare library use yet.
+        self.configure_native_product(
+            allowed=["MIT"],
+            attach_existing=True,
+            repository=repository,
+            license_only=True,
+            license_use="customer-distribution",
+            library_use=True,
+            governance_repository=repository,
+        )
+        registered = json.loads(self.source.files["products/audio-visualizer.json"])
+        engine = get_engine()
+
+        def head_manifest(declared=True, paths=None, profile_version=None):
+            document = copy.deepcopy(registered)
+            if declared:
+                document["spec"]["implementedRequirements"] = [
+                    {
+                        "controlId": "PY-LIC-001.1",
+                        "description": "Installed unmodified from PyPI and imported.",
+                    }
+                ]
+            if paths:
+                document["spec"]["repositories"][0]["paths"] = paths
+            if profile_version:
+                document["spec"]["profile"]["version"] = profile_version
+            return document
+
+        def lgpl(path="uv.lock", *, hashes=("a" * 64,)):
+            result = self.observed_result("LGPL-3.0-only")
+            package = result["packages"][0]
+            package.update(
+                path=path,
+                name="psycopg-c",
+                version="3.3.3",
+                artifactHashes=list(hashes),
+            )
+            result["files"] = [path]
+            return result
+
+        def other_lockfile(result):
+            extra = copy.deepcopy(result["packages"][0])
+            extra.update(path="tools/uv.lock", name="gpl-tool")
+            extra["metadata"]["artifacts"][0]["licenseExpression"] = "GPL-3.0-only"
+            result["packages"].append(extra)
+            result["files"] = sorted([*result["files"], "tools/uv.lock"])
+            return result
+
+        scenarios = [
+            ("declared", head_manifest(), lgpl(), "success"),
+            ("undeclared", head_manifest(declared=False), lgpl(), "failure"),
+            ("modified", head_manifest(), lgpl(hashes=("c" * 64,)), "failure"),
+            (
+                "other-profile",
+                head_manifest(profile_version="9.9.9"),
+                lgpl(),
+                "failure",
+            ),
+            ("not-needed", head_manifest(), self.observed_result("MIT"), "success"),
+            (
+                "product-paths",
+                head_manifest(paths=["services/api"]),
+                other_lockfile(lgpl("services/api/uv.lock")),
+                "success",
+            ),
+        ]
+        for index, (scenario, manifest, scan, verdict) in enumerate(scenarios):
+            with self.subTest(scenario=scenario):
+                head = f"{index + 101:040x}"
+                self.send_pull_request(
+                    repository, head, action="opened" if index == 0 else "synchronize"
+                )
+                scan = {**copy.deepcopy(scan), "sourceRevision": head}
+                manifest_reads = []
+
+                def read_product(source, commit, path, manifest=manifest):
+                    manifest_reads.append((source, commit, path))
+                    files = {path: json.dumps(manifest).encode()}
+                    return load_product(GitSnapshot(commit, files), path)
+
+                self.assertTrue(
+                    poll_pr_once(
+                        engine,
+                        self.org,
+                        lambda lease, scan=scan: prepare_pr_license_scan(
+                            engine,
+                            lease,
+                            execute=lambda _repository, _ref: {
+                                "status": "ok",
+                                "result": scan,
+                            },
+                            read_product=read_product,
+                        ),
+                    )
+                )
+                self.assertEqual(
+                    manifest_reads,
+                    [(repository, head, "products/audio-visualizer.json")],
+                )
+                with engine.connect() as db:
+                    snapshot = db.execute(
+                        select(assessment_jobs.c.result_snapshot_id).where(
+                            assessment_jobs.c.organization_id == self.org,
+                            assessment_jobs.c.head_sha == head,
+                        )
+                    ).scalar_one()
+                result = self.client.get(f"/assessments/{snapshot}").json()
+                github = Checks(repository, head)
+                self.assertTrue(
+                    publish_check_once(
+                        engine,
+                        self.org,
+                        lambda _: github,
+                        "https://portal.example",
+                        clock=lambda: datetime.now(timezone.utc),
+                    )
+                )
+                self.assertEqual(github.published[-1]["conclusion"], verdict, result)
+                reasons = {
+                    (item["control"]["id"], item["status"]): item["reason"]
+                    for item in result["evaluations"]
+                }
+                if scenario in ("declared", "product-paths"):
+                    basis = reasons[("PY-LIC-001", "PASS")]
+                    self.assertIn("PY-LIC-001.1", basis)
+                    self.assertIn(head[:12], basis)
+                    self.assertIn("audio-visualizer", basis)
+                    self.assertIn(("PY-LIC-001.1", "PASS"), reasons)
+                elif verdict == "failure":
+                    self.assertIn(("PY-LIC-001", "FAIL"), reasons)
+                if scenario == "not-needed":
+                    self.assertIn(("PY-LIC-001.1", "NOT_APPLICABLE"), reasons)
+                if scenario == "product-paths":
+                    self.assertEqual(
+                        result["sourceScan"]["files"], ["services/api/uv.lock"]
+                    )
+                    self.assertEqual(
+                        result["sourceScan"]["outsideProductPaths"], ["tools/uv.lock"]
+                    )
+                    self.assertEqual(len(result["evidence"]), 1)
 
     def test_contract_for_internal_use_does_not_grant_saas_or_replaced_artifacts(self):
         self.configure_native_product(license_only=True, license_use="internal")

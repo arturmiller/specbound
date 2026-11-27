@@ -271,6 +271,7 @@ def assessment_report(
             "coverage": result.get("sourceCoverage"),
             "files": result.get("files", []),
             "unsupportedFiles": result.get("unsupportedFiles", []),
+            "outsideProductPaths": result.get("outsideProductPaths", []),
             "reason": result.get("reason"),
         }
     return {

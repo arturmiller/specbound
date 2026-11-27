@@ -22,6 +22,7 @@ from app.license_scope import (
     live_approvals,
     locked_artifact_digest,
 )
+from app.product_scope import library_use
 from app.pypi_license_metadata import MAX_ARTIFACTS, SOURCE_LICENSE_FILES
 from app.reviewed_python_licenses import REVIEWED_PYPI_ARTIFACTS
 from app.rule_evaluation import evaluate_and_store
@@ -176,6 +177,10 @@ def _verified_metadata(package):
         if complete and len(expressions) == 1
         else None,
         "licenseCoverage": "complete" if complete else "incomplete",
+        # Every locked artifact hash was found on PyPI and nothing else was
+        # observed: the evidence covers unmodified published files only.
+        "lockedSource": "pypi",
+        "artifactHashesVerified": bool(expected) and matching,
         "artifacts": verified,
     }
 
@@ -284,6 +289,7 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
     if any(not isinstance(path, str) or not path or len(path) > 500 for path in files):
         raise ValueError("Invalid lockfile coverage")
     policy, execution_gaps = plan_public_scan(context, len(packages))
+    declared = library_use(context)
     coverage_status = (
         source_coverage if source_coverage in ("covered", "partial") else "failed"
     )
@@ -360,6 +366,7 @@ def create_public_license_assessment(db, job, result, *, now, pull_request_numbe
                 selected_evidence_id=selected,
                 approved_license_use=approved is not None,
                 require_artifact_licenses=True,
+                library_use=declared,
             )
             evaluation_ids.append(evaluation["id"])
     snapshot = create_snapshot(

@@ -1,9 +1,9 @@
 {
   "apiVersion": "specbound.example/v1alpha1",
   "kind": "ControlBindings",
-  "metadata": {"id": "license-checks", "version": "1.0.0", "name": "Paketlizenzen prüfen"},
+  "metadata": {"id": "license-checks", "version": "1.1.0", "name": "Paketlizenzen prüfen"},
   "spec": {
-    "catalog": {"id": "license-controls", "version": "1.0.0"},
+    "catalog": {"id": "license-controls", "version": "1.1.0"},
     "controls": [{
       "id": "PY-LIC-001",
       "target": {"kind": "python.package"},
@@ -12,7 +12,19 @@
         "operator": "spdx-allowlist",
         "path": "licenseExpression",
         "allowedParameter": "license-allowlist",
-        "allowApprovedUse": true
+        "allowApprovedUse": true,
+        "libraryUse": {"control": "PY-LIC-001.1", "allowedParameter": "license-library-allowlist"}
+      }]
+    }, {
+      "id": "PY-LIC-001.1",
+      "target": {"kind": "python.package"},
+      "requiredEvidence": {"capability": "python.package-license/v1"},
+      "assertions": [{
+        "operator": "spdx-library-use",
+        "path": "licenseExpression",
+        "control": "PY-LIC-001.1",
+        "allowedParameter": "license-library-allowlist",
+        "baseAllowedParameter": "license-allowlist"
       }]
     }]
   }

@@ -631,6 +631,59 @@ class ResourceRegistryTest(unittest.TestCase):
             ):
                 self.assertEqual(self.post(preview=True).status_code, 503)
 
+    def test_product_declares_source_paths_and_profile_control_implementations(self):
+        self.prepare_product()
+        path = "products/audio-visualizer.json"
+        original = json.loads(self.source.files[path])
+
+        def post_with(repositories=None, implemented=None):
+            document = json.loads(json.dumps(original))
+            if repositories is not None:
+                document["spec"]["repositories"] = repositories
+            if implemented is not None:
+                document["spec"]["implementedRequirements"] = implemented
+            self.source.files[path] = json.dumps(document).encode()
+            return self.post(preview=True)
+
+        repository = original["spec"]["repositories"][0]["repository"]
+        for repositories, implemented in (
+            (
+                [{"provider": "github", "repository": repository, "paths": ["../x"]}],
+                None,
+            ),
+            ([{"provider": "github", "repository": repository, "paths": []}], None),
+            (None, [{"controlId": "UNKNOWN-001", "description": "Not selected"}]),
+            (
+                None,
+                [
+                    {"controlId": "PY-LIC-001", "description": "Once"},
+                    {"controlId": "PY-LIC-001", "description": "Twice"},
+                ],
+            ),
+        ):
+            with self.subTest(repositories=repositories, implemented=implemented):
+                response = post_with(repositories, implemented)
+                self.assertEqual(response.status_code, 422, response.text)
+        response = post_with(
+            [
+                {
+                    "provider": "github",
+                    "repository": repository,
+                    "paths": ["services/api", "services/worker"],
+                }
+            ],
+            [{"controlId": "PY-LIC-001", "description": "Installed from PyPI"}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        resolved = response.json()["resolved"]
+        self.assertEqual(
+            resolved["repositories"][0]["paths"], ["services/api", "services/worker"]
+        )
+        self.assertEqual(
+            resolved["implementedRequirements"],
+            [{"controlId": "PY-LIC-001", "description": "Installed from PyPI"}],
+        )
+
     def test_product_resources_retain_team_boundaries(self):
         team = self.prepare_product()
         created = self.post().json()

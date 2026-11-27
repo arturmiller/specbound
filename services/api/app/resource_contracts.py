@@ -127,7 +127,7 @@ def index_catalog(document):
     validate(document, ROOT / "oscal/1.2.3/oscal_catalog_schema.json")
     catalog = document["catalog"]
     catalog_identity = identity(catalog)
-    controls, parameters, owners, control_groups = {}, {}, {}, {}
+    controls, parameters, owners, control_groups, parents = {}, {}, {}, {}, {}
     groups = [{"key": "$root", "id": None, "title": "Ohne Gruppe", "parent": None}]
     group_ids = set()
 
@@ -152,9 +152,16 @@ def index_catalog(document):
             parameters[parameter["id"]] = parameter.get("values")
             owners[parameter["id"]] = owner
         for control in node.get("controls", []):
-            if control.get("controls") or control["id"] in controls:
+            # One level of OSCAL control enhancements (e.g. AC-2(1)) is supported.
+            if control["id"] in controls or (
+                owner is not None and control.get("controls")
+            ):
                 raise ValueError("Nested or duplicate control")
-            controls[control["id"]] = control
+            if owner is not None:
+                parents[control["id"]] = owner
+            controls[control["id"]] = {
+                key: value for key, value in control.items() if key != "controls"
+            }
             control_groups[control["id"]] = group_key
             collect(control, depth + 1, control["id"], group_key)
         for group in node.get("groups", []):
@@ -182,6 +189,7 @@ def index_catalog(document):
         "parameterOwners": owners,
         "groups": groups,
         "controlGroups": control_groups,
+        "controlParents": parents,
     }
 
 
@@ -219,6 +227,13 @@ def resolve_profile(document, catalogs, *, profile_path):
     parameter_owners = indexed["parameterOwners"]
     if any(control_id not in controls for control_id in selected):
         raise ValueError("Selected control does not exist")
+    control_parents = {
+        child: parent
+        for child, parent in indexed["controlParents"].items()
+        if child in selected
+    }
+    if any(parent not in selected for parent in control_parents.values()):
+        raise ValueError("A selected enhancement requires its parent control")
     parameters = {
         key: value
         for key, value in parameters.items()
@@ -253,7 +268,9 @@ def resolve_profile(document, catalogs, *, profile_path):
         "catalogPath": path,
         "bindingPath": binding_path,
         "controls": [copy.deepcopy(controls[i]) for i in selected],
+        "controlParents": control_parents,
         "allControlIds": set(controls),
+        "allControlParents": dict(indexed["controlParents"]),
         "parameters": parameters,
     }
 
@@ -274,16 +291,37 @@ def compile_bindings(document, resolved):
             raise ValueError("Missing parameter value")
         return values
 
-    def compile_rule(rule, depth=0):
+    parents = resolved.get("allControlParents", {})
+
+    def enhancement_of(control_id, owner):
+        if parents.get(control_id) != owner:
+            raise ValueError("Library use must name an enhancement of its control")
+
+    def compile_rule(rule, owner, depth=0):
         if depth > 16 or rule.get("operator") not in {
             "equals",
             "exists",
             "all",
             "any",
             "spdx-allowlist",
+            "spdx-library-use",
         }:
             raise ValueError("Unsupported rule operator or depth")
         rule = copy.deepcopy(rule)
+        if "libraryUse" in rule:
+            library = rule.pop("libraryUse")
+            enhancement_of(library["control"], owner)
+            if library["control"] in selected:
+                if "allowedParameter" in library:
+                    library["allowed"] = list(
+                        parameter(library.pop("allowedParameter"))
+                    )
+                rule["libraryUse"] = library
+        if rule["operator"] == "spdx-library-use":
+            if rule["control"] != owner or owner not in parents:
+                raise ValueError("Library use must be bound to its own enhancement")
+            if "baseAllowedParameter" in rule:
+                rule["baseAllowed"] = list(parameter(rule.pop("baseAllowedParameter")))
         if "expectedParameter" in rule:
             if rule["operator"] != "equals" or "expected" in rule:
                 raise ValueError("Ambiguous expected parameter")
@@ -296,12 +334,15 @@ def compile_bindings(document, resolved):
                 raise ValueError("Expected parameter must encode a JSON scalar")
             rule["expected"] = value
         if "allowedParameter" in rule:
-            if rule["operator"] != "spdx-allowlist" or "allowed" in rule:
+            if (
+                rule["operator"] not in ("spdx-allowlist", "spdx-library-use")
+                or "allowed" in rule
+            ):
                 raise ValueError("Ambiguous allowlist parameter")
             rule["allowed"] = list(parameter(rule.pop("allowedParameter")))
         if "assertions" in rule:
             rule["assertions"] = [
-                compile_rule(item, depth + 1) for item in rule["assertions"]
+                compile_rule(item, owner, depth + 1) for item in rule["assertions"]
             ]
         return rule
 
@@ -312,7 +353,7 @@ def compile_bindings(document, resolved):
         if control["id"] in selected:
             compiled = copy.deepcopy(control)
             compiled["assertions"] = [
-                compile_rule(rule) for rule in compiled["assertions"]
+                compile_rule(rule, control["id"]) for rule in compiled["assertions"]
             ]
             result.append(compiled)
     if result:
